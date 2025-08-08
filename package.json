@@ -1,6 +1,6 @@
 {
   "name": "tx-cli",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "一个cli工具",
   "type": "module",
   "scripts": {
