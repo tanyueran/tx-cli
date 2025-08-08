@@ -1,0 +1,55 @@
+<template>
+  <div :class="style['{{name}}-wrapper']">{{ name }}</div>
+</template>
+
+<script setup lang="ts">
+import { defineOptions } from "vue";
+import style from "./index.module.scss";
+
+defineOptions({
+  name: "{{ toPascalCase name}}",
+});
+
+// #region Props
+// default
+// const props = withDefaults(defineProps<{}>(), {});
+// props
+// const props = defineProps<{}>();
+// #endregion
+
+// #region Emits
+// const emits = defineEmits<{
+//   // (e: 'eventName', 参数1: '', 参数2: '', ...): void;
+// }>();
+// #endregion
+
+// #region Hooks
+// #endregion
+
+// #region Vars
+// #endregion
+
+// #region Computed
+// #endregion
+
+// #region Methods
+// #endregion
+
+// #region Public
+// #endregion
+
+// #region Event Handler
+// #endregion
+
+// #region Watch
+// #endregion
+
+// #region Life Cycle
+// onBeforeMount(() => {});
+// onMounted(() => {});
+// onBeforeUpdate(() => {});
+// onUpdated(() => {});
+// onBeforeUnmount(() => {});
+// onUnmounted(() => {});
+// #endregion
+</script>

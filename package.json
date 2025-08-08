@@ -1,0 +1,21 @@
+{
+  "name": "tx-cli",
+  "version": "0.0.1",
+  "description": "一个cli工具",
+  "type": "module",
+  "scripts": {
+    "build": "pnpm -r --parallel run build"
+  },
+  "workspaces": [
+    "packages/*"
+  ],
+  "keywords": [
+    "cli"
+  ],
+  "author": "tanyueran",
+  "license": "ISC",
+  "packageManager": "pnpm@10.5.2",
+  "pnpm": {
+    "overrides": {}
+  }
+}
