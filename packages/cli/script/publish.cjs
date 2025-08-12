@@ -66,8 +66,10 @@ async function commit() {
  */
 async function playTag() {
   try {
-    await git.tag(`v${version}`);
+    await git.addTag(`v${version}`);
+    console.log("打tag完成");
     await git.pushTags("origin");
+    console.log("tag推送完成");
   } catch (err) {
     console.error("打tag失败:", error);
     process.exit(1);
