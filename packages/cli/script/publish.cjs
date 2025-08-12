@@ -81,17 +81,17 @@ async function publish() {
   }
 }
 
-function release() {
+async function release() {
   // 修改版本号
   updateVersion();
   // 打包构建
   build();
   // 提交修改 到 远程仓库
-  commit();
+  await commit();
   // 创建 tag
-  playTag();
+  await playTag();
   // 发包
-  publish();
+  await publish();
 }
 
 release();
