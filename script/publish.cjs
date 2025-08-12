@@ -27,7 +27,16 @@ async function updateVersion() {
         { title: "热修：patch", value: "patch" },
       ],
     });
-    execSync(`npm version ${versionType} --no-git-tag-version`);
+    const { isRelease } = await prompts({
+      type: "confirm",
+      name: "isRelease",
+      message: "是否发布正式版本？",
+    });
+    if (isRelease) {
+      execSync(`npm version ${versionType} --no-git-tag-version`);
+    } else {
+      execSync(`npm version ${versionType} --preid=beta --no-git-tag-version`);
+    }
   } catch (err) {
     console.log("更新版本号失败：", err);
     process.exit(1);
