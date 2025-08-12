@@ -1,4 +1,4 @@
-const { execSync } = require("node:child_process");
+const { execSync, exec } = require("node:child_process");
 const { readFileSync, writeFileSync } = require("fs-extra");
 const { simpleGit } = require("simple-git");
 
@@ -35,7 +35,7 @@ function rollbackVersion() {
  */
 function build() {
   try {
-    execSync("pnpm run build", {
+    exec("pnpm run build", {
       stdio: "inherit",
     });
     console.log("构建完成");
@@ -72,9 +72,9 @@ async function playTag() {
 /**
  * 发布
  */
-function publish() {
+async function publish() {
   try {
-    execSync("npm publish --access public");
+    await exec("npm publish --access public");
   } catch (err) {
     console.error("发布失败:", err);
     process.exit(1);
