@@ -79,9 +79,9 @@ async function playTag() {
 /**
  * 发布
  */
-async function publish() {
+function publish() {
   try {
-    await exec("npm publish --access public", {
+    execSync("npm publish --access public", {
       stdio: "inherit",
     });
   } catch (err) {
