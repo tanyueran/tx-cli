@@ -1,9 +1,9 @@
 {
   "name": "tx-cli",
-  "version": "0.0.2",
   "description": "一个cli工具",
   "type": "module",
   "scripts": {
+    "publish": "pnpm -r --parallel run publish",
     "build": "pnpm -r --parallel run build"
   },
   "workspaces": [
@@ -17,5 +17,8 @@
   "packageManager": "pnpm@10.5.2",
   "pnpm": {
     "overrides": {}
+  },
+  "devDependencies": {
+    "simple-git": "3.28.0"
   }
 }
