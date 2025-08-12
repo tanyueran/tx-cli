@@ -10,12 +10,6 @@ let version = "0.0.1";
  * 更新版本号
  */
 async function updateVersion() {
-  // const json = JSON.parse(readFileSync("./package.json", "utf-8"));
-  // version = json.version;
-  // let vList = version.split(".").map((v) => parseInt(v));
-  // version = `${vList[0]}.${vList[1]}.${vList[2] + 1}`;
-  // json.version = version;
-  // writeFileSync("./package.json", JSON.stringify(json, null, 2));
   const status = await git.status();
   if (!status.isClean()) {
     console.log("请保证工作空间是干净的");
@@ -23,8 +17,11 @@ async function updateVersion() {
   }
   try {
     // major minor patch bate
-    execSync("npm version patch");
+    execSync("npm version patch --no-git-tag-version");
     execSync("npm run changelog");
+    // 读取版本号
+    const json = JSON.parse(readFileSync("./package.json", "utf-8"));
+    version = json.version;
   } catch (err) {
     console.log("更新版本号失败：", err);
     process.exit(1);
@@ -51,7 +48,7 @@ function build() {
 async function commit() {
   try {
     await git.add(".");
-    await git.commit(`chore: v${version}`);
+    await git.commit(`release: v${version}`);
     await git.push("origin", "main");
     console.log("提交完成");
   } catch (err) {
