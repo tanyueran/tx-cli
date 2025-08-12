@@ -85,8 +85,8 @@ async function publish() {
     // 询问用户输入OTP
     const { otp } = await prompts([
       {
-        type: "otp",
-        name: "name",
+        type: "text",
+        name: "otp",
         message: "请输入npm账户的双因素认证代码(OTP): ",
       },
     ]);
