@@ -74,7 +74,7 @@ async function playTag() {
  */
 function publish() {
   try {
-    execSync("npm publish");
+    execSync("npm publish --access public");
   } catch (err) {
     console.error("发布失败:", err);
     process.exit(1);
