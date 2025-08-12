@@ -65,8 +65,13 @@ async function commit() {
  * 打tag
  */
 async function playTag() {
-  await git.tag(`v${version}`);
-  await git.pushTags("origin");
+  try {
+    await git.tag(`v${version}`);
+    await git.pushTags("origin");
+  } catch (err) {
+    console.error("打tag失败:", error);
+    process.exit(1);
+  }
 }
 
 /**
