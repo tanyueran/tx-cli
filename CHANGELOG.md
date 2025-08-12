@@ -1,3 +1,18 @@
+## [0.0.22-beta.0](https://github.com/tanyueran/tx-cli/compare/v0.0.21...v0.0.22-beta.0) (2025-08-12)
+
+
+### Bug Fixes
+
+* 修复发布beta版本构建失败的bug ([16f414b](https://github.com/tanyueran/tx-cli/commit/16f414b45ebc50bf99f4dbb6be8027ae6bb822f8))
+* 修复发布beta版本的逻辑错误 ([6e78bd9](https://github.com/tanyueran/tx-cli/commit/6e78bd9ffbe60578d31fb0e5711b3d292640c9a4))
+
+
+### Features
+
+* 支持beta版本的自动发布 ([e63fb0b](https://github.com/tanyueran/tx-cli/commit/e63fb0b9f201db630742bd3a0ed0dd0de0e8f913))
+
+
+
 ## [0.0.21](https://github.com/tanyueran/tx-cli/compare/v0.0.20...v0.0.21) (2025-08-12)
 
 
