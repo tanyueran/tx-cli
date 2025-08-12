@@ -1,4 +1,5 @@
-const { execSync, exec } = require("node:child_process");
+const { execSync } = require("node:child_process");
+const readline = require("node:readline");
 const { readFileSync, writeFileSync } = require("fs-extra");
 const { simpleGit } = require("simple-git");
 
@@ -79,11 +80,24 @@ async function playTag() {
 /**
  * 发布
  */
-function publish() {
+async function publish() {
   try {
-    execSync("npm publish --access public", {
+    // 创建readline接口
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
+    });
+
+    // 询问用户输入OTP
+    const otp = await new Promise((resolve) => {
+      rl.question("请输入npm账户的双因素认证代码(OTP): ", resolve);
+    });
+    rl.close();
+    console.log("正在发布到npm...");
+    execSync(`npm publish --access public --otp=${otp}`, {
       stdio: "inherit",
     });
+    console.log("发布成功!");
   } catch (err) {
     console.error("发布失败:", err);
     process.exit(1);
