@@ -35,7 +35,7 @@ async function updateVersion() {
       });
       execSync(`npm version ${versionType} --no-git-tag-version`);
     } else {
-      execSync(`npm version --preid=beta --no-git-tag-version`);
+      execSync(`npm version prerelease --preid=beta --no-git-tag-version`);
     }
   } catch (err) {
     console.log("更新版本号失败：", err);
