@@ -80,8 +80,9 @@ async function playTag() {
 /**
  * 发布
  */
-async function publish() {
+async function publishPkg() {
   try {
+    console.log("11111");
     // 询问用户输入OTP
     const { otp } = await prompts([
       {
@@ -116,7 +117,7 @@ async function start() {
   // 创建 tag
   await playTag();
   // 发包
-  await publish();
+  await publishPkg();
 }
 
 start();
