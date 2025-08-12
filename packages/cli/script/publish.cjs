@@ -72,7 +72,7 @@ async function playTag() {
     await git.pushTags("origin");
     console.log("tag推送完成");
   } catch (err) {
-    console.error("打tag失败:", error);
+    console.error("打tag失败:", err);
     process.exit(1);
   }
 }
