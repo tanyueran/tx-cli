@@ -103,14 +103,14 @@ async function publishPkg() {
 
 async function start() {
   await updateVersion();
-  // // 打包构建
-  // build();
-  // // 提交修改 到 远程仓库
-  // await commit();
-  // // 创建 tag
-  // await playTag();
-  // // 发包
-  // await publishPkg();
+  // 打包构建
+  build();
+  // 提交修改 到 远程仓库
+  await commit();
+  // 创建 tag
+  await playTag();
+  // 发包
+  await publishPkg();
 }
 
 start();
