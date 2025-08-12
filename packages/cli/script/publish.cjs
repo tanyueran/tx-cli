@@ -35,7 +35,7 @@ function rollbackVersion() {
  */
 function build() {
   try {
-    exec("pnpm run build", {
+    execSync("pnpm run build", {
       stdio: "inherit",
     });
     console.log("构建完成");
@@ -79,16 +79,18 @@ async function playTag() {
 /**
  * 发布
  */
-async function publish() {
+function publish() {
   try {
-    await exec("npm publish --access public");
+    execSync("npm publish --access public", {
+      stdio: "inherit",
+    });
   } catch (err) {
     console.error("发布失败:", err);
     process.exit(1);
   }
 }
 
-async function release() {
+async function start() {
   // 修改版本号
   updateVersion();
   // 打包构建
@@ -101,4 +103,4 @@ async function release() {
   await publish();
 }
 
-release();
+start();
