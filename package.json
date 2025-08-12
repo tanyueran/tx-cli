@@ -2,10 +2,10 @@
   "name": "tx-cli",
   "description": "一个cli工具",
   "type": "module",
-  "version": "0.0.1",
+  "version": "0.0.4",
   "scripts": {
     "build": "pnpm -r --parallel run build",
-    "publish-pkg": "pnpm -r --parallel run publish-pkg"
+    "publish-pkg": "cd ./packages/cli && pnpm run publish-pkg"
   },
   "workspaces": [
     "packages/*"

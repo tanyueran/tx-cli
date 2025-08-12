@@ -1,6 +1,7 @@
-const { execSync, exec } = require("node:child_process");
+const { execSync } = require("node:child_process");
 const { readFileSync, writeFileSync } = require("fs-extra");
 const { simpleGit } = require("simple-git");
+const prompts = require("prompts");
 
 const git = simpleGit();
 let version = "0.0.1";
@@ -35,7 +36,7 @@ function rollbackVersion() {
  */
 function build() {
   try {
-    exec("pnpm run build", {
+    execSync("pnpm run build", {
       stdio: "inherit",
     });
     console.log("构建完成");
@@ -65,33 +66,57 @@ async function commit() {
  * 打tag
  */
 async function playTag() {
-  await git.tag(`v${version}`);
-  await git.pushTags("origin");
+  try {
+    await git.addTag(`v${version}`);
+    console.log("打tag完成");
+    await git.pushTags("origin");
+    console.log("tag推送完成");
+  } catch (err) {
+    console.error("打tag失败:", err);
+    process.exit(1);
+  }
 }
 
 /**
  * 发布
  */
-async function publish() {
+async function publishPkg() {
   try {
-    await exec("npm publish --access public");
+    // 询问用户输入OTP
+    const { otp } = await prompts([
+      {
+        type: "text",
+        name: "otp",
+        message: "请输入npm账户的双因素认证代码(OTP): ",
+      },
+    ]);
+    console.log("正在发布到npm...");
+    if (otp) {
+      execSync(`npm publish --otp=${otp.trim()} --access public `, {
+        stdio: "inherit",
+      });
+      console.log("发布成功!");
+    } else {
+      console.log("OTP无效输入");
+      process.exit(1);
+    }
   } catch (err) {
     console.error("发布失败:", err);
     process.exit(1);
   }
 }
 
-function release() {
+async function start() {
   // 修改版本号
   updateVersion();
   // 打包构建
   build();
   // 提交修改 到 远程仓库
-  commit();
+  await commit();
   // 创建 tag
-  playTag();
+  await playTag();
   // 发包
-  publish();
+  await publishPkg();
 }
 
-release();
+start();
