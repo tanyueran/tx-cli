@@ -16,26 +16,26 @@ async function updateVersion() {
     process.exit(1);
   }
   try {
-    // 选择版本类型（major、minor、patch）
-    const { versionType } = await prompts({
-      type: "select",
-      name: "versionType",
-      message: "请选择版本类型",
-      choices: [
-        { title: "重大更新：major", value: "major" },
-        { title: "小更新：minor", value: "minor" },
-        { title: "热修：patch", value: "patch" },
-      ],
-    });
     const { isRelease } = await prompts({
       type: "confirm",
       name: "isRelease",
       message: "是否发布正式版本？",
     });
     if (isRelease) {
+      // 选择版本类型（major、minor、patch）
+      const { versionType } = await prompts({
+        type: "select",
+        name: "versionType",
+        message: "请选择版本类型",
+        choices: [
+          { title: "重大更新：major", value: "major" },
+          { title: "小更新：minor", value: "minor" },
+          { title: "热修：patch", value: "patch" },
+        ],
+      });
       execSync(`npm version ${versionType} --no-git-tag-version`);
     } else {
-      execSync(`npm version ${versionType} --preid=beta --no-git-tag-version`);
+      execSync(`npm version --preid=beta --no-git-tag-version`);
     }
   } catch (err) {
     console.log("更新版本号失败：", err);
