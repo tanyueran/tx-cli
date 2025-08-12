@@ -1,3 +1,12 @@
+## [0.0.21](https://github.com/tanyueran/tx-cli/compare/v0.0.20...v0.0.21) (2025-08-12)
+
+
+### Features
+
+* 支持选择发布的版本的类型(major、minor、patch) ([19836db](https://github.com/tanyueran/tx-cli/commit/19836db9dba13788cbaa3ce142445c8be45efa7c))
+
+
+
 ## [0.0.20](https://github.com/tanyueran/tx-cli/compare/v0.0.19...v0.0.20) (2025-08-12)
 
 
