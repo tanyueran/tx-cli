@@ -1,7 +1,7 @@
 {
   "name": "@tanyueran/cli",
   "version": "0.0.20",
-  "description": "一个cli工具",
+  "description": "一个cli工具，支持创建项目，添加模版",
   "main": "./src/index.ts",
   "bin": {
     "tx-cli": "./bin/tx-cli"

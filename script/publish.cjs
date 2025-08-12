@@ -16,15 +16,35 @@ async function updateVersion() {
     process.exit(1);
   }
   try {
-    // TODO
-    // 通过命令行实现: major \ minor \ patch 以及 publish时支持beta包
-    execSync("npm version patch --no-git-tag-version");
+    // 选择版本类型（major、minor、patch）
+    const { versionType } = await prompts({
+      type: "select",
+      name: "versionType",
+      message: "请选择版本类型",
+      choices: [
+        { title: "重大更新：major", value: "major" },
+        { title: "小更新：minor", value: "minor" },
+        { title: "热修：patch", value: "patch" },
+      ],
+    });
+    execSync(`npm version ${versionType} --no-git-tag-version`);
+  } catch (err) {
+    console.log("更新版本号失败：", err);
+    process.exit(1);
+  }
+}
+
+/**
+ * 自动生成日志
+ */
+function autoGeneratorLog() {
+  try {
     execSync("npm run changelog");
     // 读取版本号
     const json = JSON.parse(readFileSync("./package.json", "utf-8"));
     version = json.version;
   } catch (err) {
-    console.log("更新版本号失败：", err);
+    console.log("生成 changelog 失败：", err);
     process.exit(1);
   }
 }
@@ -104,6 +124,7 @@ async function publishPkg() {
 
 async function start() {
   await updateVersion();
+  autoGeneratorLog();
   // 打包构建
   build();
   // 提交修改 到 远程仓库
