@@ -1,7 +1,7 @@
 const { execSync } = require("node:child_process");
 const { readFileSync, writeFileSync } = require("fs-extra");
 const { simpleGit } = require("simple-git");
-const { prompts } = require("prompts");
+const prompts = require("prompts");
 
 const git = simpleGit();
 let version = "0.0.1";
