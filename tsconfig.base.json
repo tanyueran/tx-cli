@@ -1,9 +1,0 @@
-{
-  "compilerOptions": {
-    "resolveJsonModule": true,
-    "esModuleInterop": true,
-    "module": "esnext",
-    "target": "esnext",
-  },
-  "types": ["./module.d.ts"]
-}

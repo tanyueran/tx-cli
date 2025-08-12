@@ -1,6 +1,6 @@
 import { Command } from "commander";
 import prompts from "prompts";
-import * as pkg from "./package.json";
+import * as pkg from "../package.json";
 const pico = require("picocolors");
 import path from "node:path";
 import { ProjectTemplateData, ModuleTemplateData } from "./constant/template";

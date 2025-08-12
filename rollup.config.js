@@ -5,15 +5,18 @@ import { terser } from "rollup-plugin-terser";
 
 /** @type {import('rollup').RollupOptions} */
 export default {
-  input: "./index.ts",
+  input: "./src/index.ts",
   output: {
     dir: "./dist",
     format: "commonjs",
   },
   plugins: [
-    typescript(),
-    pluginJson(),
+    typescript({
+      tsconfig: "./tsconfig.json",
+    }
+    ),
     commonjs(),
+    pluginJson(),
     terser({
       compress: {
         dead_code: true, // 移除不可达代码

@@ -4,12 +4,12 @@ export const ProjectTemplateData = [
   {
     label: "vite + vue + ts项目",
     value: ProjectTemplateEnum.ViteVueTs,
-    path: "../packages/template/project/vue/vite-vue-ts",
+    path: "./src/template/project/vue/vite-vue-ts",
   },
   {
     label: "webpack + vue + ts项目",
     value: ProjectTemplateEnum.WebpackVueTs,
-    path: "../packages/template/project/vue/webpack-vue-ts",
+    path: "./src/template/project/vue/webpack-vue-ts",
   },
 ];
 
@@ -17,6 +17,6 @@ export const ModuleTemplateData = [
   {
     label: "vue-ts的空模板",
     value: ModuleTemplateEnum.VueTsEmpty,
-    path: "../template/module/vue/vue-ts-empty",
+    path: "./template/module/vue/vue-ts-empty",
   },
 ];

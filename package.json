@@ -1,25 +1,47 @@
 {
-  "name": "tx-cli",
+  "name": "@tanyueran/cli",
+  "version": "0.0.0",
   "description": "一个cli工具",
-  "type": "module",
-  "version": "0.0.4",
-  "scripts": {
-    "build": "pnpm -r --parallel run build",
-    "publish-pkg": "cd ./packages/cli && pnpm run publish-pkg"
+  "main": "./src/index.ts",
+  "bin": {
+    "tx-cli": "./bin/tx-cli"
   },
-  "workspaces": [
-    "packages/*"
+  "files": [
+    "bin",
+    "dist",
+    "template"
   ],
+  "scripts": {
+    "dev": "pnpm run build && ./bin/tx-cli",
+    "build": "rollup --config rollup.config.js",
+    "publish-pkg": "node ./script/publish.cjs",
+    "release": "standard-version"
+  },
   "keywords": [
     "cli"
   ],
   "author": "tanyueran",
   "license": "ISC",
   "packageManager": "pnpm@10.5.2",
-  "pnpm": {
-    "overrides": {}
+  "dependencies": {
+    "commander": "12.1.0",
+    "fs-extra": "11.1.1",
+    "handlebars": "4.7.7",
+    "picocolors": "1.1.1",
+    "prompts": "2.4.2",
+    "table": "6.8.2"
   },
   "devDependencies": {
-    "simple-git": "3.28.0"
+    "@rollup/plugin-commonjs": "28.0.6",
+    "@rollup/plugin-json": "6.1.0",
+    "@rollup/plugin-typescript": "12.1.4",
+    "@types/fs-extra": "11.0.4",
+    "@types/prompts": "2.4.2",
+    "rollup": "4.46.2",
+    "rollup-plugin-terser": "7.0.2",
+    "simple-git": "3.28.0",
+    "ts-node": "10.9.1",
+    "tslib": "2.8.1",
+    "typescript": "5.9.2"
   }
 }
