@@ -1,6 +1,6 @@
 # @tanyueran/cli
 
-| 一个命令行工具
+| 一个命令行工具，可以创建项目，添加模块
 
 ## 安装
 | npm install -g @tanyueran/cli
@@ -24,3 +24,7 @@ tx-cli create <project-name>
 tx-cli add <module-name>
 
 ```
+
+## TODO
+- [ ] 创建项目
+- [x] 创建模块

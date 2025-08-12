@@ -1,5 +1,5 @@
 const { execSync } = require("node:child_process");
-const { readFileSync, writeFileSync } = require("fs-extra");
+const { readFileSync } = require("fs-extra");
 const { simpleGit } = require("simple-git");
 const prompts = require("prompts");
 
@@ -16,7 +16,8 @@ async function updateVersion() {
     process.exit(1);
   }
   try {
-    // major minor patch bate
+    // TODO
+    // 通过命令行实现: major \ minor \ patch 以及 publish时支持beta包
     execSync("npm version patch --no-git-tag-version");
     execSync("npm run changelog");
     // 读取版本号
