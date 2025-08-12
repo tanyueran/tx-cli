@@ -1,3 +1,7 @@
+## [0.0.20](https://github.com/tanyueran/tx-cli/compare/v0.0.19...v0.0.20) (2025-08-12)
+
+
+
 ## 0.0.19 (2025-08-12)
 
 
