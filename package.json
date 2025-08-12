@@ -1,6 +1,6 @@
 {
   "name": "@tanyueran/cli",
-  "version": "0.0.18",
+  "version": "0.0.19",
   "description": "一个cli工具",
   "main": "./src/index.ts",
   "bin": {
