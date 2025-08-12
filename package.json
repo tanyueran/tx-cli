@@ -3,8 +3,8 @@
   "description": "一个cli工具",
   "type": "module",
   "scripts": {
-    "publish": "pnpm -r --parallel run publish",
-    "build": "pnpm -r --parallel run build"
+    "build": "pnpm -r --parallel run build",
+    "publish-pkg": "pnpm -r --parallel run publish-pkg"
   },
   "workspaces": [
     "packages/*"

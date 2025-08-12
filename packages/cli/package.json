@@ -15,7 +15,7 @@
   "scripts": {
     "dev": "pnpm run build && ./bin/tx-cli",
     "build": "rollup --config rollup.config.js",
-    "publish": "node ./script/publish.cjs"
+    "publish-pkg": "node ./script/publish.cjs"
   },
   "keywords": [
     "cli"
