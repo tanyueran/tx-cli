@@ -93,7 +93,7 @@ async function publishPkg() {
     ]);
     console.log("正在发布到npm...");
     if (otp) {
-      execSync(`npm publish --access public --otp=${otp}`, {
+      execSync(`npm publish --otp=${otp.trim()} --access public `, {
         stdio: "inherit",
       });
       console.log("发布成功!");
