@@ -9,24 +9,24 @@ let version = "0.0.1";
 /**
  * 更新版本号
  */
-function updateVersion() {
-  const json = JSON.parse(readFileSync("./package.json", "utf-8"));
-  version = json.version;
-  let vList = version.split(".").map((v) => parseInt(v));
-  version = `${vList[0]}.${vList[1]}.${vList[2] + 1}`;
-  json.version = version;
-  writeFileSync("./package.json", JSON.stringify(json, null, 2));
-}
-
-/**
- * 回滚版本号
- */
-function rollbackVersion() {
+async function updateVersion() {
+  // const json = JSON.parse(readFileSync("./package.json", "utf-8"));
+  // version = json.version;
+  // let vList = version.split(".").map((v) => parseInt(v));
+  // version = `${vList[0]}.${vList[1]}.${vList[2] + 1}`;
+  // json.version = version;
+  // writeFileSync("./package.json", JSON.stringify(json, null, 2));
+  const status = await git.status();
+  if (!status.isClean()) {
+    console.log("请保证工作空间是干净的");
+    process.exit(1);
+  }
   try {
-    execSync("git checkout ./packages/cli/package.json");
-    console.log("版本号回滚成功");
+    // major minor patch bate
+    execSync("npm version patch");
+    execSync("npm run changelog");
   } catch (err) {
-    console.error("版本号回滚失败，请手动处理：", error);
+    console.log("更新版本号失败：", err);
     process.exit(1);
   }
 }
@@ -42,8 +42,6 @@ function build() {
     console.log("构建完成");
   } catch (err) {
     console.error("提交失败:", error);
-    // 打包失败，回滚版本号
-    rollbackVersion();
   }
 }
 
@@ -107,16 +105,15 @@ async function publishPkg() {
 }
 
 async function start() {
-  // 修改版本号
-  updateVersion();
-  // 打包构建
-  build();
-  // 提交修改 到 远程仓库
-  await commit();
-  // 创建 tag
-  await playTag();
-  // 发包
-  await publishPkg();
+  await updateVersion();
+  // // 打包构建
+  // build();
+  // // 提交修改 到 远程仓库
+  // await commit();
+  // // 创建 tag
+  // await playTag();
+  // // 发包
+  // await publishPkg();
 }
 
 start();
