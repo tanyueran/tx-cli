@@ -26,5 +26,5 @@ tx-cli add <module-name>
 ```
 
 ## TODO
-- [ ] 创建项目
+- [x] 创建项目
 - [x] 创建模块

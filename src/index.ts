@@ -34,7 +34,7 @@ program
         {
           type: "text",
           name: "name",
-          message: "请输入模块名",
+          message: "请输入项目名称",
         },
       ]);
       projectName = result.name ? result.name : DefaultProjectName;
@@ -53,10 +53,25 @@ program
         }),
       },
     ]);
-    console.log(pico.green());
-    console.log(pico.green(response.template));
-    // TODO
-    console.log(pico.red("项目模板正在建设中，请稍后"));
+
+    console.log(pico.green("项目名称：" + response.template));
+    console.log(pico.green("选择模板：" + projectName));
+
+    const selectedTemplate = ProjectTemplateData.find(
+      (item) => item.value === response.template
+    );
+    const targetPath = path.resolve(process.cwd(), projectName);
+    const sourcePath = path.resolve(__dirname, selectedTemplate!.path);
+
+    processor({
+      targetPath,
+      sourcePath,
+      templateData: {
+        name: projectName,
+      },
+    });
+    console.log(pico.green("创建成功"));
+    console.log(pico.green(`cd ./${projectName} && pnpm install`));
   });
 
 // -添加模块

@@ -33,6 +33,8 @@ function parseTemplate(data: {
 
   // 源文件是目录
   if (statSync(sourcePath).isDirectory()) {
+    // 创建目录
+    mkdirSync(targetPath, { recursive: true });
     let items = readdirSync(sourcePath);
     items.forEach((item) => {
       parseTemplate({
@@ -41,6 +43,7 @@ function parseTemplate(data: {
         templateData,
       });
     });
+    // 源文件是文件
   } else {
     if (sourcePath.endsWith(".hbs")) {
       const templateContent = readFileSync(sourcePath);
