@@ -49,5 +49,9 @@
     "ts-node": "10.9.1",
     "tslib": "2.8.1",
     "typescript": "5.9.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tanyueran/tx-cli.git"
   }
 }
