@@ -1,10 +1,10 @@
 import prompts from "prompts";
-import { DefaultProjectName } from "../constant/constant";
-import { ProjectTemplateData } from "../constant/template";
+import { DefaultProjectName } from "../../constant/constant";
+import { ProjectTemplateData } from "../../constant/template";
 const pico = require("picocolors");
 import path from "node:path";
-import { processor } from "../parse-template";
-import { program } from "./var";
+import { processor } from "../../parse-template";
+import { program } from "../var";
 
 // -创建项目
 program

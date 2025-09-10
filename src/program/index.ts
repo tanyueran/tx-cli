@@ -1,4 +1,4 @@
-import "./create-command";
-import "./add-command";
+import "./command/add-command";
+import "./command/create-command";
 
 export * from "./var";
