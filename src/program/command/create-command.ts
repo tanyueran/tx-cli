@@ -10,8 +10,10 @@ import { program } from "../var";
 program
   .command("create <project-name>")
   .description("创建项目")
+  .option("-p, --project-name <projectName>", "项目名称")
   .action(async (_projectName: string) => {
     let projectName = _projectName || program.opts().projectName;
+    console.log("项目名称：", projectName);
     // option 中没有携带模块名称时，让用户自己在输入
     if (!projectName) {
       const result = await prompts([

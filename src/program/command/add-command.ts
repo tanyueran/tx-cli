@@ -10,8 +10,9 @@ import { program } from "../var";
 program
   .command("add <module-name>")
   .description("添加模块")
+  .option("-m, --module-name <moduleName>", "模块名称")
   .action(async (_moduleName: string) => {
-    console.log("_moduleName:", _moduleName);
+    console.log("模块名称：", _moduleName);
     let moduleName = _moduleName || program.opts().moduleName;
     // option 中没有携带模块名称时，让用户自己在输入
     if (!moduleName) {
