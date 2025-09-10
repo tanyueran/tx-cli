@@ -1,3 +1,18 @@
+# [0.2.0](https://github.com/tanyueran/tx-cli/compare/v0.1.0...v0.2.0) (2025-09-10)
+
+
+### Bug Fixes
+
+* 优化add,create的命令设计 ([8d366c0](https://github.com/tanyueran/tx-cli/commit/8d366c0d130eec2ec9e2fa8d852edf73e47ecd1f))
+
+
+### Features
+
+* create命令支持后面跟项目名称;add命令后面支持跟模块名称 ([f4ec6c5](https://github.com/tanyueran/tx-cli/commit/f4ec6c5e6e3dd42f1c0a33d0f159651623f61d35))
+* server命令 ([8834c50](https://github.com/tanyueran/tx-cli/commit/8834c504bfeb3d00e947d6ea47f6792d4fbc6d59))
+
+
+
 # [0.1.0](https://github.com/tanyueran/tx-cli/compare/v0.0.22-beta.0...v0.1.0) (2025-08-14)
 
 
