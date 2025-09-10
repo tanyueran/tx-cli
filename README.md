@@ -25,5 +25,5 @@ Commands:
 ## TODO
 - [x] 创建项目
 - [x] 创建模块
-- [ ] server 命令（启用一个本地服务器）
+- [x] server 命令（启用一个本地服务器）
 - [ ] copy 命令（复制文件，支持过滤某些文件）tx-cli copy <src> <dest> --filter <filter>
