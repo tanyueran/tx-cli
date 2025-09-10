@@ -16,15 +16,13 @@ Options:
   -h, --help                        display help for command
 
 Commands:
-  create                            创建项目
-  add                               添加模块
+  create <project-name>             创建项目
+  add <module-name>                 添加模块
   help [command]                    display help for command
-
-tx-cli create <project-name>
-tx-cli add <module-name>
 
 ```
 
 ## TODO
 - [x] 创建项目
 - [x] 创建模块
+- [ ] copy 命令（复制文件，支持过滤某些文件）tx-cli copy <src> <dest> --filter <filter>

@@ -24,10 +24,10 @@ program
 
 // -创建项目
 program
-  .command("create")
+  .command("create <project-name>")
   .description("创建项目")
-  .action(async () => {
-    let projectName = program.opts().projectName;
+  .action(async (_projectName: string) => {
+    let projectName = _projectName || program.opts().projectName;
     // option 中没有携带模块名称时，让用户自己在输入
     if (!projectName) {
       const result = await prompts([
@@ -76,10 +76,11 @@ program
 
 // -添加模块
 program
-  .command("add")
+  .command("add <module-name>")
   .description("添加模块")
-  .action(async () => {
-    let moduleName = program.opts().moduleName;
+  .action(async (_moduleName: string) => {
+    console.log("_moduleName:", _moduleName)
+    let moduleName = _moduleName || program.opts().moduleName;
     // option 中没有携带模块名称时，让用户自己在输入
     if (!moduleName) {
       const result = await prompts([
