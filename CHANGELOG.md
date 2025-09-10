@@ -1,3 +1,12 @@
+## [0.2.1](https://github.com/tanyueran/tx-cli/compare/v0.2.0...v0.2.1) (2025-09-10)
+
+
+### Bug Fixes
+
+* 更新说明文档和一些pgk配置 ([c584788](https://github.com/tanyueran/tx-cli/commit/c5847882e57597f85b1a0e1940c98ca1ce3e2ec7))
+
+
+
 # [0.2.0](https://github.com/tanyueran/tx-cli/compare/v0.1.0...v0.2.0) (2025-09-10)
 
 
