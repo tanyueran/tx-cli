@@ -5,6 +5,12 @@ import serveStatic from "serve-static";
 import open from "open";
 import { resolve } from "node:path";
 
+function setHeaders(res: any, path: string, stat: any, headerOptions: Record<string, string>){
+  for (const [key, value] of Object.entries(headerOptions)) {
+    res.setHeader(key, value);
+  }
+}
+
 function startServer(options: ServerOptions = {}) {
   const {
     port = 8080,
@@ -19,7 +25,9 @@ function startServer(options: ServerOptions = {}) {
   const app = connect();
 
   // 添加静态文件服务中间件
-  app.use(serveStatic(resolve(directory), header));
+  app.use(serveStatic(resolve(directory), {
+    setHeaders: (...args)=> setHeaders(...args, header)
+  }));
 
   // 处理404
   app.use((req, res) => {
