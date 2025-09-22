@@ -4,4 +4,5 @@ export interface ServerOptions {
   directory?: string;
   openBrowser?: boolean;
   silent?: boolean;
+  header?: Record<string, string>;
 }

@@ -9,6 +9,7 @@ program
   .option("-d, --directory <path>", "服务的目录", ".")
   .option("-o, --open", "启动后自动打开浏览器")
   .option("-s, --silent", "静默模式，不输出信息")
+  .option("--header <json>", "启动服务设置的HTTP相应头", "{}")
   .action((options) => {
     // 将字符串选项转换为正确类型
     const opts = {
@@ -16,6 +17,7 @@ program
       port: parseInt(options.port, 10),
       openBrowser: !!options.open,
       silent: !!options.silent,
+      header: JSON.parse(options.header),
     };
 
     // 启动服务器

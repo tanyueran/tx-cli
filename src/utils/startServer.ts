@@ -12,13 +12,14 @@ function startServer(options: ServerOptions = {}) {
     directory = process.cwd(), // 默认为当前工作目录
     openBrowser = false,
     silent = false,
+    header = {},
   } = options;
 
   // 创建 Connect 应用
   const app = connect();
 
   // 添加静态文件服务中间件
-  app.use(serveStatic(resolve(directory)));
+  app.use(serveStatic(resolve(directory), header));
 
   // 处理404
   app.use((req, res) => {
