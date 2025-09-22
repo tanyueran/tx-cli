@@ -1,3 +1,12 @@
+## [0.3.1](https://github.com/tanyueran/tx-cli/compare/v0.3.0...v0.3.1) (2025-09-22)
+
+
+### Bug Fixes
+
+* 修复server 自定义header没有设置上的问题 ([3da6517](https://github.com/tanyueran/tx-cli/commit/3da65176eb7002a4afe85c225a5dbe3766965d7e))
+
+
+
 # [0.3.0](https://github.com/tanyueran/tx-cli/compare/v0.2.1...v0.3.0) (2025-09-22)
 
 
