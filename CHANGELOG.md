@@ -1,3 +1,12 @@
+# [0.3.0](https://github.com/tanyueran/tx-cli/compare/v0.2.1...v0.3.0) (2025-09-22)
+
+
+### Features
+
+* server支持设置响应header ([e2ca9e4](https://github.com/tanyueran/tx-cli/commit/e2ca9e43db3d08ed9d6923db2caef86fcf5d86e5))
+
+
+
 ## [0.2.1](https://github.com/tanyueran/tx-cli/compare/v0.2.0...v0.2.1) (2025-09-10)
 
 
