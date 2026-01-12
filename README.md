@@ -21,6 +21,7 @@ Commands:
   create [options] <project-name>  创建项目
   server [options]                 启动一个本地HTTP服务器
   help [command]                   display help for command
+  git-rename [options] <old-name> <new-name>  git重命名模块名称
 
 ```
 
