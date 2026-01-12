@@ -1,3 +1,12 @@
+# [0.4.0](https://github.com/tanyueran/tx-cli/compare/v0.3.1...v0.4.0) (2026-01-12)
+
+
+### Features
+
+* 添加git重命名模块名称命令 ([267f224](https://github.com/tanyueran/tx-cli/commit/267f2241ed4b912c32c55b247f6947dc7f8ec0eb))
+
+
+
 ## [0.3.1](https://github.com/tanyueran/tx-cli/compare/v0.3.0...v0.3.1) (2025-09-22)
 
 
