@@ -1,3 +1,12 @@
+## [0.4.1](https://github.com/tanyueran/tx-cli/compare/v0.4.0...v0.4.1) (2026-01-12)
+
+
+### Bug Fixes
+
+* 修复安装后的报错 ([255fefa](https://github.com/tanyueran/tx-cli/commit/255fefa562c2f06b50f15b7e58091f88982e779d))
+
+
+
 # [0.4.0](https://github.com/tanyueran/tx-cli/compare/v0.3.1...v0.4.0) (2026-01-12)
 
 
