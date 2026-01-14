@@ -1,20 +1,20 @@
 import { program } from "../var";
-import { basename, dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { cwd } from "process";
+import { basename, resolve } from "node:path";
 import { existsWithExactCase } from "../../utils/fileUtils";
 
 const { simpleGit } = require("simple-git");
 
 const git = simpleGit();
 
-const __dirname = fileURLToPath(dirname(import.meta.url));
-
 program
   .command("git-rename <old-model-url> <new-model-url>")
   .description("git重命名模块")
   .action(async (_oldModelUrl: string, _newModelUrl: string) => {
-    const oldModelUrl = resolve(__dirname, _oldModelUrl);
-    const newModelUrl = resolve(__dirname, _newModelUrl);
+    const basePath = cwd();
+
+    const oldModelUrl = resolve(basePath, _oldModelUrl);
+    const newModelUrl = resolve(basePath, _newModelUrl);
 
     // nodejs判断文件是否存在
     if (!existsWithExactCase(oldModelUrl)) {
