@@ -1,7 +1,7 @@
 import prompts from "prompts";
 import { DefaultProjectName } from "../../constant/constant";
 import { ProjectTemplateData } from "../../constant/template";
-const pico = require("picocolors");
+import pico from 'picocolors'
 import path from "node:path";
 import { processor } from "../../parse-template";
 import { program } from "../var";
