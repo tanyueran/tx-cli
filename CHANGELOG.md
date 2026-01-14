@@ -1,3 +1,12 @@
+## [0.4.3](https://github.com/tanyueran/tx-cli/compare/v0.4.2...v0.4.3) (2026-01-14)
+
+
+### Bug Fixes
+
+* 修复git-rename命令打包安装后获取的文件路径错误问题 ([fd00b37](https://github.com/tanyueran/tx-cli/commit/fd00b378ba0ee965f0e1c23064ad89703614bde7))
+
+
+
 ## [0.4.2](https://github.com/tanyueran/tx-cli/compare/v0.4.1...v0.4.2) (2026-01-13)
 
 
