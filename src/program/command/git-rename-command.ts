@@ -3,6 +3,7 @@ import { cwd } from "node:process";
 import { basename, resolve } from "node:path";
 import { existsWithExactCase } from "../../utils/fileUtils";
 import { simpleGit } from "simple-git";
+import pico from "picocolors";
 
 const git = simpleGit();
 
@@ -17,11 +18,11 @@ program
 
     // nodejs判断文件是否存在
     if (!existsWithExactCase(oldModelUrl)) {
-      return console.error(`${oldModelUrl}文件不存在`);
+      return console.error(pico.red(`${oldModelUrl}文件不存在`));
     }
 
     if (existsWithExactCase(newModelUrl)) {
-      return console.error(`${newModelUrl}文件已存在`);
+      return console.error(pico.red(`${newModelUrl}文件已存在`));
     }
 
     // 判断旧文件是否被git跟踪
@@ -35,7 +36,7 @@ program
         .map((item) => resolve(gitRootPath, item))
         .includes(oldModelUrl)
     ) {
-      return console.error(`文件${oldModelUrl}未被git跟踪`);
+      return console.error(pico.red(`文件${oldModelUrl}未被git跟踪`));
     }
 
     const oldModelName = basename(oldModelUrl);

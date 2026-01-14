@@ -11,6 +11,7 @@ import {
 import path from "node:path";
 import { compile, registerHelper } from "handlebars";
 import { toPascalCase } from "../utils/stringUtils";
+import pico from "picocolors";
 
 type TemplateDataType = {
   [key: string]: unknown;
@@ -70,7 +71,7 @@ export function processor(data: {
   const { targetPath, sourcePath } = data;
 
   if (!statSync(sourcePath).isDirectory()) {
-    console.error("源文件路劲必须是一个目录");
+    console.error(pico.red("源文件路劲必须是一个目录"));
     return;
   }
 
