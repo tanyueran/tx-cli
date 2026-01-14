@@ -1,3 +1,13 @@
+## [0.4.5](https://github.com/tanyueran/tx-cli/compare/v0.4.4...v0.4.5) (2026-01-14)
+
+
+### Bug Fixes
+
+* 优化错误输出 ([923917b](https://github.com/tanyueran/tx-cli/commit/923917ba9659dc05ce212cb1083abb50978c26cf))
+* 输出添加颜色区分 ([e77bb5f](https://github.com/tanyueran/tx-cli/commit/e77bb5f9a5997fe0db05e5bbbaac27931d4667a8))
+
+
+
 ## [0.4.4](https://github.com/tanyueran/tx-cli/compare/v0.4.3...v0.4.4) (2026-01-14)
 
 
