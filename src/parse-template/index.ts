@@ -70,7 +70,8 @@ export function processor(data: {
   const { targetPath, sourcePath } = data;
 
   if (!statSync(sourcePath).isDirectory()) {
-    throw new Error("源文件路劲必须是一个目录");
+    console.error("源文件路劲必须是一个目录");
+    return;
   }
 
   // 旧目录存在，则直接删除
