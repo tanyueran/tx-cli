@@ -1,9 +1,8 @@
 import { program } from "../var";
-import { cwd } from "process";
+import { cwd } from "node:process";
 import { basename, resolve } from "node:path";
 import { existsWithExactCase } from "../../utils/fileUtils";
-
-const { simpleGit } = require("simple-git");
+import { simpleGit } from "simple-git";
 
 const git = simpleGit();
 
@@ -23,6 +22,20 @@ program
 
     if (existsWithExactCase(newModelUrl)) {
       throw new Error(`${newModelUrl}文件已存在`);
+    }
+
+    // 判断旧文件是否被git跟踪
+    const status = await git.status();
+    const gitRootPath = await git.revparse(["--show-toplevel"]);
+    if (
+      status.not_added
+        .map((item) => resolve(gitRootPath, item))
+        .includes(oldModelUrl) ||
+      (status.ignored || [])
+        .map((item) => resolve(gitRootPath, item))
+        .includes(oldModelUrl)
+    ) {
+      throw new Error(`文件${oldModelUrl}未被git跟踪`);
     }
 
     const oldModelName = basename(oldModelUrl);

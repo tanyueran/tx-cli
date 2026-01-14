@@ -8,7 +8,7 @@ import {
   mkdirSync,
   readFileSync,
 } from "fs-extra";
-const path = require("node:path");
+import path from "node:path";
 import { compile, registerHelper } from "handlebars";
 import { toPascalCase } from "../utils/stringUtils";
 
