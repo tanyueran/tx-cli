@@ -1,3 +1,12 @@
+## [0.4.4](https://github.com/tanyueran/tx-cli/compare/v0.4.3...v0.4.4) (2026-01-14)
+
+
+### Bug Fixes
+
+* 完善git-rename命令的校验逻辑 ([5f236e5](https://github.com/tanyueran/tx-cli/commit/5f236e58bd943ea45702db57bb2cbeaf481ea1d4))
+
+
+
 ## [0.4.3](https://github.com/tanyueran/tx-cli/compare/v0.4.2...v0.4.3) (2026-01-14)
 
 
