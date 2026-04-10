@@ -22,6 +22,7 @@ Commands:
   server [options]                 启动一个本地HTTP服务器
   git-rename <old-name> <new-name>  git重命名模块名称(主要用于git跟踪的文件的名称大小写的转换)
   help [command]                   display help for command
+  commit-fix <message...>          根据ones上“【id】+【title】+【message】”的信息改为：“fix(【id】): 【title】”格式提交git commit。注意：后面的消息双引号包裹
 ```
 
 ## TODO
