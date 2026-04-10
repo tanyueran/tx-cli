@@ -1,3 +1,12 @@
+# [0.5.0](https://github.com/tanyueran/tx-cli/compare/v0.4.5...v0.5.0) (2026-04-10)
+
+
+### Features
+
+* 新增commit-fix命令 ([3458665](https://github.com/tanyueran/tx-cli/commit/3458665de5a355c454fd3b7eddb5d6cb5c6bcddc))
+
+
+
 ## [0.4.5](https://github.com/tanyueran/tx-cli/compare/v0.4.4...v0.4.5) (2026-01-14)
 
 
