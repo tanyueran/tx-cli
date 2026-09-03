@@ -12,14 +12,10 @@ program
     "根据ones上“【id】+【title】+【message】”的信息改为：“fix(【id】): 【title】”格式提交git commit。注意：后面的消息双引号包裹",
   )
   .action(async (message: string[]) => {
-    console.log("----------获取的message:-------------");
-    console.log(message);
-    console.log("-----------------------:-------------");
-
     // 处理message的信息
     const newMessage = disposeOnesInfo(message.join(" "));
 
-    console.log(pico.green("commit message: " + newMessage || "-"));
+    console.log(pico.green("commit message: " + (newMessage || "-")));
     const result = await prompts({
       type: "select",
       name: "confirm",
@@ -34,7 +30,7 @@ program
         await git.commit(newMessage);
         console.log(pico.green("提交成功"));
       } catch (err) {
-        console.log(pico.red("提交失败"));
+        console.log(pico.red(`提交失败: ${(err as Error).message}`));
       }
     } else {
       console.log("取消");

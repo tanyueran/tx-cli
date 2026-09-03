@@ -2,7 +2,7 @@
   "name": "@tanyueran/cli",
   "version": "0.5.0",
   "description": "一个cli工具，支持创建项目，添加模版",
-  "main": "./src/index.ts",
+  "main": "./dist/index.js",
   "bin": {
     "tx-cli": "./bin/tx-cli"
   },
@@ -11,11 +11,19 @@
     "dist",
     "template"
   ],
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "dev": "pnpm run build && ./bin/tx-cli",
     "build": "rollup --config rollup.config.js",
     "publish-pkg": "node ./script/publish.cjs",
-    "changelog": "conventional-changelog -p angular -i CHANGELOG.md -s"
+    "changelog": "conventional-changelog -p angular -i CHANGELOG.md -s",
+    "type-check": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint src/",
+    "lint:fix": "eslint src/ --fix"
   },
   "keywords": [
     "cli"
@@ -32,10 +40,10 @@
     "picocolors": "1.1.1",
     "prompts": "2.4.2",
     "serve-static": "^2.2.0",
-    "table": "6.8.2",
     "simple-git": "3.28.0"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@rollup/plugin-commonjs": "28.0.6",
     "@rollup/plugin-json": "6.1.0",
     "@rollup/plugin-typescript": "12.1.4",
@@ -44,11 +52,14 @@
     "@types/prompts": "2.4.2",
     "@types/serve-static": "^1.15.8",
     "conventional-changelog-cli": "5.0.0",
+    "eslint": "^10.9.1",
     "rollup": "4.46.2",
     "rollup-plugin-terser": "7.0.2",
     "ts-node": "10.9.1",
     "tslib": "2.8.1",
-    "typescript": "5.9.2"
+    "typescript": "5.9.2",
+    "typescript-eslint": "^8.69.0",
+    "vitest": "^4.1.11"
   },
   "repository": {
     "type": "git",

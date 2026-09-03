@@ -6,18 +6,12 @@ import open from "open";
 import { resolve } from "node:path";
 import pico from "picocolors";
 
-function setHeaders(
-  res: any,
-  path: string,
-  stat: any,
-  headerOptions: Record<string, string>
-) {
-  for (const [key, value] of Object.entries(headerOptions)) {
-    res.setHeader(key, value);
-  }
-}
-
-function startServer(options: ServerOptions = {}) {
+/**
+ * 启动一个静态文件服务器
+ * @param {ServerOptions} options - 服务器配置项
+ * @returns {http.Server} 已开始监听的 http server 实例，便于外部关闭或测试
+ */
+function startServer(options: ServerOptions = {}): http.Server {
   const {
     port = 8080,
     host = "localhost",
@@ -33,7 +27,11 @@ function startServer(options: ServerOptions = {}) {
   // 添加静态文件服务中间件
   app.use(
     serveStatic(resolve(directory), {
-      setHeaders: (...args) => setHeaders(...args, header),
+      setHeaders: (res: http.ServerResponse) => {
+        for (const [key, value] of Object.entries(header)) {
+          res.setHeader(key, value);
+        }
+      },
     })
   );
 
@@ -45,6 +43,16 @@ function startServer(options: ServerOptions = {}) {
 
   // 创建 HTTP 服务器
   const server = http.createServer(app);
+
+  // 端口被占用等启动失败的场景，给出可读的提示而非抛出未捕获异常
+  server.on("error", (err: NodeJS.ErrnoException) => {
+    if (err.code === "EADDRINUSE") {
+      console.error(pico.red(`端口 ${port} 已被占用，请换一个端口`));
+    } else {
+      console.error(pico.red(`服务器启动失败: ${err.message}`));
+    }
+    process.exit(1);
+  });
 
   server.listen(port, host, () => {
     const url = `http://${host}:${port}`;

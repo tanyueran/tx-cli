@@ -6,11 +6,6 @@ export const ProjectTemplateData = [
     value: ProjectTemplateEnum.ViteVueTs,
     path: "../template/project/vue/vite-vue-ts",
   },
-  // {
-  //   label: "webpack + vue + ts项目",
-  //   value: ProjectTemplateEnum.WebpackVueTs,
-  //   path: "../template/project/vue/webpack-vue-ts",
-  // },
 ];
 
 export const ModuleTemplateData = [

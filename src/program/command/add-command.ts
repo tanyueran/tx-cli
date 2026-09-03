@@ -1,20 +1,18 @@
 import prompts from "prompts";
 import { DefaultModuleName } from "../../constant/constant";
 import { ModuleTemplateData } from "../../constant/template";
-import pico from 'picocolors'
+import pico from "picocolors";
 import path from "node:path";
 import { processor } from "../../parse-template";
 import { program } from "../var";
 
 // -添加模块
 program
-  .command("add <module-name>")
+  .command("add [module-name]")
   .description("添加模块")
-  .option("-m, --module-name <moduleName>", "模块名称")
-  .action(async (_moduleName: string) => {
-    console.log("模块名称：", _moduleName);
-    let moduleName = _moduleName || program.opts().moduleName;
-    // option 中没有携带模块名称时，让用户自己在输入
+  .action(async (_moduleName?: string) => {
+    let moduleName = _moduleName;
+    // 未传入模块名称时，让用户自己输入
     if (!moduleName) {
       const result = await prompts([
         {
@@ -26,7 +24,6 @@ program
       moduleName = result.name ? result.name : DefaultModuleName;
     }
     // 询问创建的 模板等
-    // prompts
     const response = await prompts([
       {
         type: "select",
@@ -38,16 +35,23 @@ program
         })),
       },
     ]);
-    console.log(pico.green("模板名称：" + moduleName));
-    console.log(pico.green("选择模板：" + response.template));
 
     const selectedTemplate = ModuleTemplateData.find(
       (item) => item.value === response.template
     );
-    const targetPath = path.resolve(process.cwd(), moduleName);
-    const sourcePath = path.resolve(__dirname, selectedTemplate!.path);
+    // 用户中途取消选择时直接退出
+    if (!selectedTemplate) {
+      console.log(pico.yellow("未选择模板，已取消"));
+      return;
+    }
 
-    processor({
+    console.log(pico.green("模块名称：" + moduleName));
+    console.log(pico.green("选择模板：" + selectedTemplate.label));
+
+    const targetPath = path.resolve(process.cwd(), moduleName!);
+    const sourcePath = path.resolve(__dirname, selectedTemplate.path);
+
+    const success = await processor({
       targetPath,
       sourcePath,
       templateData: {
@@ -55,6 +59,7 @@ program
       },
     });
 
-    // TODO
-    // 接入AI，通过AI去实现，你的描述表达的案例
+    if (success) {
+      console.log(pico.green(`模块已生成：${targetPath}`));
+    }
   });
