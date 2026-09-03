@@ -1,3 +1,7 @@
+## [0.5.1-beta.1](https://github.com/tanyueran/tx-cli/compare/v0.5.1-beta.0...v0.5.1-beta.1) (2026-09-03)
+
+
+
 ## [0.5.1-beta.0](https://github.com/tanyueran/tx-cli/compare/v0.5.0...v0.5.1-beta.0) (2026-09-03)
 
 
