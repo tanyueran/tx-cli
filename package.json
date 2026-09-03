@@ -2,7 +2,7 @@
   "name": "@tanyueran/cli",
   "version": "0.5.1-beta.0",
   "description": "一个cli工具，支持创建项目，添加模版",
-  "main": "./dist/index.js",
+  "main": "./dist/cli.js",
   "bin": {
     "tx-cli": "./bin/tx-cli"
   },
@@ -15,15 +15,16 @@
     "node": ">=18"
   },
   "scripts": {
-    "dev": "pnpm run build && ./bin/tx-cli",
-    "build": "rollup --config rollup.config.js",
+    "dev": "tsx ./src/cli.ts",
+    "build": "rollup --config rollup.config.mjs",
     "publish-pkg": "node ./script/publish.cjs",
     "changelog": "conventional-changelog -p angular -i CHANGELOG.md -s",
     "type-check": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "lint": "eslint src/",
-    "lint:fix": "eslint src/ --fix"
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint src/ test/",
+    "lint:fix": "eslint src/ test/ --fix"
   },
   "keywords": [
     "cli"
@@ -44,19 +45,20 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@rollup/plugin-commonjs": "28.0.6",
-    "@rollup/plugin-json": "6.1.0",
+    "@rollup/plugin-replace": "^6.0.3",
+    "@rollup/plugin-terser": "^1.0.0",
     "@rollup/plugin-typescript": "12.1.4",
     "@types/connect": "^3.4.38",
     "@types/fs-extra": "11.0.4",
+    "@types/node": "^26.4.1",
     "@types/prompts": "2.4.2",
     "@types/serve-static": "^1.15.8",
+    "@vitest/coverage-v8": "^4.1.11",
     "conventional-changelog-cli": "5.0.0",
     "eslint": "^10.9.1",
     "rollup": "4.46.2",
-    "rollup-plugin-terser": "7.0.2",
-    "ts-node": "10.9.1",
     "tslib": "2.8.1",
+    "tsx": "^4.23.13",
     "typescript": "5.9.2",
     "typescript-eslint": "^8.69.0",
     "vitest": "^4.1.11"

@@ -9,22 +9,17 @@
  * @returns {string} 转换后的 commit message，不符合格式时原样返回
  */
 export function disposeOnesInfo(message: string) {
-  if (message.startsWith("#")) {
-    try {
-      const [info] = message.split(/\n/);
-      const matched = info.match(/#(\d+)/);
-      // 没匹配到 id 时按原样返回，避免生成 fix(): xxx 这种无意义信息
-      if (!matched) {
-        return message;
-      }
-      const [idWithHash] = matched;
-      const title = info.replace(idWithHash, "").trim();
-      return `fix(${idWithHash}): ${title}`;
-    } catch (err) {
-      console.error(err);
-      return message;
-    }
-  } else {
+  if (!message.startsWith("#")) {
     return message;
   }
+
+  const [info] = message.split(/\n/);
+  const matched = info.match(/#(\d+)/);
+  // 没匹配到 id 时按原样返回，避免生成 fix(): xxx 这种无意义信息
+  if (!matched) {
+    return message;
+  }
+  const [idWithHash] = matched;
+  const title = info.replace(idWithHash, "").trim();
+  return `fix(${idWithHash}): ${title}`;
 }

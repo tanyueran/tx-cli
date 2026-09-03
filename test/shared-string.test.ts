@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { toPascalCase } from "../src/utils/stringUtils";
+import { toPascalCase } from "../src/shared/string";
 
 describe("toPascalCase", () => {
   it("连字符分隔转大驼峰", () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { disposeOnesInfo } from "../src/utils/disposeOnesInfoUtils";
+import { disposeOnesInfo } from "../src/core/ones-message";
 
 describe("disposeOnesInfo", () => {
   it("标准ones信息：带#id、标题和url", () => {
