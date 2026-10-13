@@ -1,3 +1,9 @@
+## [0.7.1](https://github.com/tanyueran/tx-cli/compare/v0.7.0...v0.7.1) (2026-10-13)
+
+### Miscellaneous Chores
+
+* 优化自动发布的流程 ([892d5d7](https://github.com/tanyueran/tx-cli/commit/892d5d73506c47c5f8b7fa9218fd1a7e0f76e94d))
+* 完善发布日志收集 ([348fbf8](https://github.com/tanyueran/tx-cli/commit/348fbf871ccc5a409b7557973dab8180aae66eac))
 # [0.7.0](https://github.com/tanyueran/tx-cli/compare/v0.6.0...v0.7.0) (2026-10-13)
 
 
