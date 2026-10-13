@@ -1,3 +1,12 @@
+# [0.6.0](https://github.com/tanyueran/tx-cli/compare/v0.5.1-beta.1...v0.6.0) (2026-10-13)
+
+
+### Features
+
+* 新增copy、chat命令 ([5020e15](https://github.com/tanyueran/tx-cli/commit/5020e15b24b904aecff96a37737951dbc5e6c3a0))
+
+
+
 ## [0.5.1-beta.1](https://github.com/tanyueran/tx-cli/compare/v0.5.1-beta.0...v0.5.1-beta.1) (2026-09-03)
 
 
