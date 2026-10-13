@@ -7,9 +7,11 @@ describe("createProgram", () => {
     expect(names).toEqual([
       "create",
       "add",
+      "copy",
       "server",
       "git-rename",
       "commit-fix",
+      "chat",
     ]);
   });
 

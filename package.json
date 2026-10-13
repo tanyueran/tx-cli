@@ -1,7 +1,7 @@
 {
   "name": "@tanyueran/cli",
-  "version": "0.5.1-beta.1",
-  "description": "一个cli工具，支持创建项目，添加模版",
+  "version": "0.6.0",
+  "description": "一个cli工具，支持创建项目，添加模版，与大模型对话",
   "main": "./dist/cli.js",
   "bin": {
     "tx-cli": "./bin/tx-cli"
@@ -38,6 +38,7 @@
     "fs-extra": "11.1.1",
     "handlebars": "4.7.7",
     "open": "^10.2.0",
+    "openai": "7.32.0",
     "picocolors": "1.1.1",
     "prompts": "2.4.2",
     "serve-static": "^2.2.0",
