@@ -5,8 +5,6 @@ import { disposeOnesInfo } from "../../core/ones-message";
 import { CliError } from "../../shared/errors";
 import { askSelect } from "../../shared/prompt";
 
-const git = simpleGit();
-
 /**
  * 注册 commit-fix 命令：把 ones 上复制的信息转换为规范的 commit message 并提交
  * @param {Command} program - commander 实例
@@ -19,6 +17,8 @@ export function registerCommitFixCommand(program: Command): void {
       "根据ones上“【id】+【title】+【message】”的信息改为：“fix(【id】): 【title】”格式提交git commit。注意：后面的消息双引号包裹"
     )
     .action(async (message: string[]) => {
+      // 按需创建，避免模块顶层实例化污染其他命令，也便于测试注入
+      const git = simpleGit();
       if (!(await git.checkIsRepo())) {
         throw new CliError("当前目录不是一个git仓库");
       }

@@ -4,7 +4,7 @@ import { runOneShotChat, runReplChat } from "../../core/chat";
 
 /**
  * 注册 chat 命令：与大模型对话
- * 思考档位优先级：--think > 配置文件 llm.thinkingLevel > off
+ * 思考档位优先级：--think > 配置文件 llm.thinkingLevel > medium
  * @param {Command} program - commander 实例
  * @returns {void}
  */

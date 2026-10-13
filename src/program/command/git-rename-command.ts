@@ -6,8 +6,6 @@ import pico from "picocolors";
 import { existsWithExactCase } from "../../shared/fs";
 import { CliError } from "../../shared/errors";
 
-const git = simpleGit();
-
 /**
  * 注册 git-rename 命令：git 重命名模块（支持大小写转换）
  * @param {Command} program - commander 实例
@@ -18,6 +16,8 @@ export function registerGitRenameCommand(program: Command): void {
     .command("git-rename <old-model-url> <new-model-url>")
     .description("git重命名模块")
     .action(async (_oldModelUrl: string, _newModelUrl: string) => {
+      // 按需创建，避免模块顶层实例化污染其他命令，也便于测试注入
+      const git = simpleGit();
       const basePath = cwd();
       const oldModelUrl = resolve(basePath, _oldModelUrl);
       const newModelUrl = resolve(basePath, _newModelUrl);

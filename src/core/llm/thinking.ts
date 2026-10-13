@@ -1,26 +1,29 @@
 import { CliError } from "../../shared/errors";
-import type {
-  LlmConfig,
-  ThinkingLevel,
-  ThinkingStyle,
-} from "../../types/llm";
+import type { LlmConfig, ThinkingLevel, ThinkingStyle } from "../../types/llm";
 
 /** 全部合法的思考档位 */
-const THINKING_LEVELS: readonly ThinkingLevel[] = ["off", "low", "medium", "high"];
+const THINKING_LEVELS: readonly ThinkingLevel[] = [
+  "off",
+  "low",
+  "medium",
+  "high",
+];
 
 /** baseUrl → 思考协议风格的推断规则（按声明顺序首个命中生效） */
-const STYLE_INFERENCE_RULES: Array<{ pattern: RegExp; style: ThinkingStyle }> = [
-  // 火山方舟（豆包）、智谱 GLM：thinking.type 开关式扩展
-  { pattern: /volces\.com|doubao|bigmodel\.cn/i, style: "thinking" },
-  // 阿里 Qwen DashScope 兼容模式：enable_thinking 布尔开关
-  { pattern: /dashscope\.aliyuncs\.com/i, style: "enable_thinking" },
-];
+const STYLE_INFERENCE_RULES: Array<{ pattern: RegExp; style: ThinkingStyle }> =
+  [
+    // 火山方舟（豆包）、智谱 GLM：thinking.type 开关式扩展
+    { pattern: /volces\.com|doubao|bigmodel\.cn/i, style: "thinking" },
+    // 阿里 Qwen DashScope 兼容模式：enable_thinking 布尔开关
+    { pattern: /dashscope\.aliyuncs\.com/i, style: "enable_thinking" },
+  ];
 
 /** 各协议风格的用户可读说明（用于折算提示） */
 const STYLE_DESCRIPTIONS: Record<ThinkingStyle, string> = {
   reasoning_effort: "档位直接作为 reasoning_effort 下发",
   thinking: "仅支持开/关（thinking.type），low/medium/high 均按 enabled 折算",
-  enable_thinking: "仅支持开/关（enable_thinking），low/medium/high 均按开启折算",
+  enable_thinking:
+    "仅支持开/关（enable_thinking），low/medium/high 均按开启折算",
   none: "不支持思考开关，思考字段不会下发（可换 reasoner 类模型）",
 };
 
@@ -88,28 +91,35 @@ export function resolveThinkingStyle(config: LlmConfig): ThinkingStyle {
   return hit?.style ?? "reasoning_effort";
 }
 
+/** reasoning 扩展字段的构造器：两套接口的字段形状不同，由调用方提供 */
+type ReasoningFieldBuilder = (effort: string) => Record<string, unknown>;
+
 /**
- * 按档位与风格生成 Chat Completions 接口的附加请求字段
- * off 在 reasoning_effort/none 风格下不发任何字段，最大化兼容不支持思考扩展的服务
+ * 按档位与风格生成思考扩展字段：两套接口仅 reasoning 字段形状不同，其余分支共用
+ * off 在 reasoning_effort/none 风格下不发任何字段，最大化兼容不支持思考扩展的服务；
+ * thinking/enable_thinking 为开关式风格，low/medium/high 均折算为开启
  * @param {ThinkingLevel} level - 思考档位
  * @param {ThinkingStyle} style - 思考协议风格
  * @param {Partial<Record<ThinkingLevel, string>>} [effortMap] - 高级映射，优先于内置映射
+ * @param {ReasoningFieldBuilder} buildReasoningField - 生成 reasoning 字段（仅 reasoning_effort 风格使用）
  * @returns {Record<string, unknown>} 附加请求字段，空对象表示不下发
  */
-export function resolveChatThinkingFields(
+function resolveThinkingFields(
   level: ThinkingLevel,
   style: ThinkingStyle,
-  effortMap?: Partial<Record<ThinkingLevel, string>>,
+  effortMap: Partial<Record<ThinkingLevel, string>> | undefined,
+  buildReasoningField: ReasoningFieldBuilder,
 ): Record<string, unknown> {
   switch (style) {
     case "reasoning_effort": {
       if (level === "off") {
         return {};
       }
-      return { reasoning_effort: effortMap?.[level] ?? level };
+      return buildReasoningField(effortMap?.[level] ?? level);
     }
     case "thinking": {
-      const type = effortMap?.[level] ?? (level === "off" ? "disabled" : "enabled");
+      const type =
+        effortMap?.[level] ?? (level === "off" ? "disabled" : "enabled");
       return { thinking: { type } };
     }
     case "enable_thinking":
@@ -120,8 +130,26 @@ export function resolveChatThinkingFields(
 }
 
 /**
+ * 按档位与风格生成 Chat Completions 接口的附加请求字段
+ * reasoning_effort 风格映射为顶层 reasoning_effort 字段
+ * @param {ThinkingLevel} level - 思考档位
+ * @param {ThinkingStyle} style - 思考协议风格
+ * @param {Partial<Record<ThinkingLevel, string>>} [effortMap] - 高级映射，优先于内置映射
+ * @returns {Record<string, unknown>} 附加请求字段，空对象表示不下发
+ */
+export function resolveChatThinkingFields(
+  level: ThinkingLevel,
+  style: ThinkingStyle,
+  effortMap?: Partial<Record<ThinkingLevel, string>>,
+): Record<string, unknown> {
+  return resolveThinkingFields(level, style, effortMap, (effort) => ({
+    reasoning_effort: effort,
+  }));
+}
+
+/**
  * 按档位与风格生成 Responses API 的附加请求字段
- * reasoning_effort 风格对应 reasoning.effort；thinking 风格沿用 thinking.type；off 不发字段
+ * reasoning_effort 风格映射为嵌套的 reasoning.effort 字段
  * @param {ThinkingLevel} level - 思考档位
  * @param {ThinkingStyle} style - 思考协议风格
  * @param {Partial<Record<ThinkingLevel, string>>} [effortMap] - 高级映射，优先于内置映射
@@ -132,22 +160,9 @@ export function resolveResponsesThinkingFields(
   style: ThinkingStyle,
   effortMap?: Partial<Record<ThinkingLevel, string>>,
 ): Record<string, unknown> {
-  switch (style) {
-    case "reasoning_effort": {
-      if (level === "off") {
-        return {};
-      }
-      return { reasoning: { effort: effortMap?.[level] ?? level } };
-    }
-    case "thinking": {
-      const type = effortMap?.[level] ?? (level === "off" ? "disabled" : "enabled");
-      return { thinking: { type } };
-    }
-    case "enable_thinking":
-      return { enable_thinking: level !== "off" };
-    case "none":
-      return {};
-  }
+  return resolveThinkingFields(level, style, effortMap, (effort) => ({
+    reasoning: { effort },
+  }));
 }
 
 /**

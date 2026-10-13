@@ -8,7 +8,7 @@ export interface LlmConfig {
   baseUrl: string;
   /** 模型名称，如 deepseek-chat */
   model: string;
-  /** 全局默认思考档位，缺省 off（chat --think 可按次覆盖） */
+  /** 全局默认思考档位，缺省 medium（chat --think 可按次覆盖） */
   thinkingLevel?: ThinkingLevel;
   /** 思考协议风格，缺省按 baseUrl 推断 */
   thinkingStyle?: ThinkingStyle;
