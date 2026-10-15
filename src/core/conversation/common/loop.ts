@@ -1,7 +1,7 @@
-import { CliError } from "../../shared/errors";
-import type { ToolCall } from "../../types/llm";
-import { executeToolCall } from "../tools";
-import type { Tool, ToolResult } from "../tools";
+import { CliError } from "../../../shared/errors";
+import type { ToolCall } from "../../../types/llm";
+import { executeToolCall } from "../../tools";
+import type { Tool, ToolResult } from "../../tools";
 
 /** 单回合结果：模型的最终回答，或新的工具调用请求 */
 export type TurnOutcome =

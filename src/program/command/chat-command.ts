@@ -1,6 +1,6 @@
 import type { Command } from "commander";
 import { loadLlmConfig, parseThinkingLevel } from "../../core/llm";
-import { runOneShotChat, runReplChat } from "../../core/chat";
+import { runOneShotChat, runReplChat } from "../../core/conversation/chat";
 
 /**
  * 注册 chat 命令：与大模型对话

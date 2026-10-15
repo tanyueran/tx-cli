@@ -1,11 +1,11 @@
-import { streamChat } from "../llm";
+import { streamChat } from "../../llm";
 import type {
   ChatMessage,
   LlmConfig,
   ToolCall,
   ToolDefinition,
-} from "../../types/llm";
-import type { ToolResult } from "../tools";
+} from "../../../types/llm";
+import type { ToolResult } from "../../tools";
 import type { RunTurn, TurnOutcome } from "./loop";
 
 /** Chat Completions 回合函数创建参数 */
