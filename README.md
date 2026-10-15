@@ -205,3 +205,4 @@ TX_LLM_API_KEY=sk-xxx TX_LLM_BASE_URL=https://api.deepseek.com/v1 TX_LLM_MODEL=d
 - [x] commit-fix 命令（格式化 ones 信息为 git commit）
 - [x] chat 命令（与大模型对话，支持流式输出、多轮对话、工具调用与深度思考档位）
 - [x] copy 命令（复制文件，支持过滤某些文件）`tx-cli copy <src> <dest> --filter <filter>`
+- [ ] agent 命令（让大模型执行完成指定的任务）
