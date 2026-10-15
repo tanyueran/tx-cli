@@ -3,6 +3,7 @@ import { globTool } from "./builtin/glob";
 import { grepTool } from "./builtin/grep";
 import { listDirTool } from "./builtin/list-dir";
 import { readFileTool } from "./builtin/read-file";
+import { webSearchTool } from "./builtin/web-search";
 import type { Tool } from "./types";
 
 /**
@@ -53,5 +54,6 @@ export function createBuiltinRegistry(): ToolRegistry {
   registry.register(listDirTool);
   registry.register(globTool);
   registry.register(grepTool);
+  registry.register(webSearchTool);
   return registry;
 }
