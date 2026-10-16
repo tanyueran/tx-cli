@@ -27,6 +27,11 @@ export interface ToolResult extends ToolOutput {
  */
 export interface Tool extends ToolDefinition {
   /**
+   * 单工具执行超时（毫秒）：缺省用执行器的全局超时（30s）
+   * MCP 等外部工具可放宽（如 60s），由适配层按需声明
+   */
+  timeoutMs?: number;
+  /**
    * 执行工具
    * @param {Record<string, unknown>} args - 模型给出的参数（已解析的 JSON 对象）
    * @returns {Promise<ToolOutput>} 执行输出（成功或失败的说明）

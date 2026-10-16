@@ -14,6 +14,7 @@ import {
   resolveResponsesThinkingFields,
   resolveThinkingStyle,
 } from "../../llm";
+import { connectMcpServers } from "../../mcp";
 import type { Tool } from "../../tools";
 import { CancelError, CliError } from "../../../shared/errors";
 import { askText } from "../../../shared/prompt";
@@ -100,22 +101,51 @@ function printThinkingNotice(level: ThinkingLevel, style: ThinkingStyle): void {
  * 单轮请求失败（网络抖动、限流等可预期错误）只提示不终止会话，避免丢失整个对话上下文
  * @param {LlmConfig} config - LLM 接入配置
  * @param {ThinkingLevel | undefined} thinkingLevel - 命令行指定的思考档位，未指定时回退配置默认
+ * @param {boolean} mcpEnabled - 是否启用 MCP 服务器（--no-mcp 关闭），缺省开启
  * @returns {Promise<void>}
  */
 export async function runReplChat(
   config: LlmConfig,
   thinkingLevel?: ThinkingLevel,
+  mcpEnabled = true,
 ): Promise<void> {
-  // 档位为会话内可变状态：/think 切换后下一轮请求生效
-  let currentLevel = resolveThinkingLevel(thinkingLevel, config);
+  // 初始档位由 /think 在会话内切换（见 runReplSession）
+  const currentLevel = resolveThinkingLevel(thinkingLevel, config);
   const style = resolveThinkingStyle(config);
-  const { systemPrompt, tools, catalog, warnings } =
-    setupSkillContext(SYSTEM_PROMPT);
+  const { manager, tools: mcpTools } = await connectMcpServers(mcpEnabled);
+  try {
+    await runReplSession(config, style, currentLevel, mcpTools);
+  } finally {
+    // MCP 连接随会话结束关闭（含异常路径），stdio 子进程随之退出
+    await manager?.closeAll();
+  }
+}
+
+/**
+ * REPL 主循环：装配会话上下文并循环处理用户输入，MCP 生命周期由调用方管理
+ * @param {LlmConfig} config - LLM 接入配置
+ * @param {ThinkingStyle} style - 思考协议风格
+ * @param {ThinkingLevel} currentLevel - 初始思考档位
+ * @param {Tool[]} mcpTools - MCP 工具列表（可为空）
+ * @returns {Promise<void>}
+ */
+async function runReplSession(
+  config: LlmConfig,
+  style: ThinkingStyle,
+  currentLevel: ThinkingLevel,
+  mcpTools: Tool[],
+): Promise<void> {
+  const { systemPrompt, tools, catalog, warnings } = setupSkillContext(
+    SYSTEM_PROMPT,
+    mcpTools,
+  );
   printSkillWarnings(warnings);
   const skillNote = catalog.size > 0 ? `，已发现 ${catalog.size} 个技能` : "";
+  const mcpNote =
+    mcpTools.length > 0 ? `，已连接 MCP 工具 ${mcpTools.length} 个` : "";
   console.log(
     pico.green(
-      `已连接模型 ${config.model}，思考档位 ${currentLevel}，支持工具调用${skillNote}，输入问题开始对话，输入 exit 或按 Ctrl+C 退出`,
+      `已连接模型 ${config.model}，思考档位 ${currentLevel}，支持工具调用${skillNote}${mcpNote}，输入问题开始对话，输入 exit 或按 Ctrl+C 退出`,
     ),
   );
   const hints = ["/think 查看思考档位，/think <off|low|medium|high> 切换"];

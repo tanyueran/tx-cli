@@ -21,15 +21,21 @@ function truncateOutput(output: string): string {
 
 /**
  * 带超时执行：超时以错误拒绝，由调用方统一转为失败结果
+ * 超时时长优先取工具自带的 timeoutMs（如 MCP 工具放宽到 60s），缺省用全局值
+ * @param {Tool} tool - 目标工具（提供可选的单工具超时）
  * @param {Promise<ToolOutput>} promise - 工具执行的 Promise
  * @returns {Promise<ToolOutput>} 工具输出
  */
-function withTimeout(promise: Promise<ToolOutput>): Promise<ToolOutput> {
+function withTimeout(
+  tool: Tool,
+  promise: Promise<ToolOutput>,
+): Promise<ToolOutput> {
+  const timeoutMs = tool.timeoutMs ?? TOOL_TIMEOUT_MS;
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, reject) => {
     timer = setTimeout(() => {
-      reject(new Error(`工具执行超时（${TOOL_TIMEOUT_MS / 1000}s）`));
-    }, TOOL_TIMEOUT_MS);
+      reject(new Error(`工具执行超时（${timeoutMs / 1000}s）`));
+    }, timeoutMs);
   });
   return (async () => {
     try {
@@ -64,7 +70,7 @@ export async function executeToolCall(
 
   let output: ToolOutput;
   try {
-    output = await withTimeout(tool.execute(args));
+    output = await withTimeout(tool, tool.execute(args));
   } catch (err) {
     output = {
       ok: false,

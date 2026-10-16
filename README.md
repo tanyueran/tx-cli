@@ -121,6 +121,7 @@ tx-cli commit-fix "#532311 优化属性设置 https://ones.x.cn/abc"
 - 传入问题：单次问答，流式输出回答后退出
 - 不传参数：进入多轮对话模式，持续输入问题对话，输入 `exit`/`quit` 或按 `Ctrl+C` 退出
 - 工具调用默认开启、不可关闭：单次问答内置 `read_file` 等工具，模型可读取本地文件后再作答，每次调用会打印 `→ 调用 ...` 提示
+- 支持 MCP 服务器：在 `~/.tx-cli/config.json` 配置 `mcpServers` 段即可接入外部工具（详见下方 [MCP 服务器](#mcp-服务器)），`--no-mcp` 可按次禁用
 - 单次问答：走 Chat Completions 接口
 - 多轮对话：走 Responses API（要求所配置的服务支持该接口），采用服务端会话存储（store）+ `previous_response_id` 衔接上下文
 
@@ -129,6 +130,7 @@ tx-cli commit-fix "#532311 优化属性设置 https://ones.x.cn/abc"
 | 选项 | 说明 |
 |---|---|
 | `--think <level>` | 思考档位：`off` \| `low` \| `medium` \| `high`，仅影响本次对话 |
+| `--no-mcp` | 本次对话禁用 MCP 服务器（缺省启用） |
 
 **深度思考档位：**
 
@@ -174,8 +176,42 @@ tx-cli commit-fix "#532311 优化属性设置 https://ones.x.cn/abc"
     "thinkingStyle": "reasoning_effort",
     // 可选：档位 → 服务端实际值的高级映射（适配仅支持部分档位的服务）
     "thinkingEffortMap": { "low": "high", "medium": "high", "high": "high" }
+  },
+  // MCP 服务器段，见下方说明，无则省略
+  "mcpServers": {
+    // 本地服务器：以子进程启动，配置中存在 command 即视为 stdio
+    "fetch": {
+      "command": "npx",
+      "args": ["-y", "mcp-server-fetch"]
+    },
+    // 远程服务器：走 Streamable HTTP，配置中存在 url 即视为 http
+    "search": {
+      "url": "https://mcp.example.com/search",
+      "headers": { "Authorization": "Bearer ${MY_TOKEN}" }
+    }
   }
 }
+```
+
+### MCP 服务器
+
+在 `~/.tx-cli/config.json` 的 `mcpServers` 段配置外部工具服务器，对话时模型即可调用其工具（工具名带 `mcp__<服务器名>__<工具名>` 前缀，与内置工具区分）。格式与 Claude Desktop 的配置兼容：
+
+| 字段 | 说明 |
+|---|---|
+| `command` / `args` / `env` | 本地服务器（stdio）：启动命令、参数、附加环境变量（与当前进程环境合并） |
+| `url` / `headers` | 远程服务器（http）：服务器地址、附加请求头 |
+| `type` | **可选**：`stdio` \| `http`，缺省时按字段自动推断——有 `command` 为 stdio，有 `url` 为 http |
+
+- 字符串值支持 `${VAR}` 环境变量展开（如 `Bearer ${MY_TOKEN}`），未定义变量展开为空串
+- 单个服务器连接失败只黄字告警，不影响其他服务器与本次对话；也可用 `tx-cli chat --no-mcp` 按次禁用全部 MCP 服务器
+
+```bash
+# 启用全部已配置的 MCP 服务器（缺省行为）
+tx-cli chat 帮我抓取 https://example.com 的标题
+
+# 本次对话禁用 MCP 服务器
+tx-cli chat --no-mcp 怎么用 fs.rm 递归删除目录
 ```
 
 ```bash

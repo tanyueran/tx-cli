@@ -1,7 +1,9 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { dirname, join } from "node:path";
 import pico from "picocolors";
+import {
+  readUserConfig,
+  resolveUserConfigPath,
+  updateConfigSection,
+} from "../../shared/user-config";
 import { runSetupWizard } from "./config-wizard";
 import { parseThinkingLevel, parseThinkingStyle } from "./thinking";
 import type { LlmConfig, ThinkingLevel, ThinkingStyle } from "../../types/llm";
@@ -12,28 +14,21 @@ interface LlmFileConfig {
 }
 
 /**
- * 解析用户级配置文件路径：~/.tx-cli/config.json
- * @returns {string} 配置文件的绝对路径
- */
-export function resolveUserConfigPath(): string {
-  return join(homedir(), ".tx-cli", "config.json");
-}
-
-/**
- * 读取配置文件，文件不存在或内容损坏时返回空对象
- * @returns {LlmFileConfig} 配置文件内容（解析失败时为空对象）
+ * 读取配置文件的 llm 段：文件读取与 JSON 解析由共享模块完成，此处只做段收窄
+ * @returns {LlmFileConfig} llm 段内容（文件不存在或损坏时为空对象）
  */
 function readConfigFile(): LlmFileConfig {
-  const path = resolveUserConfigPath();
-  if (!existsSync(path)) {
-    return {};
+  const { data, warnings } = readUserConfig();
+  for (const warning of warnings) {
+    console.warn(pico.yellow(warning));
   }
-  try {
-    return JSON.parse(readFileSync(path, "utf-8")) as LlmFileConfig;
-  } catch {
-    console.warn(pico.yellow(`配置文件 ${path} 解析失败，已忽略，可重新配置`));
-    return {};
-  }
+  const { llm } = data;
+  return {
+    llm:
+      typeof llm === "object" && llm !== null && !Array.isArray(llm)
+        ? (llm as Partial<LlmConfig>)
+        : undefined,
+  };
 }
 
 /**
@@ -58,17 +53,13 @@ function resolveConfigFromSources(): Partial<LlmConfig> {
 
 /**
  * 保存 LLM 配置到用户级配置文件
+ * 走统一写入口：只替换 llm 段，mcpServers 等其他段由共享模块负责保留，缓存同步刷新
  * @param {LlmConfig} config - 完整配置
  * @returns {void}
  */
 function saveConfigFile(config: LlmConfig): void {
-  const path = resolveUserConfigPath();
-  mkdirSync(dirname(path), { recursive: true });
-  // 0o600：文件含密钥，仅允许当前用户读写
-  writeFileSync(path, `${JSON.stringify({ llm: config }, null, 2)}\n`, {
-    mode: 0o600,
-  });
-  console.log(pico.green(`配置已保存到 ${path}`));
+  updateConfigSection("llm", config);
+  console.log(pico.green(`配置已保存到 ${resolveUserConfigPath()}`));
 }
 
 /**

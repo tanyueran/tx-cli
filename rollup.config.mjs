@@ -13,8 +13,18 @@ const outDir = "./dist";
 
 /**
  * 运行时依赖保持 external，由 npm 安装到用户环境，不打进产物
+ * 依赖的子路径导入（如 @modelcontextprotocol/sdk/client/index.js）同样视为 external
+ * @param {string} id - 待判定的模块标识
+ * @returns {boolean} 是否 external
  */
-const external = [...Object.keys(pkg.dependencies || {}), /^node:/];
+function external(id) {
+  if (id.startsWith("node:")) {
+    return true;
+  }
+  return Object.keys(pkg.dependencies || {}).some(
+    (dep) => id === dep || id.startsWith(`${dep}/`),
+  );
+}
 
 /**
  * 构建开始前清空输出目录，避免残留旧产物
