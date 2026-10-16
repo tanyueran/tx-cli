@@ -14,6 +14,6 @@ export {
   createToolCallLogger,
   printToolCall,
 } from "./renderer";
-export { printSkillWarnings, setupSkillContext } from "./skill-context";
+export { setupSkillContext } from "./skill-context";
 export type { SkillContext } from "./skill-context";
 export { resolveThinkingLevel, warnThinkingFallback } from "./thinking";

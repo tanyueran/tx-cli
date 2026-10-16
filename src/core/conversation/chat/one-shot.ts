@@ -3,12 +3,12 @@ import {
   createChatCompletionsTurn,
   createStreamRenderer,
   createToolCallLogger,
-  printSkillWarnings,
   resolveThinkingLevel,
   runAgentLoop,
   setupSkillContext,
   warnThinkingFallback,
 } from "../common";
+import { printWarnings } from "../../../shared/warnings";
 import { resolveChatThinkingFields, resolveThinkingStyle } from "../../llm";
 import { connectMcpServers } from "../../mcp";
 import type { LlmConfig, ThinkingLevel } from "../../../types/llm";
@@ -41,7 +41,7 @@ export async function runOneShotChat(
       SYSTEM_PROMPT,
       mcpTools,
     );
-    printSkillWarnings(warnings);
+    printWarnings(warnings);
     const runTurn = createChatCompletionsTurn({
       config,
       messages: buildInitialMessages(systemPrompt, question),

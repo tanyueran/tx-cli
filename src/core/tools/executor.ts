@@ -1,3 +1,4 @@
+import { withTimeout } from "../../shared/timeout";
 import type { ToolCall } from "../../types/llm";
 import type { Tool, ToolOutput, ToolResult } from "./types";
 
@@ -17,33 +18,6 @@ function truncateOutput(output: string): string {
     return output;
   }
   return `${output.slice(0, MAX_OUTPUT_CHARS)}\n...（输出过长已截断，原文共 ${output.length} 字符）`;
-}
-
-/**
- * 带超时执行：超时以错误拒绝，由调用方统一转为失败结果
- * 超时时长优先取工具自带的 timeoutMs（如 MCP 工具放宽到 60s），缺省用全局值
- * @param {Tool} tool - 目标工具（提供可选的单工具超时）
- * @param {Promise<ToolOutput>} promise - 工具执行的 Promise
- * @returns {Promise<ToolOutput>} 工具输出
- */
-function withTimeout(
-  tool: Tool,
-  promise: Promise<ToolOutput>,
-): Promise<ToolOutput> {
-  const timeoutMs = tool.timeoutMs ?? TOOL_TIMEOUT_MS;
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => {
-      reject(new Error(`工具执行超时（${timeoutMs / 1000}s）`));
-    }, timeoutMs);
-  });
-  return (async () => {
-    try {
-      return await Promise.race([promise, timeout]);
-    } finally {
-      clearTimeout(timer);
-    }
-  })();
 }
 
 /**
@@ -70,7 +44,13 @@ export async function executeToolCall(
 
   let output: ToolOutput;
   try {
-    output = await withTimeout(tool, tool.execute(args));
+    // 超时时长优先取工具自带的 timeoutMs（如 MCP 工具放宽到 60s），缺省用全局值
+    const timeoutMs = tool.timeoutMs ?? TOOL_TIMEOUT_MS;
+    output = await withTimeout(
+      tool.execute(args),
+      timeoutMs,
+      `工具执行超时（${timeoutMs / 1000}s）`,
+    );
   } catch (err) {
     output = {
       ok: false,

@@ -1,4 +1,3 @@
-import pico from "picocolors";
 import { createLoadSkillTool, discoverSkills, SkillCatalog } from "../../skills";
 import { createBuiltinRegistry, type Tool } from "../../tools";
 import { buildSystemPrompt } from "./prompt";
@@ -42,15 +41,4 @@ export function setupSkillContext(
     catalog,
     warnings,
   };
-}
-
-/**
- * 打印技能扫描警告：各对话模式共用的启动提示
- * @param {string[]} warnings - 扫描警告列表
- * @returns {void}
- */
-export function printSkillWarnings(warnings: string[]): void {
-  for (const warning of warnings) {
-    console.warn(pico.yellow(warning));
-  }
 }

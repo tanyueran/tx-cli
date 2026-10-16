@@ -2,6 +2,7 @@ import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import type { Tool as McpTool } from "@modelcontextprotocol/sdk/types.js";
 import { CliError } from "../../shared/errors";
+import { withTimeout } from "../../shared/timeout";
 import { getVersion } from "../../shared/paths";
 import type { Tool } from "../tools/types";
 import { createMcpTool } from "./tool-adapter";
@@ -13,33 +14,6 @@ const CONNECT_TIMEOUT_MS = 10_000;
 /** 传输工厂选项：把服务器配置翻译为 Transport 实例，测试可注入 InMemoryTransport */
 export interface McpManagerOptions {
   createTransport?: (config: McpServerConfig) => Promise<Transport>;
-}
-
-/**
- * 给 Promise 加超时：超时后以指定消息拒绝，原 Promise 的迟到结果被丢弃
- * @param {Promise<T>} promise - 受约束的 Promise
- * @param {number} timeoutMs - 超时毫秒数
- * @param {string} message - 超时时用于拒绝的错误消息
- * @returns {Promise<T>} 原结果或超时拒绝
- */
-function withTimeout<T>(
-  promise: Promise<T>,
-  timeoutMs: number,
-  message: string,
-): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => {
-      reject(new Error(message));
-    }, timeoutMs);
-  });
-  return (async () => {
-    try {
-      return await Promise.race([promise, timeout]);
-    } finally {
-      clearTimeout(timer);
-    }
-  })();
 }
 
 /**

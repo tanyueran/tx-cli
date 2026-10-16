@@ -12,4 +12,5 @@ export {
   resolveResponsesThinkingFields,
   isToggleOnlyStyle,
   describeThinkingStyle,
+  THINKING_LEVELS,
 } from "./thinking";

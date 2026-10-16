@@ -1,5 +1,6 @@
 import pico from "picocolors";
 import type { Tool } from "../tools/types";
+import { printWarnings } from "../../shared/warnings";
 import { loadMcpServers } from "./config";
 import { McpManager } from "./manager";
 
@@ -25,9 +26,7 @@ export async function connectMcpServers(
     return { manager: undefined, tools: [] };
   }
   const { servers, warnings } = loadMcpServers();
-  for (const warning of warnings) {
-    console.warn(pico.yellow(warning));
-  }
+  printWarnings(warnings);
   if (servers.size === 0) {
     return { manager: undefined, tools: [] };
   }
@@ -53,8 +52,6 @@ export async function connectMcpServers(
     }
   }
   const { tools, warnings: toolWarnings } = manager.listTools();
-  for (const warning of toolWarnings) {
-    console.warn(pico.yellow(warning));
-  }
+  printWarnings(toolWarnings);
   return { manager, tools };
 }

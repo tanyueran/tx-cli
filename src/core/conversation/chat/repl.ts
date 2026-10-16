@@ -3,16 +3,17 @@ import {
   createResponsesTurn,
   createStreamRenderer,
   createToolCallLogger,
-  printSkillWarnings,
   resolveThinkingLevel,
   runAgentLoop,
   setupSkillContext,
   warnThinkingFallback,
 } from "../common";
+import { printWarnings } from "../../../shared/warnings";
 import {
   parseThinkingLevel,
   resolveResponsesThinkingFields,
   resolveThinkingStyle,
+  THINKING_LEVELS,
 } from "../../llm";
 import { connectMcpServers } from "../../mcp";
 import type { Tool } from "../../tools";
@@ -139,7 +140,7 @@ async function runReplSession(
     SYSTEM_PROMPT,
     mcpTools,
   );
-  printSkillWarnings(warnings);
+  printWarnings(warnings);
   const skillNote = catalog.size > 0 ? `，已发现 ${catalog.size} 个技能` : "";
   const mcpNote =
     mcpTools.length > 0 ? `，已连接 MCP 工具 ${mcpTools.length} 个` : "";
@@ -148,7 +149,9 @@ async function runReplSession(
       `已连接模型 ${config.model}，思考档位 ${currentLevel}，支持工具调用${skillNote}${mcpNote}，输入问题开始对话，输入 exit 或按 Ctrl+C 退出`,
     ),
   );
-  const hints = ["/think 查看思考档位，/think <off|low|medium|high> 切换"];
+  const hints = [
+    `/think 查看思考档位，/think <${THINKING_LEVELS.join("|")}> 切换`,
+  ];
   if (catalog.size > 0) {
     hints.push("/skills 查看可用技能");
   }

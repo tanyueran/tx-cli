@@ -9,17 +9,30 @@ export const MCP_TOOL_TIMEOUT_MS = 60_000;
 const UNSAFE_NAME_RE = /[^a-zA-Z0-9_-]/g;
 
 /**
- * 净化名称中的非法字符：非字母数字下划线连字符一律替换为下划线
+ * 净化名称中的非法字符：非字母数字下划线连字符一律替换为下划线；
+ * 净化后为空串（原名称全为非法字符）时兜底为 unnamed，避免生成空段工具名
  * @param {string} name - 原始名称（服务器名或远端工具名）
  * @returns {string} 净化后的名称
  */
 function sanitizeName(name: string): string {
-  return name.replace(UNSAFE_NAME_RE, "_");
+  const sanitized = name.replace(UNSAFE_NAME_RE, "_");
+  return sanitized || "unnamed";
+}
+
+/**
+ * 判断值是否为普通对象（作为 inputSchema 的最低形状要求）
+ * @param {unknown} value - 待判断的值
+ * @returns {boolean} 是非 null、非数组的对象时为 true
+ */
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 /**
  * 把单个远端 MCP 工具适配为内部 Tool
- * 命名规则 mcp__<server>__<tool>，与内置工具天然隔离；描述带来源前缀帮助模型区分
+ * 命名规则 mcp__<server>__<tool>，与内置工具天然隔离；描述带来源前缀帮助模型区分；
+ * inputSchema 来自第三方进程且协议仅为约定：非法形状兜底为空对象 schema，
+ * 避免非法定义一路透传到 LLM 请求时才炸出难懂的接口报错
  * @param {string} serverName - 所属服务器名（配置中的键名）
  * @param {Client} client - 已连接的服务器客户端
  * @param {McpTool} mcpTool - 远端工具定义
@@ -33,7 +46,9 @@ export function createMcpTool(
   return {
     name: `mcp__${sanitizeName(serverName)}__${sanitizeName(mcpTool.name)}`,
     description: `[MCP:${serverName}] ${mcpTool.description ?? ""}`.trim(),
-    parameters: mcpTool.inputSchema as Record<string, unknown>,
+    parameters: isJsonObject(mcpTool.inputSchema)
+      ? mcpTool.inputSchema
+      : { type: "object", properties: {} },
     timeoutMs: MCP_TOOL_TIMEOUT_MS,
     async execute(args) {
       const result = await client.callTool({

@@ -1,8 +1,8 @@
 import { CliError } from "../../shared/errors";
 import type { LlmConfig, ThinkingLevel, ThinkingStyle } from "../../types/llm";
 
-/** 全部合法的思考档位 */
-const THINKING_LEVELS: readonly ThinkingLevel[] = [
+/** 全部合法的思考档位（帮助文案与校验共用，避免多处硬编码漂移） */
+export const THINKING_LEVELS: readonly ThinkingLevel[] = [
   "off",
   "low",
   "medium",
