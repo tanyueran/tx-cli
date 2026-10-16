@@ -1,6 +1,5 @@
 import {
-  buildInitialMessages,
-  createChatCompletionsTurn,
+  createResponsesTurn,
   createStreamRenderer,
   createToolCallLogger,
   resolveThinkingLevel,
@@ -9,13 +8,20 @@ import {
   warnThinkingFallback,
 } from "../common";
 import { printWarnings } from "../../../shared/warnings";
-import { resolveChatThinkingFields, resolveThinkingStyle } from "../../llm";
+import {
+  resolveResponsesThinkingFields,
+  resolveThinkingStyle,
+} from "../../llm";
 import { connectMcpServers } from "../../mcp";
-import type { LlmConfig, ThinkingLevel } from "../../../types/llm";
+import type {
+  LlmConfig,
+  ResponseHistoryItem,
+  ThinkingLevel,
+} from "../../../types/llm";
 import { SYSTEM_PROMPT } from "./constants";
 
 /**
- * 单次问答：走 Chat Completions 接口 + agentic loop，工具调用默认开启（内置 read_file 等）
+ * 单次问答：走 Responses API（无状态模式）+ agentic loop，工具调用默认开启（内置 read_file 等）
  * 思考档位取值：命令行 > 配置文件 > medium，经 thinking 适配层翻译为协议扩展字段下发；
  * 服务不支持分档思考时先打印折算警告，避免用户误以为 high 等档位真实生效
  * 深度思考内容以暗色流式输出（模型未返回时不输出）
@@ -42,11 +48,15 @@ export async function runOneShotChat(
       mcpTools,
     );
     printWarnings(warnings);
-    const runTurn = createChatCompletionsTurn({
+    // 单次问答的历史仅在本函数内存活：不跨轮共享，问答结束即丢弃
+    const history: ResponseHistoryItem[] = [];
+    const runTurn = createResponsesTurn({
       config,
-      messages: buildInitialMessages(systemPrompt, question),
+      input: question,
+      history,
+      instructions: systemPrompt,
       tools,
-      extraBody: resolveChatThinkingFields(
+      extraBody: resolveResponsesThinkingFields(
         level,
         style,
         config.thinkingEffortMap,

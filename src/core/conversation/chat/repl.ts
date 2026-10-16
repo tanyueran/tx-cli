@@ -21,6 +21,7 @@ import { CancelError, CliError } from "../../../shared/errors";
 import { askText } from "../../../shared/prompt";
 import type {
   LlmConfig,
+  ResponseHistoryItem,
   ThinkingLevel,
   ThinkingStyle,
 } from "../../../types/llm";
@@ -39,44 +40,42 @@ interface ReplSession {
 }
 
 /**
- * 执行多轮对话的一轮：Responses API store 会话 + agentic loop，工具调用开启（内置 read_file 等）
- * store 会话模式：每轮只发送本轮输入，历史上下文由服务端通过 responseId 链衔接；
- * 深度思考内容以暗色流式输出（模型未返回时不输出），instructions 每轮重传以规避其不随会话延续的问题
+ * 执行多轮对话的一轮：Responses API 无状态模式 + agentic loop，工具调用开启（内置 read_file 等）
+ * store=false：服务端不留存会话，历史由本地维护并每轮全量发送，跨轮经共享 history 数组衔接；
+ * 深度思考内容以暗色流式输出（模型未返回时不输出），instructions 每轮重传
  * @param {ReplSession} session - 会话上下文（配置、协议风格、提示词、工具列表）
+ * @param {ResponseHistoryItem[]} history - 跨轮共享的对话历史（本函数向其追加内容）
  * @param {string} input - 本轮用户输入
- * @param {string | undefined} previousResponseId - 上一轮响应 ID，首轮不传
  * @param {ThinkingLevel} thinkingLevel - 本轮思考档位（/think 切换后下一轮使用新档位）
- * @returns {Promise<string | undefined>} 本轮会话最新的响应 ID，用于下一轮衔接上下文
+ * @returns {Promise<void>}
  */
 async function runReplTurn(
   session: ReplSession,
+  history: ResponseHistoryItem[],
   input: string,
-  previousResponseId: string | undefined,
   thinkingLevel: ThinkingLevel,
-): Promise<string | undefined> {
+): Promise<void> {
   const renderer = createStreamRenderer();
-  const turn = createResponsesTurn({
+  const runTurn = createResponsesTurn({
     config: session.config,
     input,
+    history,
     instructions: session.systemPrompt,
     extraBody: resolveResponsesThinkingFields(
       thinkingLevel,
       session.style,
       session.config.thinkingEffortMap,
     ),
-    previousResponseId,
     tools: session.tools,
     onDelta: renderer.onDelta,
     onReasoningDelta: renderer.onReasoningDelta,
   });
   await runAgentLoop({
-    runTurn: turn.runTurn,
+    runTurn,
     tools: session.tools,
     onToolCall: createToolCallLogger(renderer),
   });
   process.stdout.write("\n\n");
-  // 流异常结束可能未收到 response.created：turn 内部保留上一轮衔接，避免下一轮发出空的 previous_response_id
-  return turn.getResponseId();
 }
 
 /**
@@ -95,7 +94,7 @@ function printThinkingNotice(level: ThinkingLevel, style: ThinkingStyle): void {
 
 /**
  * 多轮对话模式（REPL）：循环提问，直到用户输入 exit/quit 或按 Ctrl+C 退出
- * 基于 Responses API 的 store 会话 + agentic loop：每轮只发送新输入，经 responseId 链衔接历史，
+ * 基于 Responses API（无状态模式）+ agentic loop：历史由本地维护、每轮全量发送，
  * 模型可在任意一轮发起工具调用（read_file 等），与单次问答模式能力一致
  * 支持内联命令 /think：无参查看当前思考档位，带参切换（如 /think high，下一轮生效）
  * 支持内联命令 /skills：列出可用技能及来源
@@ -159,7 +158,8 @@ async function runReplSession(
   // 服务能力折算警告：off 档位本就对应关闭，此时不提示
   warnThinkingFallback(currentLevel, style);
   const session: ReplSession = { config, style, systemPrompt, tools };
-  let previousResponseId: string | undefined;
+  // 本地维护的对话历史：store=false 模式下每轮全量发送给服务端，跨轮累积
+  const history: ResponseHistoryItem[] = [];
 
   for (;;) {
     let input: string;
@@ -221,12 +221,7 @@ async function runReplSession(
     }
 
     try {
-      previousResponseId = await runReplTurn(
-        session,
-        input,
-        previousResponseId,
-        currentLevel,
-      );
+      await runReplTurn(session, history, input, currentLevel);
     } catch (err) {
       // 仅吞可预期的业务错误（网络、接口报错）；未预期错误仍上抛，避免代码 bug 被无限循环掩盖
       if (!(err instanceof CliError)) {

@@ -4,11 +4,9 @@
  */
 export { runAgentLoop } from "./loop";
 export type { RunTurn, TurnOutcome } from "./loop";
-export { createChatCompletionsTurn } from "./chat-completions-turn";
 export { createResponsesTurn } from "./responses-turn";
-export type { ResponsesTurn } from "./responses-turn";
 export { DEFAULT_THINKING_LEVEL } from "./constants";
-export { buildInitialMessages, buildSystemPrompt } from "./prompt";
+export { buildSystemPrompt } from "./prompt";
 export {
   createStreamRenderer,
   createToolCallLogger,

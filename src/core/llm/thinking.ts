@@ -91,31 +91,27 @@ export function resolveThinkingStyle(config: LlmConfig): ThinkingStyle {
   return hit?.style ?? "reasoning_effort";
 }
 
-/** reasoning 扩展字段的构造器：两套接口的字段形状不同，由调用方提供 */
-type ReasoningFieldBuilder = (effort: string) => Record<string, unknown>;
-
 /**
- * 按档位与风格生成思考扩展字段：两套接口仅 reasoning 字段形状不同，其余分支共用
+ * 按档位与风格生成 Responses API 的附加请求字段
  * off 在 reasoning_effort/none 风格下不发任何字段，最大化兼容不支持思考扩展的服务；
  * thinking/enable_thinking 为开关式风格，low/medium/high 均折算为开启
  * @param {ThinkingLevel} level - 思考档位
  * @param {ThinkingStyle} style - 思考协议风格
  * @param {Partial<Record<ThinkingLevel, string>>} [effortMap] - 高级映射，优先于内置映射
- * @param {ReasoningFieldBuilder} buildReasoningField - 生成 reasoning 字段（仅 reasoning_effort 风格使用）
  * @returns {Record<string, unknown>} 附加请求字段，空对象表示不下发
  */
-function resolveThinkingFields(
+export function resolveResponsesThinkingFields(
   level: ThinkingLevel,
   style: ThinkingStyle,
-  effortMap: Partial<Record<ThinkingLevel, string>> | undefined,
-  buildReasoningField: ReasoningFieldBuilder,
+  effortMap?: Partial<Record<ThinkingLevel, string>>,
 ): Record<string, unknown> {
   switch (style) {
     case "reasoning_effort": {
       if (level === "off") {
         return {};
       }
-      return buildReasoningField(effortMap?.[level] ?? level);
+      // reasoning_effort 风格映射为嵌套的 reasoning.effort 字段
+      return { reasoning: { effort: effortMap?.[level] ?? level } };
     }
     case "thinking": {
       const type =
@@ -127,42 +123,6 @@ function resolveThinkingFields(
     case "none":
       return {};
   }
-}
-
-/**
- * 按档位与风格生成 Chat Completions 接口的附加请求字段
- * reasoning_effort 风格映射为顶层 reasoning_effort 字段
- * @param {ThinkingLevel} level - 思考档位
- * @param {ThinkingStyle} style - 思考协议风格
- * @param {Partial<Record<ThinkingLevel, string>>} [effortMap] - 高级映射，优先于内置映射
- * @returns {Record<string, unknown>} 附加请求字段，空对象表示不下发
- */
-export function resolveChatThinkingFields(
-  level: ThinkingLevel,
-  style: ThinkingStyle,
-  effortMap?: Partial<Record<ThinkingLevel, string>>,
-): Record<string, unknown> {
-  return resolveThinkingFields(level, style, effortMap, (effort) => ({
-    reasoning_effort: effort,
-  }));
-}
-
-/**
- * 按档位与风格生成 Responses API 的附加请求字段
- * reasoning_effort 风格映射为嵌套的 reasoning.effort 字段
- * @param {ThinkingLevel} level - 思考档位
- * @param {ThinkingStyle} style - 思考协议风格
- * @param {Partial<Record<ThinkingLevel, string>>} [effortMap] - 高级映射，优先于内置映射
- * @returns {Record<string, unknown>} 附加请求字段，空对象表示不下发
- */
-export function resolveResponsesThinkingFields(
-  level: ThinkingLevel,
-  style: ThinkingStyle,
-  effortMap?: Partial<Record<ThinkingLevel, string>>,
-): Record<string, unknown> {
-  return resolveThinkingFields(level, style, effortMap, (effort) => ({
-    reasoning: { effort },
-  }));
 }
 
 /**

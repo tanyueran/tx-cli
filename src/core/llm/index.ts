@@ -3,12 +3,11 @@
  * 说明：模块内部文件互相引用时，仍直接走具体文件
  */
 export { loadLlmConfig } from "./config";
-export { streamChat, streamResponse } from "./client";
+export { streamResponse } from "./client";
 export {
   parseThinkingLevel,
   parseThinkingStyle,
   resolveThinkingStyle,
-  resolveChatThinkingFields,
   resolveResponsesThinkingFields,
   isToggleOnlyStyle,
   describeThinkingStyle,

@@ -1,5 +1,4 @@
 import type { SkillMeta } from "../../skills";
-import type { ChatMessage } from "../../../types/llm";
 
 /**
  * 组装 system 提示词：基础人设 + 技能元数据清单
@@ -22,21 +21,4 @@ export function buildSystemPrompt(
     "你可以使用 load_skill 工具加载以下技能手册，当任务匹配某个技能的描述时，先调用 load_skill 加载对应手册，再按手册指引执行：",
     ...lines,
   ].join("\n");
-}
-
-/**
- * 构造初始消息列表（system 提示词 + 可选的首个用户问题）
- * @param {string} systemPrompt - 组装后的 system 提示词
- * @param {string | undefined} question - 首个用户问题（单次问答模式传入）
- * @returns {ChatMessage[]} 初始消息列表
- */
-export function buildInitialMessages(
-  systemPrompt: string,
-  question?: string,
-): ChatMessage[] {
-  const messages: ChatMessage[] = [{ role: "system", content: systemPrompt }];
-  if (question) {
-    messages.push({ role: "user", content: question });
-  }
-  return messages;
 }
