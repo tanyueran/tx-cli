@@ -4,7 +4,7 @@ import { printWarnings } from "../../shared/warnings";
 import { loadMcpServers } from "./config";
 import { McpManager } from "./manager";
 
-/** connectMcpServers 的返回值：管理器供会话结束时关闭连接，工具供注册进注册表 */
+/** connectMcpServers 的返回值：管理器供会话结束时关闭连接，工具供并入会话工具列表 */
 export interface McpSetupResult {
   /** 已连接的管理器；禁用或无配置时为 undefined */
   manager: McpManager | undefined;

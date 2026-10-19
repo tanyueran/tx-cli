@@ -23,7 +23,7 @@ export interface ToolResult extends ToolOutput {
 
 /**
  * 工具接口：在 ToolDefinition（模型可见的定义）之上增加本地执行逻辑
- * 内置工具、插件目录工具、MCP 工具均实现此接口
+ * 内置工具、技能工具（load_skill）、MCP 工具均实现此接口，不支持运行时动态注册
  */
 export interface Tool extends ToolDefinition {
   /**

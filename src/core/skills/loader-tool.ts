@@ -5,7 +5,7 @@ import type { SkillCatalog } from "./catalog";
  * 创建 load_skill 内置工具：模型据 system prompt 中的元数据清单自主加载技能正文
  * 技能正文作为工具输出回传，复用 agentic loop 的现有机制，对话循环与执行器零改动
  * @param {SkillCatalog} catalog - 启动时扫描得到的技能目录
- * @returns {Tool} 可直接注册进 ToolRegistry 的工具实例
+ * @returns {Tool} 可直接并入会话工具列表的工具实例
  */
 export function createLoadSkillTool(catalog: SkillCatalog): Tool {
   return {

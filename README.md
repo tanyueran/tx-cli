@@ -120,10 +120,10 @@ tx-cli commit-fix "#532311 优化属性设置 https://ones.x.cn/abc"
 
 - 传入问题：单次问答，流式输出回答后退出
 - 不传参数：进入多轮对话模式，持续输入问题对话，输入 `exit`/`quit` 或按 `Ctrl+C` 退出
-- 工具调用默认开启、不可关闭：单次问答内置 `read_file` 等工具，模型可读取本地文件后再作答，每次调用会打印 `→ 调用 ...` 提示
+- 工具调用默认开启、不可关闭：仅支持随版本内置发布的固定工具集，不支持运行时动态注册——`read_file`、`list_dir`、`glob`、`grep` 用于读取与检索本地文件，`web_search` 用于联网搜索实时信息；每次调用会打印 `→ 调用 ...` 提示
+- 支持技能（skills）：扫描 `~/.tx-cli/skills`（用户级）与 `./.tx-cli/skills`（项目级，同名时项目级优先）中的 `SKILL.md` 技能手册，发现技能时自动装配 `load_skill` 工具，模型按需加载手册后按其指引执行；多轮对话中可用 `/skills` 查看技能清单
 - 支持 MCP 服务器：在 `~/.tx-cli/config.json` 配置 `mcpServers` 段即可接入外部工具（详见下方 [MCP 服务器](#mcp-服务器)），`--no-mcp` 可按次禁用
-- 单次问答：走 Chat Completions 接口
-- 多轮对话：走 Responses API（要求所配置的服务支持该接口），采用服务端会话存储（store）+ `previous_response_id` 衔接上下文
+- 单次问答与多轮对话均走 Responses API 无状态模式（要求所配置的服务支持该接口）：服务端不留存会话，多轮历史由本地维护并每轮全量发送
 
 **选项：**
 
