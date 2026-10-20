@@ -32,7 +32,9 @@ function isJsonObject(value: unknown): value is Record<string, unknown> {
  * 把单个远端 MCP 工具适配为内部 Tool
  * 命名规则 mcp__<server>__<tool>，与内置工具天然隔离；描述带来源前缀帮助模型区分；
  * inputSchema 来自第三方进程且协议仅为约定：非法形状兜底为空对象 schema，
- * 避免非法定义一路透传到 LLM 请求时才炸出难懂的接口报错
+ * 避免非法定义一路透传到 LLM 请求时才炸出难懂的接口报错；
+ * 声明 permission（整工具级规则键）：在 setupSkillContext 装配沙箱时经权限门卫包装，
+ * 无沙箱会话（sandbox 为 undefined）不包装、行为不变
  * @param {string} serverName - 所属服务器名（配置中的键名）
  * @param {Client} client - 已连接的服务器客户端
  * @param {McpTool} mcpTool - 远端工具定义
@@ -43,13 +45,26 @@ export function createMcpTool(
   client: Client,
   mcpTool: McpTool,
 ): Tool {
+  const name = `mcp__${sanitizeName(serverName)}__${sanitizeName(mcpTool.name)}`;
   return {
-    name: `mcp__${sanitizeName(serverName)}__${sanitizeName(mcpTool.name)}`,
+    name,
     description: `[MCP:${serverName}] ${mcpTool.description ?? ""}`.trim(),
     parameters: isJsonObject(mcpTool.inputSchema)
       ? mcpTool.inputSchema
       : { type: "object", properties: {} },
     timeoutMs: MCP_TOOL_TIMEOUT_MS,
+    permission: {
+      // MCP 工具的真实能力未知（外部进程），按保守口径标注 net + exec；
+      // 规则键为整工具级（无细粒度 spec），用户按 mcp__server__tool 粒度配置
+      capabilities: ["net", "exec"],
+      /**
+       * 生成规则键：整工具级（远端参数结构不可知，不做细粒度拆分）
+       * @returns {string} 形如 mcp__server__tool 的规则键
+       */
+      ruleKey(): string {
+        return name;
+      },
+    },
     async execute(args) {
       const result = await client.callTool({
         name: mcpTool.name,

@@ -19,6 +19,27 @@ export const readFileTool: Tool = {
     },
     required: ["path"],
   },
+  permission: {
+    capabilities: ["fs.read"],
+    /**
+     * 生成规则键：以解析后的绝对路径为匹配主体
+     * @param {Record<string, unknown>} args - 模型给出的参数
+     * @returns {string} 形如 read_file(/abs/path) 的规则键
+     */
+    ruleKey(args: Record<string, unknown>): string {
+      const raw = typeof args.path === "string" ? args.path.trim() : "";
+      return `read_file(${resolveFromCwd(raw)})`;
+    },
+    /**
+     * 声明本次读取涉及的路径（门卫按档位禁读边界校验）
+     * @param {Record<string, unknown>} args - 模型给出的参数
+     * @returns {string[]} 绝对路径列表
+     */
+    paths(args: Record<string, unknown>): string[] {
+      const raw = typeof args.path === "string" ? args.path : "";
+      return [resolveFromCwd(raw)];
+    },
+  },
   /**
    * 执行读取：参数缺失、文件过大、读取失败均转为失败输出回传模型
    * @param {Record<string, unknown>} args - 模型给出的参数

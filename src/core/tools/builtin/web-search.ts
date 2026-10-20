@@ -76,6 +76,18 @@ export const webSearchTool: Tool = {
     },
     required: ["query"],
   },
+  permission: {
+    capabilities: ["net"],
+    /**
+     * 生成规则键：以搜索关键词为细粒度主体
+     * @param {Record<string, unknown>} args - 模型给出的参数
+     * @returns {string} 形如 web_search(关键词) 的规则键
+     */
+    ruleKey(args: Record<string, unknown>): string {
+      const query = typeof args.query === "string" ? args.query.trim() : "";
+      return `web_search(${query})`;
+    },
+  },
   /**
    * 执行搜索：参数缺失、服务报错、网络异常均转为失败输出回传模型
    * 注意：JSON-RPC 消息体顶层不允许加自定义字段（如 exaApiKey），否则服务端报 -32700 解析错误

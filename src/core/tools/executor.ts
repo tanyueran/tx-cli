@@ -1,3 +1,4 @@
+import { CancelError } from "../../shared/errors";
 import { withTimeout } from "../../shared/timeout";
 import type { ToolCall } from "../../types/llm";
 import type { Tool, ToolOutput, ToolResult } from "./types";
@@ -22,10 +23,13 @@ function truncateOutput(output: string): string {
 
 /**
  * 执行单次工具调用：解析参数、超时兜底、异常转结果、输出截断
- * 任何失败都不抛出，而是转为 ok:false 的结果回传模型，由模型自行调整重试，不中断会话
+ * 执行失败不抛出，而是转为 ok:false 的结果回传模型，由模型自行调整重试，不中断会话；
+ * 唯一的例外是用户取消（CancelError，如审批问询中按 Ctrl+C）：原样上抛走取消流程，
+ * 避免被包装成失败结果回传后模型继续推进会话，违背用户的中断意图
  * @param {Tool} tool - 目标工具
  * @param {ToolCall} call - 模型发起的调用请求
  * @returns {Promise<ToolResult>} 配好 callId 的执行结果
+ * @throws {CancelError} 用户在工具执行期间的交互中主动取消时抛出
  */
 export async function executeToolCall(
   tool: Tool,
@@ -52,6 +56,10 @@ export async function executeToolCall(
       `工具执行超时（${timeoutMs / 1000}s）`,
     );
   } catch (err) {
+    // 用户主动取消不是工具失败：上抛给对话层按取消流程处理（REPL 中断本轮，单次问答退出）
+    if (err instanceof CancelError) {
+      throw err;
+    }
     output = {
       ok: false,
       output: `工具执行失败: ${(err as Error)?.message ?? String(err)}`,

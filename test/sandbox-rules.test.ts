@@ -1,0 +1,340 @@
+import { describe, it, expect } from "vitest";
+import {
+  parseRule,
+  matchSpec,
+  splitTopLevel,
+  stripWrappers,
+  evaluateCommand,
+  evaluateRuleKey,
+} from "../src/core/sandbox/rules";
+import { BUILTIN_DANGER_RULES } from "../src/core/sandbox/danger-rules";
+import type { SandboxRulesConfig } from "../src/core/sandbox/config";
+
+/** 空规则集（全部走档位默认） */
+const noRules: SandboxRulesConfig = { allow: [], ask: [], deny: [] };
+
+/**
+ * 构造规则集
+ * @param {Partial<SandboxRulesConfig>} override - 各段覆盖项
+ * @returns {SandboxRulesConfig} 完整规则集
+ */
+function rules(override: Partial<SandboxRulesConfig> = {}): SandboxRulesConfig {
+  return { ...noRules, ...override };
+}
+
+describe("parseRule", () => {
+  it("解析细粒度规则：Name(spec) 拆出小写名与模式", () => {
+    expect(parseRule("Bash(git push:*)")).toEqual({
+      name: "bash",
+      spec: "git push:*",
+      raw: "Bash(git push:*)",
+    });
+  });
+
+  it("解析整工具规则：裸 Name 无 spec（别名归一化为内部工具名）", () => {
+    expect(parseRule("WebSearch")).toEqual({
+      name: "web_search",
+      raw: "WebSearch",
+    });
+  });
+
+  it("规则名别名归一化：Read/ListDir 映射到内部工具名", () => {
+    expect(parseRule("Read(/src/**)")?.name).toBe("read_file");
+    expect(parseRule("ListDir(/tmp)")?.name).toBe("list_dir");
+    expect(parseRule("READ_FILE(/x)")?.name).toBe("read_file");
+  });
+
+  it("括号不闭合的非法规则返回 undefined", () => {
+    expect(parseRule("Bash(git status")).toBeUndefined();
+  });
+
+  it("空串与空白规则返回 undefined", () => {
+    expect(parseRule("")).toBeUndefined();
+    expect(parseRule("   ")).toBeUndefined();
+  });
+});
+
+describe("matchSpec", () => {
+  it(":* 结尾按前缀匹配（含参数）", () => {
+    expect(matchSpec("git push:*", "git push origin main")).toBe(true);
+    expect(matchSpec("git push:*", "git pull")).toBe(false);
+  });
+
+  it("无通配符按精确匹配", () => {
+    expect(matchSpec("git status", "git status")).toBe(true);
+    expect(matchSpec("git status", "git status -s")).toBe(false);
+  });
+
+  it("含 * 按 glob 匹配", () => {
+    expect(matchSpec("git log *", "git log --oneline -5")).toBe(true);
+    expect(matchSpec("git log *", "git status")).toBe(false);
+  });
+
+  it("路径 glob 匹配", () => {
+    expect(matchSpec("/src/**", "/src/a/b/c.ts")).toBe(true);
+    expect(matchSpec("/src/**", "/lib/a.ts")).toBe(false);
+  });
+});
+
+describe("splitTopLevel", () => {
+  it("按 && ; | 切分顶层段", () => {
+    expect(splitTopLevel("a && b; c | d")).toEqual(["a", "b", "c", "d"]);
+  });
+
+  it("引号内的分隔符不切分", () => {
+    expect(splitTopLevel("echo 'a && b'")).toEqual(["echo 'a && b'"]);
+    expect(splitTopLevel('echo "x | y" && z')).toEqual(['echo "x | y"', "z"]);
+  });
+
+  it("空段被过滤", () => {
+    expect(splitTopLevel("a &&& b")).toEqual(["a", "b"]);
+  });
+});
+
+describe("stripWrappers", () => {
+  it("剥离环境变量赋值前缀", () => {
+    expect(stripWrappers("FOO=1 rm -rf /")).toBe("rm -rf /");
+    expect(stripWrappers("A=1 B=2 cmd")).toBe("cmd");
+  });
+
+  it("剥离 env/nohup/xargs 包装", () => {
+    expect(stripWrappers("env rm -rf /")).toBe("rm -rf /");
+    expect(stripWrappers("nohup env X=1 cmd")).toBe("cmd");
+    expect(stripWrappers("xargs git push")).toBe("git push");
+  });
+
+  it("无包装时原样返回", () => {
+    expect(stripWrappers("git status")).toBe("git status");
+  });
+});
+
+describe("evaluateCommand", () => {
+  it("危险类目命中直接拒绝（含包装穿透）", () => {
+    const result = evaluateCommand(
+      "FOO=1 rm -rf /tmp/x",
+      noRules,
+      BUILTIN_DANGER_RULES,
+      "read-only",
+      "on-failure",
+    );
+    expect(result.decision).toBe("deny");
+    expect(result.matchedRule).toBe("rm-recursive");
+  });
+
+  it("sudo 提权被危险类目拒绝", () => {
+    const result = evaluateCommand(
+      "sudo cat /etc/hosts",
+      noRules,
+      BUILTIN_DANGER_RULES,
+      "read-only",
+      "on-failure",
+    );
+    expect(result.decision).toBe("deny");
+    expect(result.matchedRule).toBe("sudo-su");
+  });
+
+  it("builtinDangerRules 关闭后危险命令走档位默认", () => {
+    const result = evaluateCommand(
+      "rm -rf /tmp/x",
+      noRules,
+      null,
+      "read-only",
+      "on-failure",
+    );
+    expect(result.decision).toBe("allow");
+  });
+
+  it("用户 deny 规则命中拒绝", () => {
+    const result = evaluateCommand(
+      "git push origin main",
+      rules({ deny: ["Bash(git push:*)"] }),
+      BUILTIN_DANGER_RULES,
+      "read-only",
+      "on-failure",
+    );
+    expect(result.decision).toBe("deny");
+    expect(result.matchedRule).toBe("Bash(git push:*)");
+  });
+
+  it("ask 规则命中进入询问", () => {
+    const result = evaluateCommand(
+      "git push origin main",
+      rules({ ask: ["Bash(git push:*)"] }),
+      null,
+      "read-only",
+      "on-failure",
+    );
+    expect(result.decision).toBe("ask");
+  });
+
+  it("allow 规则精确命中放行", () => {
+    const result = evaluateCommand(
+      "git status",
+      rules({ allow: ["Bash(git status)"] }),
+      null,
+      "read-only",
+      "on-failure",
+    );
+    expect(result.decision).toBe("allow");
+  });
+
+  it("allow 不穿透包装：带环境变量前缀的命令不命中精确 allow", () => {
+    const result = evaluateCommand(
+      "FOO=1 git status",
+      rules({ allow: ["Bash(git status)"] }),
+      null,
+      "read-only",
+      "always-ask",
+    );
+    expect(result.decision).toBe("ask");
+  });
+
+  it("复合命令任一段 deny 则整条拒绝", () => {
+    const result = evaluateCommand(
+      "echo hi && rm -rf /",
+      rules({ allow: ["Bash(echo *)"] }),
+      BUILTIN_DANGER_RULES,
+      "read-only",
+      "on-failure",
+    );
+    expect(result.decision).toBe("deny");
+  });
+
+  it("复合命令任一段 ask 则整条询问", () => {
+    const result = evaluateCommand(
+      "echo hi && git push",
+      rules({ allow: ["Bash(echo *)"], ask: ["Bash(git push:*)"] }),
+      null,
+      "read-only",
+      "on-failure",
+    );
+    expect(result.decision).toBe("ask");
+  });
+
+  it("复合命令须全部段 allow 才算命中允许", () => {
+    const result = evaluateCommand(
+      "echo hi && git status",
+      rules({ allow: ["Bash(echo *)"] }),
+      null,
+      "read-only",
+      "on-failure",
+    );
+    // git status 未命中 allow 走档位默认：read-only + on-failure 由沙箱兜底放行
+    expect(result.decision).toBe("allow");
+    expect(result.reason).toContain("沙箱硬边界");
+  });
+
+  it("未命中规则时 read-only + on-failure 由沙箱兜底放行", () => {
+    const result = evaluateCommand(
+      "cat package.json",
+      noRules,
+      null,
+      "read-only",
+      "on-failure",
+    );
+    expect(result.decision).toBe("allow");
+    expect(result.reason).toContain("沙箱");
+  });
+
+  it("未命中规则时 always-ask 策略默认询问", () => {
+    const result = evaluateCommand(
+      "cat package.json",
+      noRules,
+      null,
+      "read-only",
+      "always-ask",
+    );
+    expect(result.decision).toBe("ask");
+  });
+
+  it("danger-full-access 档默认放行", () => {
+    const result = evaluateCommand(
+      "cat package.json",
+      noRules,
+      null,
+      "danger-full-access",
+      "on-failure",
+    );
+    expect(result.decision).toBe("allow");
+  });
+
+  it("空命令拒绝", () => {
+    const result = evaluateCommand(
+      "   ",
+      noRules,
+      null,
+      "read-only",
+      "on-failure",
+    );
+    expect(result.decision).toBe("deny");
+  });
+
+  it("deny 优先级高于 allow（同一命令双规则命中）", () => {
+    const result = evaluateCommand(
+      "git push -f origin main",
+      rules({
+        allow: ["Bash(git push:*)"],
+        deny: ["Bash(git push -f:*)"],
+      }),
+      null,
+      "read-only",
+      "on-failure",
+    );
+    expect(result.decision).toBe("deny");
+  });
+});
+
+describe("evaluateRuleKey", () => {
+  it("整工具规则匹配同工具键", () => {
+    const result = evaluateRuleKey(
+      "websearch",
+      rules({ allow: ["WebSearch"] }),
+      "read-only",
+      "on-failure",
+    );
+    expect(result.decision).toBe("allow");
+  });
+
+  it("deny 整工具优先于 allow", () => {
+    const result = evaluateRuleKey(
+      "mcp__github__create_issue",
+      rules({
+        allow: ["mcp__github__create_issue"],
+        deny: ["mcp__github__create_issue"],
+      }),
+      "read-only",
+      "on-failure",
+    );
+    expect(result.decision).toBe("deny");
+  });
+
+  it("细粒度规则匹配规则键的 spec", () => {
+    const result = evaluateRuleKey(
+      "read(/src/a.ts)",
+      rules({ allow: ["Read(/src/**)"] }),
+      "read-only",
+      "on-failure",
+    );
+    expect(result.decision).toBe("allow");
+  });
+
+  it("spec 不匹配时走档位默认", () => {
+    const result = evaluateRuleKey(
+      "read(/etc/passwd)",
+      rules({ allow: ["Read(/src/**)"] }),
+      "read-only",
+      "always-ask",
+    );
+    expect(result.decision).toBe("ask");
+  });
+
+  it("非法规则键拒绝", () => {
+    const result = evaluateRuleKey(
+      "",
+      noRules,
+      "read-only",
+      "on-failure",
+    );
+    expect(result.decision).toBe("deny");
+  });
+});

@@ -43,6 +43,27 @@ export const grepTool: Tool = {
     },
     required: ["pattern"],
   },
+  permission: {
+    capabilities: ["fs.read"],
+    /**
+     * 生成规则键：以搜索根路径为匹配主体（遍历以根为界）
+     * @param {Record<string, unknown>} args - 模型给出的参数
+     * @returns {string} 形如 grep(/abs/path) 的规则键
+     */
+    ruleKey(args: Record<string, unknown>): string {
+      const raw = typeof args.path === "string" ? args.path : "";
+      return `grep(${resolveFromCwd(raw)})`;
+    },
+    /**
+     * 声明本次搜索涉及的根路径（门卫按档位禁读边界校验）
+     * @param {Record<string, unknown>} args - 模型给出的参数
+     * @returns {string[]} 绝对路径列表
+     */
+    paths(args: Record<string, unknown>): string[] {
+      const raw = typeof args.path === "string" ? args.path : "";
+      return [resolveFromCwd(raw)];
+    },
+  },
   /**
    * 执行搜索：正则非法、根路径非法、遍历失败均转为失败输出回传模型
    * @param {Record<string, unknown>} args - 模型给出的参数

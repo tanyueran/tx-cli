@@ -1,0 +1,375 @@
+import { randomUUID } from "node:crypto";
+import pico from "picocolors";
+import type { ToolOutput } from "../tools/types";
+import { askConfirm, askSelect } from "../../shared/prompt";
+import { BUILTIN_DANGER_RULES, type DangerRule } from "./danger-rules";
+import { evaluateCommand, evaluateRuleKey, parseRule } from "./rules";
+import {
+  appendAudit,
+  appendGrant,
+  readGrants,
+  type AuditEntry,
+} from "./audit";
+import type {
+  ApprovalChoice,
+  ApprovalPolicy,
+  Approver,
+  SandboxLevel,
+  SandboxProvider,
+} from "./types";
+import {
+  buildTierConfig,
+  matchPathPattern,
+} from "./defaults";
+import type { SandboxFileConfig, SandboxRulesConfig } from "./config";
+import type { TierConfig } from "./types";
+
+/** 会话级沙箱上下文的构造参数 */
+export interface SandboxContextOptions {
+  /** 生效的沙箱配置（含 CLI/env 合并结果） */
+  config: SandboxFileConfig;
+  /** 生效档位 */
+  level: SandboxLevel;
+  /** 生效审批策略 */
+  approval: ApprovalPolicy;
+  /** 沙箱 Provider；undefined 表示 fail-closed（bash 可用但执行被拒） */
+  provider: SandboxProvider | undefined;
+  /** 是否处于可交互环境（TTY）；非交互时 ask 一律拒绝 */
+  isInteractive: boolean;
+  /** 审批器（交互或测试注入） */
+  approver: Approver;
+  /** 档位边界配置（fs 工具路径检查用）；缺省按档位与配置以 cwd 为可写根构建 */
+  tier?: TierConfig;
+  /** grants 文件路径（缺省 ~/.tx-cli/sandbox-grants.json，测试可注入） */
+  grantsPath?: string;
+  /** 审计日志路径（缺省 ~/.tx-cli/sandbox-audit.jsonl，测试可注入） */
+  auditPath?: string;
+}
+
+/**
+ * 会话级沙箱上下文：L2 规则判定 + L3 审批审计 + 串行队列的运行时载体
+ * 一个对话会话持有一个实例，随会话结束 dispose
+ */
+export class SandboxContext {
+  /** 生效档位 */
+  readonly level: SandboxLevel;
+  /** 生效审批策略 */
+  readonly approval: ApprovalPolicy;
+  /** 沙箱 Provider（undefined 表示 fail-closed） */
+  readonly provider: SandboxProvider | undefined;
+  /** 是否可交互（TTY） */
+  readonly isInteractive: boolean;
+  /** bash 工具单命令超时（毫秒） */
+  readonly bashTimeoutMs: number;
+  /** 档位边界配置（fs 工具路径检查用） */
+  readonly tier: TierConfig;
+  /** 审批器 */
+  private readonly approver: Approver;
+  /** 用户规则 + 会话/持久授权（ask 命中后按 allow 匹配） */
+  private readonly rules: SandboxRulesConfig;
+  /** 内置危险类目（null 表示整体关闭） */
+  private readonly dangerRules: readonly DangerRule[] | null;
+  /** 是否写审计日志 */
+  private readonly auditEnabled: boolean;
+  /** 审计日志路径 */
+  private readonly auditPath?: string;
+  /** grants 文件路径 */
+  private readonly grantsPath?: string;
+  /** 串行工具的执行队列尾（保证 bash 等串行工具不并发执行） */
+  private serialTail: Promise<unknown> = Promise.resolve();
+
+  /**
+   * @param {SandboxContextOptions} options - 构造参数
+   */
+  constructor(options: SandboxContextOptions) {
+    this.level = options.level;
+    this.approval = options.approval;
+    this.provider = options.provider;
+    this.isInteractive = options.isInteractive;
+    this.bashTimeoutMs = options.config.bash.timeoutMs;
+    this.approver = options.approver;
+    this.auditEnabled = options.config.audit;
+    this.auditPath = options.auditPath;
+    this.grantsPath = options.grantsPath;
+    this.tier =
+      options.tier ??
+      buildTierConfig(
+        options.level,
+        options.config,
+        process.cwd(),
+      );
+    this.dangerRules = options.config.builtinDangerRules
+      ? BUILTIN_DANGER_RULES
+      : null;
+    // 持久授权（「始终允许」）合并进 allow 规则集
+    this.rules = {
+      ...options.config.rules,
+      allow: [
+        ...options.config.rules.allow,
+        ...readGrants(options.grantsPath),
+      ],
+    };
+  }
+
+  /**
+   * L2 规则判定入口：bash 工具走复合命令判定，其余工具走规则键判定
+   * @param {string} toolName - 工具名
+   * @param {string} ruleKey - 工具生成的规则键
+   * @returns {import("./rules").RuleEvaluation} 判定结果
+   */
+  evaluate(toolName: string, ruleKey: string) {
+    if (toolName === "bash") {
+      const parsed = parseRule(ruleKey);
+      const command = parsed?.spec ?? ruleKey;
+      return evaluateCommand(
+        command,
+        this.rules,
+        this.dangerRules,
+        this.level,
+        this.approval,
+      );
+    }
+    return evaluateRuleKey(ruleKey, this.rules, this.level, this.approval);
+  }
+
+  /**
+   * 应用层 fs 读边界：fs 工具是进程内代码不经沙箱进程，读取前对照档位 TierConfig 校验
+   * danger-full-access 档跳过检查；denyRead 命中即拒绝（deny-then-allow 语义）
+   * @param {string} path - 待读取的绝对路径
+   * @returns {{ allowed: boolean; reason?: string }} 拒绝时带中文原因
+   */
+  checkFsRead(path: string): { allowed: boolean; reason?: string } {
+    if (this.level === "danger-full-access") {
+      return { allowed: true };
+    }
+    for (const pattern of this.tier.denyRead) {
+      if (matchPathPattern(pattern, path)) {
+        return {
+          allowed: false,
+          reason: `路径 ${path} 命中当前档位禁读边界 ${pattern}`,
+        };
+      }
+    }
+    return { allowed: true };
+  }
+
+  /**
+   * 应用层 fs 写边界：写入前对照档位 TierConfig 校验（allow-only 语义）
+   * danger-full-access 档跳过检查；路径必须落在 allowWrite 某个可写根内，
+   * 且不命中 denyWrite 敏感模式（.env、*.pem 等）
+   * @param {string} path - 待写入的绝对路径
+   * @returns {{ allowed: boolean; reason?: string }} 拒绝时带中文原因
+   */
+  checkFsWrite(path: string): { allowed: boolean; reason?: string } {
+    if (this.level === "danger-full-access") {
+      return { allowed: true };
+    }
+    if (this.tier.allowWrite.length === 0) {
+      return {
+        allowed: false,
+        reason: `当前档位为 ${this.level}，禁止一切文件写入`,
+      };
+    }
+    const writable = this.tier.allowWrite.some(
+      (root) => path === root || path.startsWith(`${root}/`),
+    );
+    if (!writable) {
+      return {
+        allowed: false,
+        reason: `路径 ${path} 不在可写范围内（可写根：${this.tier.allowWrite.join("、")}）`,
+      };
+    }
+    for (const pattern of this.tier.denyWrite) {
+      if (matchPathPattern(pattern, path)) {
+        return {
+          allowed: false,
+          reason: `文件 ${path} 命中禁写模式 ${pattern}`,
+        };
+      }
+    }
+    return { allowed: true };
+  }
+
+  /**
+   * L3 门卫：按 L2 判定放行、拒绝或征询审批
+   * @param {string} toolName - 工具名
+   * @param {string} ruleKey - 规则键
+   * @returns {Promise<ToolOutput | null>} 拒绝时返回失败输出，放行时返回 null
+   */
+  async guard(toolName: string, ruleKey: string): Promise<ToolOutput | null> {
+    const evaluation = this.evaluate(toolName, ruleKey);
+    if (evaluation.decision === "deny") {
+      this.recordAudit({
+        tool: toolName,
+        ruleKey,
+        decision: "deny",
+      });
+      return { ok: false, output: `已拒绝执行：${evaluation.reason}` };
+    }
+    if (evaluation.decision === "allow") {
+      return null;
+    }
+    // ask 判定：非交互环境按拒绝处理（无法征询即不放行）
+    if (!this.isInteractive) {
+      this.recordAudit({
+        tool: toolName,
+        ruleKey,
+        decision: "denied-noninteractive",
+      });
+      return {
+        ok: false,
+        output: `命令需要审批但当前为非交互环境，已拒绝：${evaluation.reason}`,
+      };
+    }
+    const choice = await this.approver.ask(ruleKey, evaluation.reason);
+    if (choice.kind === "deny") {
+      this.recordAudit({
+        tool: toolName,
+        ruleKey,
+        decision: "denied",
+      });
+      return { ok: false, output: "用户拒绝了本次命令执行" };
+    }
+    if (choice.kind === "session" && evaluation.matchedRule) {
+      // 会话级授权：从 ask 集合移入 allow，同类命令后续不再询问
+      this.rules.ask = this.rules.ask.filter(
+        (r) => r !== evaluation.matchedRule,
+      );
+      this.rules.allow = [...this.rules.allow, evaluation.matchedRule];
+    }
+    if (choice.kind === "always" && evaluation.matchedRule) {
+      appendGrant(evaluation.matchedRule, this.grantsPath);
+      this.rules.allow = [...this.rules.allow, evaluation.matchedRule];
+    }
+    this.recordAudit({
+      tool: toolName,
+      ruleKey,
+      decision: "approved",
+    });
+    return null;
+  }
+
+  /**
+   * 沙箱内失败后的升级问询（on-failure 策略专用）
+   * @param {string} commandText - 用户可见的命令文本
+   * @param {string} reason - 失败/违规说明
+   * @returns {Promise<boolean>} 用户批准脱离沙箱重跑时为 true
+   */
+  async askEscalation(
+    commandText: string,
+    reason: string,
+  ): Promise<boolean> {
+    return this.approver.askEscalation(commandText, reason);
+  }
+
+  /**
+   * 当前生效规则的只读快照（含会话授权与持久授权合并后的 allow）
+   * 供 /permissions 等只读展示使用；返回副本，外部修改不影响判定
+   * @returns {{ allow: string[]; ask: string[]; deny: string[] }} 三段规则原文列表
+   */
+  listRules(): { allow: string[]; ask: string[]; deny: string[] } {
+    return {
+      allow: [...this.rules.allow],
+      ask: [...this.rules.ask],
+      deny: [...this.rules.deny],
+    };
+  }
+
+  /**
+   * 记录一行审计日志（audit 关闭时为空操作）
+   * @param {Omit<AuditEntry, "ts" | "tier" | "approval">} partial - 审计事件（时间戳与档位自动补全）
+   * @returns {void}
+   */
+  recordAudit(
+    partial: Omit<AuditEntry, "ts" | "tier" | "approval">,
+  ): void {
+    if (!this.auditEnabled) {
+      return;
+    }
+    appendAudit(
+      {
+        ts: new Date().toISOString(),
+        tier: this.level,
+        approval: this.approval,
+        ...partial,
+      },
+      this.auditPath,
+    );
+  }
+
+  /**
+   * 串行执行：把函数排入会话级队列，保证前序完成后再执行后续
+   * 前序失败不阻断后续（错误在各自调用方处理）
+   * @param {() => Promise<T>} fn - 待串行执行的异步函数
+   * @returns {Promise<T>} fn 的执行结果
+   */
+  runSerial<T>(fn: () => Promise<T>): Promise<T> {
+    const run = this.serialTail.then(fn, fn);
+    this.serialTail = run.catch(() => undefined);
+    return run;
+  }
+
+  /**
+   * 生成一次执行的唯一关联 ID
+   * @returns {string} UUID
+   */
+  newCommandId(): string {
+    return randomUUID();
+  }
+
+  /**
+   * 释放沙箱会话资源
+   * @returns {Promise<void>}
+   */
+  async dispose(): Promise<void> {
+    await this.provider?.dispose();
+  }
+}
+
+/**
+ * 交互式审批器：prompts 实现，供 TTY 环境使用
+ */
+export const interactiveApprover: Approver = {
+  /**
+   * 征询命令审批：一次/本会话/始终/拒绝
+   * @param {string} ruleKey - 规则键
+   * @param {string} reason - 判定说明
+   * @returns {Promise<ApprovalChoice>} 用户选择
+   */
+  async ask(ruleKey: string, reason: string): Promise<ApprovalChoice> {
+    console.log(pico.yellow(`\n命令需要审批：${ruleKey}`));
+    console.log(pico.gray(`原因：${reason}`));
+    const choice = await askSelect("是否允许执行？", [
+      { title: "本次允许", value: "once" as const },
+      { title: "本会话内允许同类命令", value: "session" as const },
+      { title: "始终允许同类命令（写入配置）", value: "always" as const },
+      { title: "拒绝执行", value: "deny" as const },
+    ]);
+    return { kind: choice };
+  },
+  /**
+   * 沙箱内失败后的升级问询
+   * @param {string} commandText - 命令文本
+   * @param {string} reason - 失败说明
+   * @returns {Promise<boolean>} 批准脱离沙箱重跑时为 true
+   */
+  async askEscalation(
+    commandText: string,
+    reason: string,
+  ): Promise<boolean> {
+    console.log(pico.yellow(`\n命令在沙箱内失败：${commandText}`));
+    console.log(pico.gray(reason));
+    return askConfirm("是否脱离沙箱重跑本次命令？（风险自担）", false);
+  },
+};
+
+/**
+ * 判断当前环境是否可交互（TTY 且非 CI）
+ * @returns {boolean} 可交互时为 true
+ */
+export function detectInteractive(): boolean {
+  if (process.env.CI || process.env.TX_SANDBOX_HEADLESS) {
+    return false;
+  }
+  return Boolean(process.stdin.isTTY && process.stdout.isTTY);
+}

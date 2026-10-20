@@ -20,6 +20,27 @@ export const listDirTool: Tool = {
     },
     required: [],
   },
+  permission: {
+    capabilities: ["fs.read"],
+    /**
+     * 生成规则键：以解析后的绝对目录为匹配主体
+     * @param {Record<string, unknown>} args - 模型给出的参数
+     * @returns {string} 形如 list_dir(/abs/dir) 的规则键
+     */
+    ruleKey(args: Record<string, unknown>): string {
+      const raw = typeof args.path === "string" ? args.path : "";
+      return `list_dir(${resolveFromCwd(raw)})`;
+    },
+    /**
+     * 声明本次列目录涉及的路径（门卫按档位禁读边界校验）
+     * @param {Record<string, unknown>} args - 模型给出的参数
+     * @returns {string[]} 绝对路径列表
+     */
+    paths(args: Record<string, unknown>): string[] {
+      const raw = typeof args.path === "string" ? args.path : "";
+      return [resolveFromCwd(raw)];
+    },
+  },
   /**
    * 执行列目录：非目录、读取失败均转为失败输出回传模型
    * @param {Record<string, unknown>} args - 模型给出的参数

@@ -1,10 +1,11 @@
 import {
+  createConversationRuntime,
   createResponsesTurn,
   createStreamRenderer,
   createToolCallLogger,
+  disposeConversationRuntime,
   resolveThinkingLevel,
   runAgentLoop,
-  setupSkillContext,
   warnThinkingFallback,
 } from "../common";
 import { printWarnings } from "../../../shared/warnings";
@@ -12,7 +13,7 @@ import {
   resolveResponsesThinkingFields,
   resolveThinkingStyle,
 } from "../../llm";
-import { connectMcpServers } from "../../mcp";
+import type { SandboxCliOptions } from "../../sandbox";
 import type {
   LlmConfig,
   ResponseHistoryItem,
@@ -29,6 +30,7 @@ import { SYSTEM_PROMPT } from "./constants";
  * @param {string} question - 用户问题
  * @param {ThinkingLevel | undefined} thinkingLevel - 命令行指定的思考档位，未指定时回退配置默认
  * @param {boolean} mcpEnabled - 是否启用 MCP 服务器（--no-mcp 关闭），缺省开启
+ * @param {SandboxCliOptions} sandboxCli - 沙箱 CLI 选项（--sandbox/--no-bash 等），缺省按配置文件装配
  * @returns {Promise<void>}
  */
 export async function runOneShotChat(
@@ -36,17 +38,20 @@ export async function runOneShotChat(
   question: string,
   thinkingLevel?: ThinkingLevel,
   mcpEnabled = true,
+  sandboxCli?: SandboxCliOptions,
 ): Promise<void> {
   const level = resolveThinkingLevel(thinkingLevel, config);
   const style = resolveThinkingStyle(config);
   warnThinkingFallback(level, style);
   const renderer = createStreamRenderer();
-  const { manager, tools: mcpTools } = await connectMcpServers(mcpEnabled);
+  // 会话运行时（MCP 连接与沙箱）随会话创建，finally 中统一释放
+  const runtime = await createConversationRuntime(
+    SYSTEM_PROMPT,
+    mcpEnabled,
+    sandboxCli,
+  );
   try {
-    const { systemPrompt, tools, warnings } = setupSkillContext(
-      SYSTEM_PROMPT,
-      mcpTools,
-    );
+    const { systemPrompt, tools, warnings } = runtime.skill;
     printWarnings(warnings);
     // 单次问答的历史仅在本函数内存活：不跨轮共享，问答结束即丢弃
     const history: ResponseHistoryItem[] = [];
@@ -71,8 +76,8 @@ export async function runOneShotChat(
       onToolCall: createToolCallLogger(renderer),
     });
   } finally {
-    // MCP 连接随会话结束关闭（含异常路径），stdio 子进程随之退出
-    await manager?.closeAll();
+    // 成功与异常路径都先补换行，避免后续输出（错误提示等）粘在残缺的流式输出之后
+    process.stdout.write("\n");
+    await disposeConversationRuntime(runtime);
   }
-  process.stdout.write("\n");
 }

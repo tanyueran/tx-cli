@@ -14,4 +14,9 @@ export {
 } from "./renderer";
 export { setupSkillContext } from "./skill-context";
 export type { SkillContext } from "./skill-context";
+export {
+  createConversationRuntime,
+  disposeConversationRuntime,
+} from "./runtime";
+export type { ConversationRuntime } from "./runtime";
 export { resolveThinkingLevel, warnThinkingFallback } from "./thinking";

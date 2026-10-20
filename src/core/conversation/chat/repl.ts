@@ -1,12 +1,14 @@
 import pico from "picocolors";
 import {
+  createConversationRuntime,
   createResponsesTurn,
   createStreamRenderer,
   createToolCallLogger,
+  disposeConversationRuntime,
   resolveThinkingLevel,
   runAgentLoop,
-  setupSkillContext,
   warnThinkingFallback,
+  type ConversationRuntime,
 } from "../common";
 import { printWarnings } from "../../../shared/warnings";
 import {
@@ -15,7 +17,8 @@ import {
   resolveThinkingStyle,
   THINKING_LEVELS,
 } from "../../llm";
-import { connectMcpServers } from "../../mcp";
+import type { SandboxCliOptions } from "../../sandbox";
+import type { SandboxContext } from "../../sandbox/gate";
 import type { Tool } from "../../tools";
 import { CancelError, CliError } from "../../../shared/errors";
 import { askText } from "../../../shared/prompt";
@@ -93,6 +96,63 @@ function printThinkingNotice(level: ThinkingLevel, style: ThinkingStyle): void {
 }
 
 /**
+ * 打印规则列表段（/permissions 展示用）：空段显示占位说明
+ * @param {string} title - 段标题（如「允许」「询问」「拒绝」）
+ * @param {string[]} rules - 规则原文列表
+ * @returns {void}
+ */
+function printRuleSection(title: string, rules: string[]): void {
+  if (rules.length === 0) {
+    console.log(pico.gray(`  ${title}：（空）`));
+    return;
+  }
+  console.log(pico.cyan(`  ${title}：`));
+  for (const rule of rules) {
+    console.log(`    ${rule}`);
+  }
+}
+
+/**
+ * 打印当前会话的沙箱与权限状态（/permissions 内联命令）
+ * 展示：档位、审批策略、Provider、fs 边界、三段规则（allow 含会话与持久授权合并）
+ * @param {SandboxContext | undefined} sandbox - 会话级沙箱上下文
+ * @returns {void}
+ */
+function printPermissions(sandbox: SandboxContext | undefined): void {
+  if (!sandbox) {
+    console.log(pico.yellow("本会话未启用沙箱（bash 与权限门卫均未装配）"));
+    return;
+  }
+  const providerName = sandbox.provider
+    ? `${sandbox.provider.name}${sandbox.provider.name === "noop" ? "（直通无隔离）" : ""}`
+    : "无（bash 以失败关闭模式运行）";
+  console.log(pico.cyan(`沙箱档位：${sandbox.level}`));
+  console.log(pico.cyan(`审批策略：${sandbox.approval}`));
+  console.log(pico.cyan(`沙箱 Provider：${providerName}`));
+  console.log(pico.cyan("文件系统边界："));
+  console.log(
+    pico.gray(`  禁读：${sandbox.tier.denyRead.join("、") || "（无）"}`),
+  );
+  if (sandbox.level === "read-only") {
+    console.log(pico.gray("  可写：（无，禁止一切写入）"));
+  } else {
+    console.log(
+      pico.gray(`  可写：${sandbox.tier.allowWrite.join("、") || "（无）"}`),
+    );
+    console.log(
+      pico.gray(`  禁写：${sandbox.tier.denyWrite.join("、") || "（无）"}`),
+    );
+  }
+  const rules = sandbox.listRules();
+  console.log(
+    pico.cyan("权限规则（allow 含会话授权与「始终允许」的持久授权）："),
+  );
+  printRuleSection("允许", rules.allow);
+  printRuleSection("询问", rules.ask);
+  printRuleSection("拒绝", rules.deny);
+}
+
+/**
  * 多轮对话模式（REPL）：循环提问，直到用户输入 exit/quit 或按 Ctrl+C 退出
  * 基于 Responses API（无状态模式）+ agentic loop：历史由本地维护、每轮全量发送，
  * 模型可在任意一轮发起工具调用（read_file 等），与单次问答模式能力一致
@@ -102,43 +162,47 @@ function printThinkingNotice(level: ThinkingLevel, style: ThinkingStyle): void {
  * @param {LlmConfig} config - LLM 接入配置
  * @param {ThinkingLevel | undefined} thinkingLevel - 命令行指定的思考档位，未指定时回退配置默认
  * @param {boolean} mcpEnabled - 是否启用 MCP 服务器（--no-mcp 关闭），缺省开启
+ * @param {SandboxCliOptions} sandboxCli - 沙箱 CLI 选项（--sandbox/--no-bash 等），缺省按配置文件装配
  * @returns {Promise<void>}
  */
 export async function runReplChat(
   config: LlmConfig,
   thinkingLevel?: ThinkingLevel,
   mcpEnabled = true,
+  sandboxCli?: SandboxCliOptions,
 ): Promise<void> {
   // 初始档位由 /think 在会话内切换（见 runReplSession）
   const currentLevel = resolveThinkingLevel(thinkingLevel, config);
   const style = resolveThinkingStyle(config);
-  const { manager, tools: mcpTools } = await connectMcpServers(mcpEnabled);
+  // 会话运行时（MCP 连接与沙箱）随会话创建，finally 中统一释放
+  const runtime = await createConversationRuntime(
+    SYSTEM_PROMPT,
+    mcpEnabled,
+    sandboxCli,
+  );
   try {
-    await runReplSession(config, style, currentLevel, mcpTools);
+    await runReplSession(config, style, currentLevel, runtime);
   } finally {
-    // MCP 连接随会话结束关闭（含异常路径），stdio 子进程随之退出
-    await manager?.closeAll();
+    await disposeConversationRuntime(runtime);
   }
 }
 
 /**
- * REPL 主循环：装配会话上下文并循环处理用户输入，MCP 生命周期由调用方管理
+ * REPL 主循环：基于会话运行时循环处理用户输入，MCP 与沙箱生命周期由调用方管理
  * @param {LlmConfig} config - LLM 接入配置
  * @param {ThinkingStyle} style - 思考协议风格
  * @param {ThinkingLevel} currentLevel - 初始思考档位
- * @param {Tool[]} mcpTools - MCP 工具列表（可为空）
+ * @param {ConversationRuntime} runtime - 会话运行时（MCP、沙箱、技能装配结果）
  * @returns {Promise<void>}
  */
 async function runReplSession(
   config: LlmConfig,
   style: ThinkingStyle,
   currentLevel: ThinkingLevel,
-  mcpTools: Tool[],
+  runtime: ConversationRuntime,
 ): Promise<void> {
-  const { systemPrompt, tools, catalog, warnings } = setupSkillContext(
-    SYSTEM_PROMPT,
-    mcpTools,
-  );
+  const { systemPrompt, tools, catalog, warnings } = runtime.skill;
+  const { sandbox, mcpTools } = runtime;
   printWarnings(warnings);
   const skillNote = catalog.size > 0 ? `，已发现 ${catalog.size} 个技能` : "";
   const mcpNote =
@@ -153,6 +217,9 @@ async function runReplSession(
   ];
   if (catalog.size > 0) {
     hints.push("/skills 查看可用技能");
+  }
+  if (sandbox) {
+    hints.push("/permissions 查看沙箱与权限状态");
   }
   console.log(pico.cyan(`提示：${hints.join("；")}`));
   // 服务能力折算警告：off 档位本就对应关闭，此时不提示
@@ -179,6 +246,12 @@ async function runReplSession(
     if (lower === "exit" || lower === "quit") {
       console.log(pico.yellow("已退出对话"));
       return;
+    }
+
+    // 内联命令 /permissions：查看当前会话的沙箱与权限状态（只读展示）
+    if (lower === "/permissions") {
+      printPermissions(sandbox);
+      continue;
     }
 
     // 内联命令 /skills：列出可用技能及来源，便于确认模型可加载的手册清单
@@ -209,7 +282,11 @@ async function runReplSession(
         continue;
       }
       try {
-        currentLevel = parseThinkingLevel(arg) ?? currentLevel;
+        // arg 已确认非空：parseThinkingLevel 只会返回档位或抛 CliError，不会返回 undefined
+        const nextLevel = parseThinkingLevel(arg);
+        if (nextLevel) {
+          currentLevel = nextLevel;
+        }
         printThinkingNotice(currentLevel, style);
       } catch (err) {
         if (!(err instanceof CliError)) {
@@ -220,9 +297,18 @@ async function runReplSession(
       continue;
     }
 
+    // 记录本轮开始前历史长度：本轮被取消时回滚，避免残留未配对的用户输入或工具调用项
+    const historyStart = history.length;
     try {
       await runReplTurn(session, history, input, currentLevel);
     } catch (err) {
+      // 审批等交互中按 Ctrl+C：只中断本轮并回滚本轮历史，会话继续
+      if (err instanceof CancelError) {
+        history.length = historyStart;
+        process.stdout.write("\n");
+        console.log(pico.yellow("已取消本轮"));
+        continue;
+      }
       // 仅吞可预期的业务错误（网络、接口报错）；未预期错误仍上抛，避免代码 bug 被无限循环掩盖
       if (!(err instanceof CliError)) {
         throw err;

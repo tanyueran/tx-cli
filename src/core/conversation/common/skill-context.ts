@@ -1,5 +1,8 @@
 import { createLoadSkillTool, discoverSkills, SkillCatalog } from "../../skills";
 import { builtinTools, type Tool } from "../../tools";
+import { createBashTool } from "../../tools/builtin/bash";
+import { wrapToolWithPermission } from "../../tools/permission";
+import type { SandboxContext } from "../../sandbox/gate";
 import { buildSystemPrompt } from "./prompt";
 import { CliError } from "../../../shared/errors";
 
@@ -7,7 +10,7 @@ import { CliError } from "../../../shared/errors";
 export interface SkillContext {
   /** 组装后的 system 提示词（含技能元数据清单） */
   systemPrompt: string;
-  /** 会话可用工具列表：内置工具 + load_skill（存在技能时）+ 外部工具（如 MCP） */
+  /** 会话可用工具列表：内置工具 + load_skill（存在技能时）+ bash（沙箱启用时）+ 外部工具（如 MCP） */
   tools: Tool[];
   /** 技能目录（/skills 内联命令展示用） */
   catalog: SkillCatalog;
@@ -34,16 +37,19 @@ function ensureUniqueToolNames(tools: Tool[]): void {
 
 /**
  * 发现技能并装配对话所需的提示词与工具列表
- * 工具来源固定为三类拼接：内置工具（随版本发布）+ load_skill（仅存在技能时）+ 外部工具（如 MCP），
+ * 工具来源固定拼接：内置工具（随版本发布）+ load_skill（仅存在技能时）+ bash（沙箱启用时）+ 外部工具（如 MCP），
  * 不再支持运行时动态注册工具；
- * 仅当存在可用技能时才装配 load_skill，避免空技能场景多下发一个无用工具定义
+ * 仅当存在可用技能时才装配 load_skill，避免空技能场景多下发一个无用工具定义；
+ * 传入沙箱上下文时装配 bash 并对声明了 permission 的工具做权限门卫包装
  * @param {string} basePrompt - 场景基础提示词（chat、agent 等命令各自定义人设）
  * @param {Tool[]} extraTools - 追加并入的外部工具（如 MCP 工具，缺省为空）
+ * @param {SandboxContext} sandbox - 会话级沙箱上下文（可选；存在时装配 bash 与权限门卫）
  * @returns {SkillContext} 装配结果
  */
 export function setupSkillContext(
   basePrompt: string,
   extraTools: Tool[] = [],
+  sandbox?: SandboxContext,
 ): SkillContext {
   const { skills, warnings } = discoverSkills();
   const catalog = new SkillCatalog(skills);
@@ -51,11 +57,18 @@ export function setupSkillContext(
   if (skills.length > 0) {
     tools.push(createLoadSkillTool(catalog));
   }
+  if (sandbox) {
+    tools.push(createBashTool(sandbox));
+  }
   tools.push(...extraTools);
   ensureUniqueToolNames(tools);
+  // 声明了 permission 的工具（如 bash）经 L2 规则判定 + L3 审批门卫包装
+  const gated = sandbox
+    ? tools.map((tool) => wrapToolWithPermission(tool, sandbox))
+    : tools;
   return {
     systemPrompt: buildSystemPrompt(basePrompt, skills),
-    tools,
+    tools: gated,
     catalog,
     warnings,
   };
