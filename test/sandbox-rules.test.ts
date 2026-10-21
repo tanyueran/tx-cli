@@ -338,3 +338,125 @@ describe("evaluateRuleKey", () => {
     expect(result.decision).toBe("deny");
   });
 });
+
+describe("evaluateRuleKey: MCP 类目", () => {
+  it("未命中规则时 mcp-tool 类目默认询问（on-failure）", () => {
+    const result = evaluateRuleKey(
+      "mcp__github__create_issue",
+      noRules,
+      "read-only",
+      "on-failure",
+      "mcp-tool",
+    );
+    expect(result.decision).toBe("ask");
+    // matchedRule 为工具键本身：用户选"本会话/始终允许"时按该工具粒度复用授权
+    expect(result.matchedRule).toBe("mcp__github__create_issue");
+  });
+
+  it("mcp-tool + never 策略无法征询，fail-closed 拒绝", () => {
+    const result = evaluateRuleKey(
+      "mcp__github__create_issue",
+      noRules,
+      "read-only",
+      "never",
+      "mcp-tool",
+    );
+    expect(result.decision).toBe("deny");
+  });
+
+  it("mcp-tool + always-ask 默认询问", () => {
+    const result = evaluateRuleKey(
+      "mcp__github__create_issue",
+      noRules,
+      "workspace-write",
+      "always-ask",
+      "mcp-tool",
+    );
+    expect(result.decision).toBe("ask");
+  });
+
+  it("mcp-tool 在 danger-full-access 档默认放行", () => {
+    const result = evaluateRuleKey(
+      "mcp__github__create_issue",
+      noRules,
+      "danger-full-access",
+      "on-failure",
+      "mcp-tool",
+    );
+    expect(result.decision).toBe("allow");
+  });
+
+  it("tool 类目（内置工具）未命中规则仍由沙箱兜底放行", () => {
+    const result = evaluateRuleKey(
+      "web_search",
+      noRules,
+      "read-only",
+      "on-failure",
+      "tool",
+    );
+    expect(result.decision).toBe("allow");
+  });
+
+  it("mcp__server__* 通配规则命中该服务器全部工具", () => {
+    const result = evaluateRuleKey(
+      "mcp__github__create_issue",
+      rules({ allow: ["mcp__github__*"] }),
+      "read-only",
+      "on-failure",
+      "mcp-tool",
+    );
+    expect(result.decision).toBe("allow");
+    expect(result.matchedRule).toBe("mcp__github__*");
+  });
+
+  it("通配不跨服务器：mcp__github__* 不命中其他服务器工具", () => {
+    const result = evaluateRuleKey(
+      "mcp__gitlab__create_issue",
+      rules({ allow: ["mcp__github__*"] }),
+      "read-only",
+      "on-failure",
+      "mcp-tool",
+    );
+    expect(result.decision).toBe("ask");
+  });
+
+  it("通配仅对 mcp__ 前缀规则名生效，内置工具保持精确匹配", () => {
+    const result = evaluateRuleKey(
+      "web_search",
+      rules({ allow: ["web_*"] }),
+      "read-only",
+      "always-ask",
+      "tool",
+    );
+    // web_* 不参与名字匹配（通配仅限 mcp__ 前缀），走 always-ask 默认询问
+    expect(result.decision).toBe("ask");
+  });
+
+  it("ask 通配优先于 allow 精确（deny > ask > allow 链序）", () => {
+    const result = evaluateRuleKey(
+      "mcp__github__delete_repo",
+      rules({
+        allow: ["mcp__github__*"],
+        ask: ["mcp__github__delete_*"],
+      }),
+      "read-only",
+      "on-failure",
+      "mcp-tool",
+    );
+    expect(result.decision).toBe("ask");
+  });
+
+  it("deny 通配优先于 ask 精确", () => {
+    const result = evaluateRuleKey(
+      "mcp__github__shell",
+      rules({
+        ask: ["mcp__github__shell"],
+        deny: ["mcp__github__*"],
+      }),
+      "read-only",
+      "on-failure",
+      "mcp-tool",
+    );
+    expect(result.decision).toBe("deny");
+  });
+});

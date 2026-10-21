@@ -57,6 +57,9 @@ export function createMcpTool(
       // MCP 工具的真实能力未知（外部进程），按保守口径标注 net + exec；
       // 规则键为整工具级（无细粒度 spec），用户按 mcp__server__tool 粒度配置
       capabilities: ["net", "exec"],
+      // 涉及外部副作用且默认走审批：判定+审批+执行进会话串行队列，
+      // 避免同轮多调用并发弹审批窗交互错乱（与 bash 工具对齐）
+      serial: true,
       /**
        * 生成规则键：整工具级（远端参数结构不可知，不做细粒度拆分）
        * @returns {string} 形如 mcp__server__tool 的规则键

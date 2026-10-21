@@ -220,23 +220,48 @@ function matchSegment(
   return undefined;
 }
 
+/** 规则判定的工具类目：影响未命中规则时的默认判定 */
+export type ToolCategory = "command" | "tool" | "mcp-tool";
+
 /**
- * 按档位与审批策略给出未命中任何规则时的默认判定
- * read-only/workspace-write 依赖沙箱硬边界兜底，默认放行走沙箱；
- * always-ask 策略下未知命令交由用户裁决
+ * 按档位、审批策略与工具类目给出未命中任何规则时的默认判定
+ * - danger-full-access：沙箱与规则全关，默认放行
+ * - mcp-tool：MCP 工具在沙箱硬边界之外，不走"沙箱兜底放行"，默认改为审批；
+ *   never 策略无法征询，按拒绝处理（fail-closed）
+ * - 其余类目：read-only/workspace-write 依赖沙箱硬边界兜底默认放行；
+ *   always-ask 策略下未知命令交由用户裁决
  * @param {SandboxLevel} level - 沙箱档位
  * @param {ApprovalPolicy} approval - 审批策略
+ * @param {ToolCategory} category - 工具类目（bash 为 command，内置工具为 tool，MCP 工具为 mcp-tool）
+ * @param {string} ruleKey - 规则键（mcp-tool 默认审批时用作授权粒度，其余类目忽略）
  * @returns {RuleEvaluation} 默认判定
  */
 function defaultDecision(
   level: SandboxLevel,
   approval: ApprovalPolicy,
+  category: ToolCategory,
+  ruleKey = "",
 ): RuleEvaluation {
   if (level === "danger-full-access") {
     return {
       decision: "allow",
       matchedRule: "",
       reason: "danger-full-access 档位默认放行",
+    };
+  }
+  if (category === "mcp-tool") {
+    if (approval === "never") {
+      return {
+        decision: "deny",
+        matchedRule: "",
+        reason: `MCP 工具 ${ruleKey} 默认需要审批，never 策略无法征询已拒绝（可配置 allow 规则放行）`,
+      };
+    }
+    return {
+      decision: "ask",
+      // matchedRule 取工具键本身：用户选"本会话/始终允许"时按该工具粒度复用授权
+      matchedRule: ruleKey,
+      reason: `MCP 工具 ${ruleKey} 未命中任何规则，默认需要审批`,
     };
   }
   if (approval === "always-ask") {
@@ -337,7 +362,7 @@ export function evaluateCommand(
     };
   }
   if (sawDefault) {
-    return defaultDecision(level, approval);
+    return defaultDecision(level, approval, "command");
   }
   return {
     decision: "allow",
@@ -347,12 +372,34 @@ export function evaluateCommand(
 }
 
 /**
+ * 判断规则名与目标规则键名是否匹配
+ * 精确相等，或双方均为 mcp__ 前缀且规则名含 * 时按 glob 匹配
+ * （MCP 工具数量多，支持 mcp__server__* 这类通配整组放行/审批/拒绝）
+ * @param {string} ruleName - 已解析的规则名
+ * @param {string} keyName - 目标规则键名
+ * @returns {boolean} 匹配时为 true
+ */
+function nameMatches(ruleName: string, keyName: string): boolean {
+  if (ruleName === keyName) {
+    return true;
+  }
+  return (
+    ruleName.includes("*") &&
+    ruleName.startsWith("mcp__") &&
+    keyName.startsWith("mcp__") &&
+    compileGlob(ruleName).test(keyName)
+  );
+}
+
+/**
  * L2 规则判定：对非 bash 工具的规则键匹配
  * 规则键形如 read(/abs/path/to/file)、web_search、mcp__server__tool
+ * 优先级：deny > ask > allow > 类目默认；MCP 工具默认审批，其余内置工具默认放行走沙箱
  * @param {string} ruleKey - 工具生成的规则键
  * @param {SandboxRulesConfig} rules - 用户规则
  * @param {SandboxLevel} level - 沙箱档位
  * @param {ApprovalPolicy} approval - 审批策略
+ * @param {ToolCategory} category - 工具类目（默认内置工具 tool）
  * @returns {RuleEvaluation} 判定结果
  */
 export function evaluateRuleKey(
@@ -360,6 +407,7 @@ export function evaluateRuleKey(
   rules: SandboxRulesConfig,
   level: SandboxLevel,
   approval: ApprovalPolicy,
+  category: ToolCategory = "tool",
 ): RuleEvaluation {
   const parsedKey = parseRule(ruleKey);
   if (!parsedKey) {
@@ -372,7 +420,7 @@ export function evaluateRuleKey(
   const sameName = (list: string[], decision: RuleDecision): RuleEvaluation | undefined => {
     for (const raw of list) {
       const rule = parseRule(raw);
-      if (!rule || rule.name !== parsedKey.name) {
+      if (!rule || !nameMatches(rule.name, parsedKey.name)) {
         continue;
       }
       const hit =
@@ -401,5 +449,5 @@ export function evaluateRuleKey(
   if (allowed) {
     return allowed;
   }
-  return defaultDecision(level, approval);
+  return defaultDecision(level, approval, category, ruleKey);
 }

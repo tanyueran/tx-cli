@@ -8,7 +8,7 @@ export interface StdioServerConfig {
   command: string;
   /** 命令参数（字符串值支持 ${VAR} 环境变量展开） */
   args?: string[];
-  /** 附加环境变量（值支持 ${VAR} 展开），与当前进程环境合并后传给子进程 */
+  /** 附加环境变量（值支持 ${VAR} 展开），与基础白名单环境合并后传给子进程 */
   env?: Record<string, string>;
 }
 

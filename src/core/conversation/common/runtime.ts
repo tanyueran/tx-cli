@@ -23,7 +23,7 @@ export interface ConversationRuntime {
 }
 
 /**
- * 装配对话会话运行时：连接 MCP 服务器 → 创建沙箱上下文 → 装配技能（提示词与工具列表）
+ * 装配对话会话运行时：创建沙箱上下文 → 连接 MCP 服务器（stdio 进程直启裸跑，审批/规则链控制其工具调用）→ 装配技能（提示词与工具列表）
  * 任一步失败时按相反顺序释放已建立的资源，避免 MCP stdio 子进程残留；
  * 成功后的释放由调用方经 disposeConversationRuntime 完成
  * @param {string} basePrompt - 场景基础提示词（chat、agent 等命令各自定义人设）
@@ -36,22 +36,23 @@ export async function createConversationRuntime(
   mcpEnabled: boolean,
   sandboxCli?: SandboxCliOptions,
 ): Promise<ConversationRuntime> {
-  const { manager, tools: mcpTools } = await connectMcpServers(mcpEnabled);
-  let sandbox: SandboxContext | undefined;
+  const sandbox = await createSandboxContext(sandboxCli);
+  let manager: McpManager | undefined;
   try {
-    sandbox = await createSandboxContext(sandboxCli);
-    const skill = setupSkillContext(basePrompt, mcpTools, sandbox);
-    return { manager, sandbox, mcpTools, skill };
+    const mcp = await connectMcpServers(mcpEnabled);
+    manager = mcp.manager;
+    const skill = setupSkillContext(basePrompt, mcp.tools, sandbox);
+    return { manager, sandbox, mcpTools: mcp.tools, skill };
   } catch (err) {
     // 引导中途失败：已建立的资源立即释放，避免泄漏到顶层报错之后
-    await sandbox?.dispose();
     await manager?.closeAll();
+    await sandbox?.dispose();
     throw err;
   }
 }
 
 /**
- * 释放对话会话运行时：先关沙箱再断 MCP 连接（stdio 子进程随之退出）
+ * 释放对话会话运行时：先断 MCP 连接（stdio 子进程随之退出）再关沙箱
  * 供调用方在 finally 中使用，异常路径同样释放
  * @param {ConversationRuntime} runtime - 会话运行时
  * @returns {Promise<void>}
@@ -59,6 +60,6 @@ export async function createConversationRuntime(
 export async function disposeConversationRuntime(
   runtime: ConversationRuntime,
 ): Promise<void> {
-  await runtime.sandbox?.dispose();
   await runtime.manager?.closeAll();
+  await runtime.sandbox?.dispose();
 }

@@ -113,6 +113,7 @@ export class SandboxContext {
 
   /**
    * L2 规则判定入口：bash 工具走复合命令判定，其余工具走规则键判定
+   * MCP 工具（规则键 mcp__ 前缀）按 mcp-tool 类目判定，未命中规则时默认审批
    * @param {string} toolName - 工具名
    * @param {string} ruleKey - 工具生成的规则键
    * @returns {import("./rules").RuleEvaluation} 判定结果
@@ -129,7 +130,8 @@ export class SandboxContext {
         this.approval,
       );
     }
-    return evaluateRuleKey(ruleKey, this.rules, this.level, this.approval);
+    const category = ruleKey.startsWith("mcp__") ? "mcp-tool" : "tool";
+    return evaluateRuleKey(ruleKey, this.rules, this.level, this.approval, category);
   }
 
   /**

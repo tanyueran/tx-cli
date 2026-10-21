@@ -6,10 +6,45 @@ import { withTimeout } from "../../shared/timeout";
 import { getVersion } from "../../shared/paths";
 import type { Tool } from "../tools/types";
 import { createMcpTool } from "./tool-adapter";
-import type { McpServerConfig, McpServerStatus } from "../../types/mcp";
+import type {
+  McpServerConfig,
+  McpServerStatus,
+  StdioServerConfig,
+} from "../../types/mcp";
 
 /** 单服务器连接超时（毫秒）：覆盖建立传输、协议握手与首次工具列举 */
 const CONNECT_TIMEOUT_MS = 10_000;
+
+/**
+ * stdio 服务器子进程继承的基础环境变量白名单
+ * 不再全量继承 process.env，避免 LLM apiKey、shell 凭据等敏感变量
+ * 暴露给第三方服务器进程；服务器需要额外变量时经配置的 env 段显式声明
+ */
+const MCP_BASE_ENV_KEYS = [
+  "PATH",
+  "HOME",
+  "LANG",
+  "TMPDIR",
+  "TERM",
+  "SHELL",
+] as const;
+
+/**
+ * 构建 stdio 服务器子进程的环境变量：基础白名单 + 配置的私有变量
+ * 配置 env 的 ${VAR} 引用已在配置装载阶段展开
+ * @param {StdioServerConfig} config - 服务器配置
+ * @returns {Record<string, string>} 子进程环境变量
+ */
+function buildServerEnv(config: StdioServerConfig): Record<string, string> {
+  const env: Record<string, string> = {};
+  for (const key of MCP_BASE_ENV_KEYS) {
+    const value = process.env[key];
+    if (value !== undefined) {
+      env[key] = value;
+    }
+  }
+  return { ...env, ...config.env };
+}
 
 /** 传输工厂选项：把服务器配置翻译为 Transport 实例，测试可注入 InMemoryTransport */
 export interface McpManagerOptions {
@@ -113,7 +148,7 @@ export class McpManager {
 
   /**
    * 按配置创建传输：注入了 createTransport 时优先使用（测试）；
-   * 否则 stdio 走本地子进程（环境变量与当前进程合并），http 走 Streamable HTTP
+   * 否则 stdio 以本地子进程直启，http 走 Streamable HTTP
    * @param {McpServerConfig} config - 服务器配置
    * @returns {Promise<Transport>} 就绪的传输实例
    */
@@ -124,15 +159,7 @@ export class McpManager {
       return this.options.createTransport(config);
     }
     if (config.type === "stdio") {
-      const { StdioClientTransport } = await import(
-        "@modelcontextprotocol/sdk/client/stdio.js"
-      );
-      return new StdioClientTransport({
-        command: config.command,
-        ...(config.args ? { args: config.args } : {}),
-        // 完整继承当前进程环境再叠加服务器私有变量，保证 PATH 等基础变量可用
-        env: { ...(process.env as Record<string, string>), ...config.env },
-      });
+      return this.createStdioTransport(config);
     }
     const { StreamableHTTPClientTransport } = await import(
       "@modelcontextprotocol/sdk/client/streamableHttp.js"
@@ -141,6 +168,26 @@ export class McpManager {
       ...(config.headers
         ? { requestInit: { headers: config.headers } }
         : {}),
+    });
+  }
+
+  /**
+   * 创建 stdio 传输：以本地子进程方式直启服务器（不做沙箱包装，进程边界沿用主流 CLI 的信任模型——
+   * 服务器由用户显式配置引入，属于信任边界之内；对模型行为的安全约束由工具审批规则链承担）。
+   * 子进程环境变量为基础白名单 + 配置 env，避免把 shell 凭据等敏感变量全量暴露给第三方服务器
+   * @param {StdioServerConfig} config - 服务器配置
+   * @returns {Promise<Transport>} 就绪的传输实例
+   */
+  private async createStdioTransport(
+    config: StdioServerConfig,
+  ): Promise<Transport> {
+    const { StdioClientTransport } = await import(
+      "@modelcontextprotocol/sdk/client/stdio.js"
+    );
+    return new StdioClientTransport({
+      command: config.command,
+      ...(config.args ? { args: config.args } : {}),
+      env: buildServerEnv(config),
     });
   }
 

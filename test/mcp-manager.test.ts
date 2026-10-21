@@ -5,10 +5,69 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { McpManager } from "../src/core/mcp";
 import type { McpServerConfig } from "../src/core/mcp";
 import type { Tool as McpTool } from "@modelcontextprotocol/sdk/types.js";
+
+const { capturedStdioParams } = vi.hoisted(() => ({
+  /** StdioClientTransport 桩捕获的构造参数（按调用顺序） */
+  capturedStdioParams: [] as Array<{
+    command: string;
+    args?: string[];
+    env?: Record<string, string>;
+  }>,
+}));
+
+vi.mock("@modelcontextprotocol/sdk/client/stdio.js", () => ({
+  // 测试桩：只捕获构造参数不真正 spawn 子进程；start 即抛错使连接快速失败
+  StdioClientTransport: class {
+    /** 捕获的构造参数 */
+    readonly captured: {
+      command: string;
+      args?: string[];
+      env?: Record<string, string>;
+    };
+    onclose?: () => void;
+    onerror?: (error: Error) => void;
+    onmessage?: (message: unknown) => void;
+
+    /**
+     * 记录构造参数供断言
+     * @param {object} params - 传输构造参数
+     */
+    constructor(params: {
+      command: string;
+      args?: string[];
+      env?: Record<string, string>;
+    }) {
+      this.captured = params;
+      capturedStdioParams.push(params);
+    }
+
+    /**
+     * 启动即抛错：模拟子进程启动失败，使 connectAll 快速返回
+     * @returns {Promise<void>} 永不 resolve
+     */
+    async start(): Promise<void> {
+      throw new Error("测试桩：不真正启动子进程");
+    }
+
+    /**
+     * 发送即抛错：测试桩不支持协议收发
+     * @returns {Promise<void>} 永不 resolve
+     */
+    async send(): Promise<void> {
+      throw new Error("测试桩：不支持发送");
+    }
+
+    /**
+     * 关闭为空操作
+     * @returns {Promise<void>}
+     */
+    async close(): Promise<void> {}
+  },
+}));
 
 /** callTool 处理器的简化签名：按工具名与参数返回输出块（text 为文本块，其余为合法的非文本块） */
 type CallHandler = (
@@ -233,5 +292,45 @@ describe("McpManager", () => {
     await manager.closeAll();
 
     expect(manager.listTools().tools).toEqual([]);
+  });
+});
+
+describe("McpManager 启动行为", () => {
+  beforeEach(() => {
+    capturedStdioParams.length = 0;
+  });
+
+  it("env 白名单：直启路径只透传基础白名单与配置 env，不继承其余 process.env", async () => {
+    const prev = process.env.TX_TEST_SECRET;
+    process.env.TX_TEST_SECRET = "s3cret";
+    try {
+      const manager = new McpManager(
+        new Map<string, McpServerConfig>([
+          [
+            "demo",
+            {
+              type: "stdio",
+              command: "demo-server",
+              env: { NODE_TOKEN: "tok" },
+            },
+          ],
+        ]),
+      );
+
+      await manager.connectAll();
+
+      expect(capturedStdioParams).toHaveLength(1);
+      expect(capturedStdioParams[0].command).toBe("demo-server");
+      const env = capturedStdioParams[0].env ?? {};
+      expect(env.PATH).toBe(process.env.PATH);
+      expect(env.NODE_TOKEN).toBe("tok");
+      expect(env.TX_TEST_SECRET).toBeUndefined();
+    } finally {
+      if (prev === undefined) {
+        delete process.env.TX_TEST_SECRET;
+      } else {
+        process.env.TX_TEST_SECRET = prev;
+      }
+    }
   });
 });
