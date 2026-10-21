@@ -22,26 +22,38 @@ export interface ConversationRuntime {
   skill: SkillContext;
 }
 
+/** 会话装配选项：chat、agent 命令各自的模式差异项 */
+export interface ConversationOptions {
+  /** 是否启用 MCP 服务器（--no-mcp 关闭，缺省开启） */
+  mcpEnabled: boolean;
+  /** 沙箱 CLI 选项（agent 命令的 --sandbox/--approval/--no-bash/--sandbox-missing），缺省按 env/配置装配 */
+  sandboxCli?: SandboxCliOptions;
+  /** bash 工具是否装配；未指定时回退 sandboxCli/配置默认，chat 模式固定传 false */
+  bashEnabled?: boolean;
+}
+
 /**
  * 装配对话会话运行时：创建沙箱上下文 → 连接 MCP 服务器（stdio 进程直启裸跑，审批/规则链控制其工具调用）→ 装配技能（提示词与工具列表）
  * 任一步失败时按相反顺序释放已建立的资源，避免 MCP stdio 子进程残留；
- * 成功后的释放由调用方经 disposeConversationRuntime 完成
+ * 成功后的释放由调用方经 disposeConversationRuntime 完成；
+ * bash 工具按 bashEnabled 装配（chat 模式固定 false，agent 模式跟随 sandboxCli/配置），
+ * 沙箱上下文始终按配置装配（承担只读工具的 fs 门卫）
  * @param {string} basePrompt - 场景基础提示词（chat、agent 等命令各自定义人设）
- * @param {boolean} mcpEnabled - 是否启用 MCP 服务器（--no-mcp 关闭）
- * @param {SandboxCliOptions} sandboxCli - 沙箱 CLI 选项（--sandbox/--no-bash 等），缺省按配置文件装配
+ * @param {ConversationOptions} opts - 会话装配选项（MCP 开关、沙箱 CLI 选项、bash 开关）
  * @returns {Promise<ConversationRuntime>} 会话运行时
  */
 export async function createConversationRuntime(
   basePrompt: string,
-  mcpEnabled: boolean,
-  sandboxCli?: SandboxCliOptions,
+  opts: ConversationOptions,
 ): Promise<ConversationRuntime> {
-  const sandbox = await createSandboxContext(sandboxCli);
+  const { sandbox, bashEnabled } = await createSandboxContext(opts.sandboxCli);
   let manager: McpManager | undefined;
   try {
-    const mcp = await connectMcpServers(mcpEnabled);
+    const mcp = await connectMcpServers(opts.mcpEnabled);
     manager = mcp.manager;
-    const skill = setupSkillContext(basePrompt, mcp.tools, sandbox);
+    const skill = setupSkillContext(basePrompt, mcp.tools, sandbox, {
+      bash: opts.bashEnabled ?? bashEnabled,
+    });
     return { manager, sandbox, mcpTools: mcp.tools, skill };
   } catch (err) {
     // 引导中途失败：已建立的资源立即释放，避免泄漏到顶层报错之后

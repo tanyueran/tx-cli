@@ -24,6 +24,7 @@ Commands:
   git-rename <old-model-url> <new-model-url>  git重命名模块
   commit-fix <message...>                     根据ones信息改为 fix(#id): title 格式提交git commit
   chat [options] [question...]                与大模型对话：传入问题为单次问答，不带参数进入多轮对话
+  agent [options] [task...]                   让 AI Agent 执行任务：传入任务为单次执行，不带参数进入多轮任务模式
   help [command]                              display help for command
 ```
 
@@ -124,6 +125,7 @@ tx-cli commit-fix "#532311 优化属性设置 https://ones.x.cn/abc"
 - 支持技能（skills）：扫描 `~/.tx-cli/skills`（用户级）与 `./.tx-cli/skills`（项目级，同名时项目级优先）中的 `SKILL.md` 技能手册，发现技能时自动装配 `load_skill` 工具，模型按需加载手册后按其指引执行；多轮对话中可用 `/skills` 查看技能清单
 - 支持 MCP 服务器：在 `~/.tx-cli/config.json` 配置 `mcpServers` 段即可接入外部工具（详见下方 [MCP 服务器](#mcp-服务器)），`--no-mcp` 可按次禁用
 - 单次问答与多轮对话均走 Responses API 无状态模式（要求所配置的服务支持该接口）：服务端不留存会话，多轮历史由本地维护并每轮全量发送
+- 单轮问答的工具调用轮数上限为 8 轮，达到上限后模型将基于已有信息直接作答（黄字提示）
 
 **选项：**
 
@@ -232,6 +234,42 @@ tx-cli chat --think low
 TX_LLM_API_KEY=sk-xxx TX_LLM_BASE_URL=https://api.deepseek.com/v1 TX_LLM_MODEL=deepseek-chat tx-cli chat
 ```
 
+#### `agent [task...]`
+
+让 AI Agent 执行任务（对标 Codex CLI / Claude Code 的执行模式）：模型可读写文件、执行 bash 命令，受沙箱档位与审批策略管控。
+
+- 传入任务：单次执行，完成后退出
+- 不传参数：进入多轮任务模式，持续输入任务，输入 `exit`/`quit` 或按 `Ctrl+C` 退出
+- 工具带为全量：`chat` 的只读工具集之外额外装配 `bash` 工具，技能、MCP、Responses 无状态模式等机制与 `chat` 一致；多轮模式同样支持 `/think`、`/skills`、`/permissions` 内联命令
+- 单轮任务的工具调用轮数上限为 20 轮（chat 为 8 轮），达到上限后模型将基于已有信息直接作答（黄字提示）
+
+**选项：**
+
+| 选项 | 说明 |
+|---|---|
+| `--think <level>` | 思考档位：`off` \| `low` \| `medium` \| `high`，同 `chat` |
+| `--no-mcp` | 本次任务禁用 MCP 服务器（缺省启用） |
+| `--sandbox <level>` | bash 沙箱档位：`read-only`（默认，全禁写）\| `workspace-write`（可写工作空间）\| `danger-full-access`（无隔离） |
+| `--approval <policy>` | 审批策略：`always-ask`（每次询问）\| `on-failure`（默认，沙箱拦截失败时询问）\| `never`（从不询问） |
+| `--no-bash` | 本次任务禁用 bash 工具 |
+| `--sandbox-missing <action>` | 沙箱在当前环境不可用时的处置：`deny`（默认，失败关闭）\| `allow`（降级为无隔离执行，规则与审批仍生效） |
+
+沙箱档位与审批策略的优先级均为：命令行 > 环境变量（`TX_SANDBOX_LEVEL` / `TX_SANDBOX_APPROVAL`）> 配置文件 `sandbox` 段 > 内置默认，也可写入 `~/.tx-cli/config.json` 的 `sandbox` 段持久化（档位、审批、文件系统边界、权限规则等）。
+
+```bash
+# 单次执行任务（默认 read-only 沙箱，bash 仅能执行只读操作）
+tx-cli agent 统计 src 下各目录的代码行数并汇总
+
+# 允许写入工作空间，沙箱拦截失败时询问
+tx-cli agent --sandbox workspace-write 修复 src/utils.ts 里的类型错误
+
+# 多轮任务模式（会话内 /permissions 查看沙箱与权限状态）
+tx-cli agent
+
+# 禁用 bash，仅用只读工具与 MCP
+tx-cli agent --no-bash 梳理这个仓库的模块结构
+```
+
 ## TODO
 
 - [x] 创建项目 `tx-cli create <project-name>`
@@ -241,4 +279,4 @@ TX_LLM_API_KEY=sk-xxx TX_LLM_BASE_URL=https://api.deepseek.com/v1 TX_LLM_MODEL=d
 - [x] commit-fix 命令（格式化 ones 信息为 git commit）
 - [x] chat 命令（与大模型对话，支持流式输出、多轮对话、工具调用与深度思考档位）
 - [x] copy 命令（复制文件，支持过滤某些文件）`tx-cli copy <src> <dest> --filter <filter>`
-- [ ] agent 命令（让大模型执行完成指定的任务）
+- [x] agent 命令（让 AI Agent 执行任务，bash 受沙箱与审批管控，单次/多轮两种模式）

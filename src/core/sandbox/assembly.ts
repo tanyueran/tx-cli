@@ -8,7 +8,7 @@ import { buildTierConfig, expandHome } from "./defaults";
 import { getProvider } from "./provider";
 import { SandboxContext, detectInteractive, interactiveApprover } from "./gate";
 
-/** chat 命令传入的沙箱 CLI 选项（均可选，未指定时走 env/配置文件） */
+/** conversation 命令传入的沙箱 CLI 选项（均可选，未指定时走 env/配置文件） */
 export interface SandboxCliOptions {
   /** --no-bash 显式关闭 bash 工具；undefined 表示未指定 */
   bashEnabled?: boolean;
@@ -112,22 +112,32 @@ function isTrusted(cwd: string, trustDirectories: string[]): boolean {
   });
 }
 
+/** L1 装配结果：沙箱上下文与 bash 工具装配开关的组合 */
+export interface SandboxAssembly {
+  /** 会话级沙箱上下文（sandbox.enabled 为 false 时不装配，为 undefined） */
+  sandbox: SandboxContext | undefined;
+  /** bash 工具是否装配：--no-bash 显式关闭，否则回退配置 sandbox.bash.enabled */
+  bashEnabled: boolean;
+}
+
 /**
- * L1 装配：创建会话级沙箱上下文
- * 装配链路：enabled/bashEnabled 开关 → 优先级合并（CLI > env > 文件）→
+ * L1 装配：创建会话级沙箱上下文并解析 bash 装配开关
+ * 装配链路：enabled 开关 → 优先级合并（CLI > env > 文件）→
  * 信任目录降级（仅文件来源的 danger-full-access / never）→ Provider 选择与初始化 →
- * 构建 SandboxContext；返回 undefined 表示本会话不装配 bash 工具
+ * 构建 SandboxContext；
+ * bash 装配开关与沙箱上下文解耦：上下文承担只读工具的 fs 门卫，
+ * --no-bash 只移除 bash 工具，不再连带关闭门卫
  * @param {SandboxCliOptions} cli - 命令行选项
- * @returns {Promise<SandboxContext | undefined>} 沙箱上下文；不装配时为 undefined
+ * @returns {Promise<SandboxAssembly>} 沙箱上下文与 bash 装配开关
  */
 export async function createSandboxContext(
   cli: SandboxCliOptions = {},
-): Promise<SandboxContext | undefined> {
+): Promise<SandboxAssembly> {
   const warnings: string[] = [];
   const { config } = loadSandboxConfig();
-  const enabled = cli.bashEnabled ?? config.bash.enabled;
-  if (!config.enabled || !enabled) {
-    return undefined;
+  const bashEnabled = cli.bashEnabled ?? config.bash.enabled;
+  if (!config.enabled) {
+    return { sandbox: undefined, bashEnabled: false };
   }
 
   const resolved = resolveOptions(cli, config, warnings);
@@ -191,12 +201,15 @@ export async function createSandboxContext(
   for (const warning of warnings) {
     console.warn(warning);
   }
-  return new SandboxContext({
-    config,
-    level,
-    approval,
-    provider,
-    isInteractive: detectInteractive(),
-    approver: interactiveApprover,
-  });
+  return {
+    sandbox: new SandboxContext({
+      config,
+      level,
+      approval,
+      provider,
+      isInteractive: detectInteractive(),
+      approver: interactiveApprover,
+    }),
+    bashEnabled,
+  };
 }

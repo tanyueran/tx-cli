@@ -65,3 +65,25 @@ export function createToolCallLogger(
     printToolCall(call);
   };
 }
+
+/**
+ * 生成 agentic loop 的软收敛提示回调：结束思考块、补齐正文换行后打印收敛提示
+ * 各对话模式（单次问答 / REPL）共用的 onSoftConverge 实现
+ * @param {ReturnType<typeof createStreamRenderer>} renderer - 流式渲染器
+ * @param {number} maxIterations - 生效的工具调用轮数上限（提示文案展示用）
+ * @returns {() => void} 可传给 runAgentLoop 的 onSoftConverge 回调
+ */
+export function createSoftConvergeNotice(
+  renderer: ReturnType<typeof createStreamRenderer>,
+  maxIterations: number
+): () => void {
+  return () => {
+    renderer.endThinking();
+    renderer.ensureNewline();
+    console.log(
+      pico.yellow(
+        `已达到工具调用轮数上限（${maxIterations} 轮），AI 将基于已有信息直接作答`,
+      ),
+    );
+  };
+}

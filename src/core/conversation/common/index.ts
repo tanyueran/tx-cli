@@ -12,11 +12,15 @@ export {
   createToolCallLogger,
   printToolCall,
 } from "./renderer";
+export { runConversationRepl, runReplConversation } from "./repl";
+export type { ReplOptions } from "./repl";
+export { runOneShotConversation } from "./one-shot";
+export type { ConversationModeConfig } from "./mode";
 export { setupSkillContext } from "./skill-context";
-export type { SkillContext } from "./skill-context";
+export type { SkillContext, SkillAssemblyOptions } from "./skill-context";
 export {
   createConversationRuntime,
   disposeConversationRuntime,
 } from "./runtime";
-export type { ConversationRuntime } from "./runtime";
+export type { ConversationRuntime, ConversationOptions } from "./runtime";
 export { resolveThinkingLevel, warnThinkingFallback } from "./thinking";

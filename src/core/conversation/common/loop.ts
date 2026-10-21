@@ -19,16 +19,21 @@ export type RunTurn = (
   disableTools: boolean
 ) => Promise<TurnOutcome>;
 
+/** 工具调用轮数默认上限：模式未指定 maxIterations 时回退该值（chat 显式 8、agent 显式 20） */
+export const DEFAULT_MAX_ITERATIONS = 8;
+
 /** agentic 循环参数 */
 interface AgentLoopParams {
   /** 回合函数（模式适配器提供） */
   runTurn: RunTurn;
   /** 本轮会话可用的工具列表 */
   tools: Tool[];
-  /** 最大迭代轮数，默认 8；超出后进入软收敛 */
+  /** 最大迭代轮数，默认 DEFAULT_MAX_ITERATIONS；超出后进入软收敛 */
   maxIterations?: number;
   /** 每次工具调用执行前的回调，用于渲染调用提示（如"→ 调用 read_file(...)"） */
   onToolCall?: (call: ToolCall) => void;
+  /** 首次进入软收敛轮（达到轮数上限）时的回调，用于向用户提示模型将被迫直接作答 */
+  onSoftConverge?: () => void;
 }
 
 /**
@@ -42,13 +47,17 @@ interface AgentLoopParams {
  * @throws {CliError} 软收敛轮模型仍请求工具（理论上不可达）时抛出
  */
 export async function runAgentLoop(params: AgentLoopParams): Promise<string> {
-  const maxIterations = params.maxIterations ?? 8;
+  const maxIterations = params.maxIterations ?? DEFAULT_MAX_ITERATIONS;
   const toolMap = new Map(params.tools.map((tool) => [tool.name, tool]));
   let toolResults: ToolResult[] = [];
 
   for (let iteration = 0; ; iteration++) {
     // 超出轮数上限后禁用工具，软收敛为直接作答
     const disableTools = iteration >= maxIterations;
+    if (disableTools) {
+      // 首次进入软收敛轮时提示一次：模型将被禁止调用工具，直接基于已有信息作答
+      params.onSoftConverge?.();
+    }
     const outcome = await params.runTurn(toolResults, disableTools);
     if (outcome.type === "reply") {
       return outcome.reply;

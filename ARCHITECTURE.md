@@ -20,7 +20,7 @@
 flowchart TD
     subgraph CLI层["CLI 层 · src/program"]
         CLI["cli.ts 入口<br/>createProgram 装配命令"]
-        CMDS["command/*<br/>chat / create / add / copy<br/>server / git-rename / commit-fix"]
+        CMDS["command/*<br/>chat / agent / create / add / copy<br/>server / git-rename / commit-fix"]
     end
     subgraph 领域层["领域层 · src/core"]
         CONV["conversation 对话编排"]
@@ -53,7 +53,7 @@ src/
 │   │   ├── common/            #   会话机制：agentic loop、Responses 适配、
 │   │   │                      #   流式渲染、思考档位、技能装配（skill-context）
 │   │   ├── chat/              #   chat 命令实现：one-shot（单次）与 repl（多轮）
-│   │   └── agent/             #   预留：未来 agent 命令入口
+│   │   └── agent/             #   agent 命令实现：one-shot（单次）与 repl（多轮）
 │   ├── tools/                 # 工具系统
 │   │   ├── types.ts           #   Tool 接口（含 permission 权限声明）
 │   │   ├── executor.ts        #   执行器：参数解析、超时、8KB 截断
@@ -75,11 +75,11 @@ src/
 └── types/                     # 协议结构：llm / mcp / template / server
 ```
 
-## 对话链路（chat 命令）
+## 对话链路（chat / agent 命令）
 
 ```mermaid
 flowchart LR
-    A["chat-command<br/>解析 --think/--no-mcp/<br/>--sandbox 等"] --> B["one-shot / repl<br/>会话生命周期"]
+    A["chat / agent-command<br/>解析 --think/--no-mcp/<br/>--sandbox 等"] --> B["one-shot / repl<br/>会话生命周期"]
     B --> C["setupSkillContext<br/>装配提示词与工具"]
     C --> D["runAgentLoop<br/>agentic loop"]
     D --> E["Responses API<br/>（无状态，历史本地维护）"]
@@ -94,6 +94,7 @@ flowchart LR
 - **工具装配**：内置工具（静态清单）+ `load_skill`（仅存在技能时）+ bash（沙箱启用时）+ MCP 工具（连接成功时），在 `setupSkillContext` 一次性拼装，不支持运行时动态注册。
 - **MCP 与沙箱同生命周期**：随会话创建、`finally` 中统一释放。
 - **失败隔离**：REPL 中单轮业务错误只提示不终止会话。
+- **工具调用轮数上限按模式配置**：`ConversationModeConfig.maxIterations`，chat 8 轮、agent 20 轮（未指定回退 loop 默认 `DEFAULT_MAX_ITERATIONS`）；达到上限后软收敛为直接作答，经 `onSoftConverge` 回调黄字提示，避免用户不知情。
 
 ## 深度思考（thinking）处理方案
 
