@@ -1,13 +1,17 @@
+import { realpathSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { pathToFileURL } from "node:url";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import {
   CallToolRequestSchema,
+  ListRootsResultSchema,
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { McpManager } from "../src/core/mcp";
-import type { McpServerConfig } from "../src/core/mcp";
+import { buildMcpRoots, McpManager } from "../src/core/mcp";
+import type { McpRoot, McpServerConfig } from "../src/core/mcp";
 import type { Tool as McpTool } from "@modelcontextprotocol/sdk/types.js";
 
 const { capturedStdioParams } = vi.hoisted(() => ({
@@ -332,5 +336,86 @@ describe("McpManager 启动行为", () => {
         process.env.TX_TEST_SECRET = prev;
       }
     }
+  });
+});
+
+describe("MCP roots capability", () => {
+  /**
+   * 建立内存双端连接：返回服务器实例与已注入配置的管理器（工具列表为空即可）
+   * @param {McpManagerOptions["roots"]} roots - 注入管理器的 roots 白名单
+   * @returns {Promise<{ server: Server; manager: McpManager }>} 双端实例
+   */
+  async function setupRootsFixture(
+    roots: McpRoot[],
+  ): Promise<{ server: Server; manager: McpManager }> {
+    const server = new Server(
+      { name: "test-server", version: "1.0.0" },
+      { capabilities: { tools: {} } },
+    );
+    server.setRequestHandler(ListToolsRequestSchema, () => ({ tools: [] }));
+    const [clientTransport, serverTransport] =
+      InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    const manager = new McpManager(
+      new Map<string, McpServerConfig>([
+        ["demo", { type: "http", url: "https://example.com" }],
+      ]),
+      { createTransport: async () => clientTransport, roots },
+    );
+    return { server, manager };
+  }
+
+  it("注入 roots 后服务器端经 roots/list 获取白名单", async () => {
+    const roots: McpRoot[] = [
+      { uri: "file:///tmp/workspace", name: "workspace" },
+      { uri: "file:///private/tmp", name: "temp" },
+    ];
+    const { server, manager } = await setupRootsFixture(roots);
+    await manager.connectAll();
+
+    const result = await server.request(
+      { method: "roots/list" },
+      ListRootsResultSchema,
+    );
+
+    expect(result.roots).toEqual(roots);
+    await manager.closeAll();
+  });
+
+  it("未注入 roots 时 roots/list 返回空列表", async () => {
+    const { server, manager } = await setupRootsFixture([]);
+    await manager.connectAll();
+
+    const result = await server.request(
+      { method: "roots/list" },
+      ListRootsResultSchema,
+    );
+
+    expect(result.roots).toEqual([]);
+    await manager.closeAll();
+  });
+});
+
+describe("buildMcpRoots", () => {
+  it("read-only 档不放权，返回空列表", () => {
+    expect(buildMcpRoots("read-only", process.cwd())).toEqual([]);
+  });
+
+  it("workspace-write 档下发 realpath 规范化后的项目根与 OS 临时目录", () => {
+    const roots = buildMcpRoots("workspace-write", process.cwd());
+
+    expect(roots).toHaveLength(2);
+    expect(roots[0]?.name).toBe("workspace");
+    expect(roots[0]?.uri).toBe(pathToFileURL(realpathSync(process.cwd())).href);
+    expect(roots[1]?.name).toBe("temp");
+    expect(roots[1]?.uri).toBe(pathToFileURL(realpathSync(tmpdir())).href);
+  });
+
+  it("danger-full-access 与无沙箱（undefined）同权", () => {
+    const full = buildMcpRoots("danger-full-access", process.cwd());
+    const none = buildMcpRoots(undefined, process.cwd());
+
+    expect(full).toEqual(none);
+    expect(full).toHaveLength(2);
   });
 });

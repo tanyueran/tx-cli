@@ -2,6 +2,8 @@ import { resolve } from "node:path";
 import type { ApprovalPolicy, SandboxLevel } from "./types";
 import {
   loadSandboxConfig,
+  readProjectGrants,
+  resolveProjectConfigPath,
   type SandboxFileConfig,
 } from "./config";
 import { buildTierConfig, expandHome } from "./defaults";
@@ -198,6 +200,15 @@ export async function createSandboxContext(
     }
   }
 
+  // 项目空间授权（<cwd>/.tx-cli/config.json 的 sandbox.rules.allow）：
+  // 授权归属当前项目，不跨项目生效；加载时提示来源，保证用户知情
+  const projectAllow = readProjectGrants(cwd);
+  if (projectAllow.length > 0) {
+    warnings.push(
+      `已加载项目授权文件 ${resolveProjectConfigPath(cwd)} 中的 ${projectAllow.length} 条放行规则`,
+    );
+  }
+
   for (const warning of warnings) {
     console.warn(warning);
   }
@@ -209,6 +220,8 @@ export async function createSandboxContext(
       provider,
       isInteractive: detectInteractive(),
       approver: interactiveApprover,
+      cwd,
+      projectAllow,
     }),
     bashEnabled,
   };

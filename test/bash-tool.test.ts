@@ -94,7 +94,7 @@ function makeContext(options: {
     provider,
     isInteractive: options.interactive ?? true,
     approver: options.approver ?? new FakeApprover(),
-    grantsPath: join(dir, "grants.json"),
+    projectConfigPath: join(dir, "project-config.json"),
     auditPath: join(dir, "audit.jsonl"),
   });
 }

@@ -29,7 +29,11 @@ export function wrapToolWithPermission(
     async execute(args: Record<string, unknown>): Promise<ToolOutput> {
       const invoke = async (): Promise<ToolOutput> => {
         const ruleKey = permission.ruleKey(args);
-        const blocked = await sandbox.guard(tool.name, ruleKey);
+        const blocked = await sandbox.guard(
+          tool.name,
+          ruleKey,
+          permission.capabilities,
+        );
         if (blocked) {
           return blocked;
         }

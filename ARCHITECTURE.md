@@ -93,6 +93,7 @@ flowchart LR
 - **工具装配**：内置工具（静态清单）+ `load_skill`（仅存在技能时）+ `write_todos`（agent 模式）+ bash（沙箱启用时）+ MCP 工具（连接成功时），在 `setupSkillContext` 一次性拼装，不支持运行时动态注册。
 - **任务清单**（agent 模式）：`write_todos` 全量替换式维护会话内计划（对标 TodoWrite），状态存工具实例闭包、不持久化；调用提示经 `renderCall` 扩展点渲染为清单视图（☐ 待办 / ◐ 进行中 / ☑ 完成），REPL 以 `/todos` 查看。
 - **MCP 与沙箱同生命周期**：随会话创建、`finally` 中统一释放。
+- **MCP roots capability**：客户端声明 roots 能力并响应 `roots/list`，按沙箱档位联动下发目录白名单——read-only 档不放权（返回空），其余档位下发项目根与 OS 临时目录（均经 realpath 规范化为 file:// URI，规避 macOS 符号链接前缀失配）；支持该协议的服务器（如 chrome-devtools-mcp）将其文件白名单与 tx-cli 工作区对齐，不支持的服务器无感知。
 - **失败隔离**：REPL 中单轮业务错误只提示不终止会话。
 - **工具调用轮数上限按模式配置**：`ConversationModeConfig.maxIterations`，chat 8 轮、agent 20 轮（未指定回退 loop 默认 `DEFAULT_MAX_ITERATIONS`）；达到上限后软收敛为直接作答，经 `onSoftConverge` 回调黄字提示，避免用户不知情。
 
@@ -177,7 +178,7 @@ interface Tool extends ToolDefinition {
 flowchart TD
     L1["L1 装配（assembly.ts）<br/>CLI > env(TX_SANDBOX_*) > 配置文件<br/>信任目录降级 / Provider 可用性探测"]
     L2["L2 规则（rules.ts）<br/>deny（含内置危险类目）> ask > allow > 档位默认<br/>复合命令逐段判定，包装穿透"]
-    L3["L3 审批（gate.ts）<br/>一次 / 本会话 / 始终（grants 持久化）<br/>非 TTY 时 ask→deny；JSONL 审计"]
+    L3["L3 审批（gate.ts）<br/>一次 / 本会话 / 始终（授权落项目 .tx-cli/config.json）<br/>非 TTY 时 ask→deny；JSONL 审计"]
     L4["L4 执行（bash.ts + Provider）<br/>wrapCommand → spawn → 违规标注回传<br/>on-failure 升级重跑"]
     L1 --> L2 --> L3 --> L4
 ```
@@ -187,6 +188,7 @@ flowchart TD
 - **规则语法**：`Bash(git push:*)` 前缀、`Bash(git status)` 精确、`Bash(git log *)` glob、`Read(/src/**)` 路径、`WebSearch` 整工具。deny/ask 匹配时剥离 `FOO=bar` / `env` / `nohup` / `xargs` 包装看真实命令（allow 不穿透）。
 - **规则名别名归一化**：`Read`→`read_file`、`WebSearch`→`web_search`、`ListDir`→`list_dir`（Claude Code 风格短名 ↔ 内部工具名），规则键与规则两侧都归一化后匹配。
 - **权限纳管范围**：bash（exec，串行）、read\_file / list\_dir / glob / grep（fs.read，规则键以绝对路径为主体）、web\_search（net，规则键 `web_search(关键词)`）、MCP 工具（整工具级键 `mcp__server__tool`，保守标注 net+exec）。无沙箱会话（`sandbox` 为 undefined）不包装、行为不变。
+- **capabilities 禁网语义**：工具声明的能力（如 net）随 guard 链路传入规则判定；read-only 档承诺禁网，net 工具未命中规则时默认 ask（OS 沙箱只拦子进程，进程内网络调用不受边界约束，故由审批层兜底），`never` 策略下直接 deny。
 - **fs 应用层边界**：fs 工具是进程内代码不经沙箱进程，权限门卫在规则放行后按 TierConfig 逐路径校验（`SandboxContext.checkFsRead/checkFsWrite`，路径模式支持目录前缀、`*` 单段、`**` 跨目录与纯文件名如 `.env`/`*.pem`），danger-full-access 档跳过检查。
 - **/permissions 内联命令**（REPL）：只读展示档位、审批策略、Provider、fs 边界与三段规则（allow 含会话授权与「始终允许」的持久授权）。
 - **内置危险类目**（可 `sandbox.builtinDangerRules: false` 关闭）：`rm -rf`、`sudo/su`、`chmod 777`、磁盘写入、`curl|sh`、`git push -f`、保护路径。
@@ -201,7 +203,7 @@ flowchart TD
 | `mcpServers` | MCP 服务器（stdio/http）                  | `core/mcp/config.ts`     |
 | `sandbox`    | 沙箱（档位/策略/规则/文件系统/网络/bash）            | `core/sandbox/config.ts` |
 
-辅助文件：`~/.tx-cli/sandbox-grants.json`（「始终允许」授权）、`~/.tx-cli/sandbox-audit.jsonl`（沙箱审计日志）；技能目录为 `~/.tx-cli/skills` 与 `./.tx-cli/skills`。
+辅助文件：`~/.tx-cli/sandbox-audit.jsonl`（沙箱审计日志）；「始终允许」授权落项目空间 `<cwd>/.tx-cli/config.json`（结构与全局配置同构，装配时加载 `sandbox.rules.allow` 并提示）；技能目录为 `~/.tx-cli/skills` 与 `./.tx-cli/skills`。
 
 配置解析遵循统一范式：坏项跳过 + 中文警告（失败隔离），不中断会话。
 

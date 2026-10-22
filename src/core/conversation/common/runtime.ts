@@ -1,4 +1,4 @@
-import { connectMcpServers } from "../../mcp";
+import { buildMcpRoots, connectMcpServers } from "../../mcp";
 import type { McpManager } from "../../mcp";
 import { createSandboxContext } from "../../sandbox";
 import type { SandboxCliOptions } from "../../sandbox";
@@ -51,7 +51,11 @@ export async function createConversationRuntime(
   const { sandbox, bashEnabled } = await createSandboxContext(opts.sandboxCli);
   let manager: McpManager | undefined;
   try {
-    const mcp = await connectMcpServers(opts.mcpEnabled);
+    // roots 按沙箱档位联动：read-only 档不放权，其余下发项目根与 OS 临时目录
+    const mcp = await connectMcpServers(
+      opts.mcpEnabled,
+      buildMcpRoots(sandbox?.level, sandbox?.rootDir ?? process.cwd()),
+    );
     manager = mcp.manager;
     const skill = setupSkillContext(basePrompt, mcp.tools, sandbox, {
       bash: opts.bashEnabled ?? bashEnabled,

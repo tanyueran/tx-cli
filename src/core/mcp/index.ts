@@ -4,8 +4,8 @@
  */
 export { loadMcpServers } from "./config";
 export type { McpServersResult } from "./config";
-export { McpManager } from "./manager";
-export type { McpManagerOptions } from "./manager";
+export { McpManager, buildMcpRoots } from "./manager";
+export type { McpManagerOptions, McpRoot } from "./manager";
 export { createMcpTool, MCP_TOOL_TIMEOUT_MS } from "./tool-adapter";
 export { connectMcpServers } from "./setup";
 export type { McpSetupResult } from "./setup";

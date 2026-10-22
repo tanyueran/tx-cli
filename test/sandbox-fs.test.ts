@@ -137,6 +137,25 @@ describe("SandboxContext.checkFsRead", () => {
     expect(context.checkFsRead(join(dir, "normal.txt")).allowed).toBe(true);
   });
 
+  it("含 .. 的伪装路径先规范化再匹配（防绕过 denyRead）", () => {
+    const tier: TierConfig = {
+      level: "workspace-write",
+      denyRead: [join(dir, "secret")],
+      allowWrite: [dir],
+      denyWrite: [],
+      allowedDomains: [],
+      deniedDomains: [],
+    };
+    const context = makeFsContext(tier, "workspace-write");
+    // dir/other/../secret/key 规范化后落入 denyRead 子树，必须被拒绝；
+    // 未规范化时字符串不以 denyRead 前缀开头会被误放行
+    const verdict = context.checkFsRead(
+      join(dir, "other", "..", "secret", "key"),
+    );
+    expect(verdict.allowed).toBe(false);
+    expect(verdict.reason).toContain("禁读边界");
+  });
+
   it("danger-full-access 档跳过检查", () => {
     const tier: TierConfig = {
       level: "danger-full-access",
@@ -249,7 +268,7 @@ describe("fs 工具的权限门卫包装", () => {
       provider: noopProvider,
       isInteractive: true,
       approver: alwaysOnceApprover(),
-      grantsPath: join(dir, "grants.json"),
+      projectConfigPath: join(dir, "project-config.json"),
       auditPath: join(dir, "audit.jsonl"),
     });
     const wrapped = wrapToolWithPermission(webSearchTool, context);
@@ -270,11 +289,34 @@ describe("fs 工具的权限门卫包装", () => {
       provider: noopProvider,
       isInteractive: false,
       approver: alwaysOnceApprover(),
-      grantsPath: join(dir, "grants.json"),
+      projectConfigPath: join(dir, "project-config.json"),
       auditPath: join(dir, "audit.jsonl"),
     });
     const wrapped = wrapToolWithPermission(webSearchTool, context);
     const result = await wrapped.execute({ query: "新闻" });
+    expect(result.ok).toBe(false);
+    expect(result.output).toContain("非交互");
+  });
+
+  it("read-only 档下 web_search 未命中规则默认审批（禁网语义，进程内调用不受沙箱约束）", async () => {
+    const config: SandboxFileConfig = {
+      ...DEFAULT_SANDBOX_CONFIG,
+      level: "read-only",
+      rules: { allow: [], ask: [], deny: [] },
+    };
+    const context = new SandboxContext({
+      config,
+      level: "read-only",
+      approval: "on-failure",
+      provider: noopProvider,
+      isInteractive: false,
+      approver: alwaysOnceApprover(),
+      projectConfigPath: join(dir, "project-config.json"),
+      auditPath: join(dir, "audit.jsonl"),
+    });
+    const wrapped = wrapToolWithPermission(webSearchTool, context);
+    const result = await wrapped.execute({ query: "新闻" });
+    // read-only 档承诺禁网：默认 ask，非交互环境 fail-closed 拒绝
     expect(result.ok).toBe(false);
     expect(result.output).toContain("非交互");
   });

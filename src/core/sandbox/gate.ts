@@ -1,10 +1,12 @@
 import { randomUUID } from "node:crypto";
+import { resolve } from "node:path";
 import pico from "picocolors";
 import type { ToolOutput } from "../tools/types";
 import { askConfirm, askSelect } from "../../shared/interactive-prompt";
 import { BUILTIN_DANGER_RULES, type DangerRule } from "./danger-rules";
 import { evaluateCommand, evaluateRuleKey, parseRule } from "./rules";
-import { appendAudit, appendGrant, readGrants, type AuditEntry } from "./audit";
+import { appendProjectGrant } from "./config";
+import { appendAudit, type AuditEntry } from "./audit";
 import type {
   ApprovalChoice,
   ApprovalPolicy,
@@ -32,10 +34,30 @@ export interface SandboxContextOptions {
   approver: Approver;
   /** 档位边界配置（fs 工具路径检查用）；缺省按档位与配置以 cwd 为可写根构建 */
   tier?: TierConfig;
-  /** grants 文件路径（缺省 ~/.tx-cli/sandbox-grants.json，测试可注入） */
-  grantsPath?: string;
+  /** 项目根目录（「始终允许」授权落盘到 <cwd>/.tx-cli/config.json；缺省 process.cwd()） */
+  cwd?: string;
+  /** 项目空间授权（装配层经 readProjectGrants 读入的 sandbox.rules.allow，注入合并进 allow 规则集） */
+  projectAllow?: string[];
+  /** 项目授权文件路径（缺省 <cwd>/.tx-cli/config.json，测试可注入） */
+  projectConfigPath?: string;
   /** 审计日志路径（缺省 ~/.tx-cli/sandbox-audit.jsonl，测试可注入） */
   auditPath?: string;
+}
+
+/**
+ * 推导授权规则：ask 判定无命中规则可复用时（如 always-ask 策略的档位默认询问）
+ * 生成可复用的同类授权粒度——bash 取命令前缀（bash(git status) → bash(git status:*)，
+ * 覆盖该命令及其带参变体），其余工具取工具名（整工具放行）
+ * @param {string} toolName - 工具名
+ * @param {string} ruleKey - 工具生成的规则键
+ * @returns {string} 授权规则文本（格式同 rules.allow）
+ */
+function deriveGrantRule(toolName: string, ruleKey: string): string {
+  if (toolName === "bash") {
+    const spec = parseRule(ruleKey)?.spec;
+    return spec ? `bash(${spec}:*)` : ruleKey;
+  }
+  return toolName;
 }
 
 /**
@@ -57,7 +79,7 @@ export class SandboxContext {
   readonly tier: TierConfig;
   /** 审批器 */
   private readonly approver: Approver;
-  /** 用户规则 + 会话/持久授权（ask 命中后按 allow 匹配） */
+  /** 用户规则 + 项目授权 + 会话授权（ask 命中后按 allow 匹配） */
   private readonly rules: SandboxRulesConfig;
   /** 内置危险类目（null 表示整体关闭） */
   private readonly dangerRules: readonly DangerRule[] | null;
@@ -65,8 +87,10 @@ export class SandboxContext {
   private readonly auditEnabled: boolean;
   /** 审计日志路径 */
   private readonly auditPath?: string;
-  /** grants 文件路径 */
-  private readonly grantsPath?: string;
+  /** 项目根目录（「始终允许」落盘位置归属） */
+  private readonly cwd: string;
+  /** 项目授权文件路径（缺省 <cwd>/.tx-cli/config.json） */
+  private readonly projectConfigPath?: string;
   /** 串行工具的执行队列尾（保证 bash 等串行工具不并发执行） */
   private serialTail: Promise<unknown> = Promise.resolve();
 
@@ -82,17 +106,21 @@ export class SandboxContext {
     this.approver = options.approver;
     this.auditEnabled = options.config.audit;
     this.auditPath = options.auditPath;
-    this.grantsPath = options.grantsPath;
+    this.cwd = options.cwd ?? process.cwd();
+    this.projectConfigPath = options.projectConfigPath;
     this.tier =
       options.tier ??
-      buildTierConfig(options.level, options.config, process.cwd());
+      buildTierConfig(options.level, options.config, this.cwd);
     this.dangerRules = options.config.builtinDangerRules
       ? BUILTIN_DANGER_RULES
       : null;
-    // 持久授权（「始终允许」）合并进 allow 规则集
+    // 项目空间授权（.tx-cli/config.json）与用户规则合并进 allow 规则集
     this.rules = {
       ...options.config.rules,
-      allow: [...options.config.rules.allow, ...readGrants(options.grantsPath)],
+      allow: [
+        ...options.config.rules.allow,
+        ...(options.projectAllow ?? []),
+      ],
     };
   }
 
@@ -101,9 +129,10 @@ export class SandboxContext {
    * MCP 工具（规则键 mcp__ 前缀）按 mcp-tool 类目判定，未命中规则时默认审批
    * @param {string} toolName - 工具名
    * @param {string} ruleKey - 工具生成的规则键
+   * @param {readonly string[]} capabilities - 工具能力声明（read-only 档禁网语义判定用）
    * @returns {import("./rules").RuleEvaluation} 判定结果
    */
-  evaluate(toolName: string, ruleKey: string) {
+  evaluate(toolName: string, ruleKey: string, capabilities: readonly string[] = []) {
     if (toolName === "bash") {
       const parsed = parseRule(ruleKey);
       const command = parsed?.spec ?? ruleKey;
@@ -122,12 +151,14 @@ export class SandboxContext {
       this.level,
       this.approval,
       category,
+      capabilities,
     );
   }
 
   /**
    * 应用层 fs 读边界：fs 工具是进程内代码不经沙箱进程，读取前对照档位 TierConfig 校验
-   * danger-full-access 档跳过检查；denyRead 命中即拒绝（deny-then-allow 语义）
+   * danger-full-access 档跳过检查；denyRead 命中即拒绝（deny-then-allow 语义）；
+   * 路径先经 resolve 词法规范化（消解 .. 与 .），防止伪装路径绕过前缀/glob 匹配
    * @param {string} path - 待读取的绝对路径
    * @returns {{ allowed: boolean; reason?: string }} 拒绝时带中文原因
    */
@@ -135,11 +166,12 @@ export class SandboxContext {
     if (this.level === "danger-full-access") {
       return { allowed: true };
     }
+    const target = resolve(path);
     for (const pattern of this.tier.denyRead) {
-      if (matchPathPattern(pattern, path)) {
+      if (matchPathPattern(pattern, target)) {
         return {
           allowed: false,
-          reason: `路径 ${path} 命中当前档位禁读边界 ${pattern}`,
+          reason: `路径 ${target} 命中当前档位禁读边界 ${pattern}`,
         };
       }
     }
@@ -149,7 +181,8 @@ export class SandboxContext {
   /**
    * 应用层 fs 写边界：写入前对照档位 TierConfig 校验（allow-only 语义）
    * danger-full-access 档跳过检查；路径必须落在 allowWrite 某个可写根内，
-   * 且不命中 denyWrite 敏感模式（.env、*.pem 等）
+   * 且不命中 denyWrite 敏感模式（.env、*.pem 等）；
+   * 路径先经 resolve 词法规范化（消解 .. 与 .），防止伪装路径绕过前缀匹配
    * @param {string} path - 待写入的绝对路径
    * @returns {{ allowed: boolean; reason?: string }} 拒绝时带中文原因
    */
@@ -157,6 +190,7 @@ export class SandboxContext {
     if (this.level === "danger-full-access") {
       return { allowed: true };
     }
+    const target = resolve(path);
     if (this.tier.allowWrite.length === 0) {
       return {
         allowed: false,
@@ -164,19 +198,19 @@ export class SandboxContext {
       };
     }
     const writable = this.tier.allowWrite.some(
-      (root) => path === root || path.startsWith(`${root}/`),
+      (root) => target === root || target.startsWith(`${root}/`),
     );
     if (!writable) {
       return {
         allowed: false,
-        reason: `路径 ${path} 不在可写范围内（可写根：${this.tier.allowWrite.join("、")}）`,
+        reason: `路径 ${target} 不在可写范围内（可写根：${this.tier.allowWrite.join("、")}）`,
       };
     }
     for (const pattern of this.tier.denyWrite) {
-      if (matchPathPattern(pattern, path)) {
+      if (matchPathPattern(pattern, target)) {
         return {
           allowed: false,
-          reason: `文件 ${path} 命中禁写模式 ${pattern}`,
+          reason: `文件 ${target} 命中禁写模式 ${pattern}`,
         };
       }
     }
@@ -187,10 +221,15 @@ export class SandboxContext {
    * L3 门卫：按 L2 判定放行、拒绝或征询审批
    * @param {string} toolName - 工具名
    * @param {string} ruleKey - 规则键
+   * @param {readonly string[]} capabilities - 工具能力声明（read-only 档禁网语义判定用）
    * @returns {Promise<ToolOutput | null>} 拒绝时返回失败输出，放行时返回 null
    */
-  async guard(toolName: string, ruleKey: string): Promise<ToolOutput | null> {
-    const evaluation = this.evaluate(toolName, ruleKey);
+  async guard(
+    toolName: string,
+    ruleKey: string,
+    capabilities: readonly string[] = [],
+  ): Promise<ToolOutput | null> {
+    const evaluation = this.evaluate(toolName, ruleKey, capabilities);
     if (evaluation.decision === "deny") {
       this.recordAudit({
         tool: toolName,
@@ -223,16 +262,23 @@ export class SandboxContext {
       });
       return { ok: false, output: "用户拒绝了本次命令执行" };
     }
-    if (choice.kind === "session" && evaluation.matchedRule) {
-      // 会话级授权：从 ask 集合移入 allow，同类命令后续不再询问
-      this.rules.ask = this.rules.ask.filter(
-        (r) => r !== evaluation.matchedRule,
-      );
-      this.rules.allow = [...this.rules.allow, evaluation.matchedRule];
+    // 授权粒度：优先复用命中的规则原文；always-ask 默认判定无规则可复用时按工具粒度推导
+    // （bash 取命令前缀 bash(git status) → bash(git status:*)，其余工具取工具名），
+    // 保证「本会话/始终允许」在任何 ask 场景都有可复用的同类粒度
+    const grantRule = evaluation.matchedRule || deriveGrantRule(toolName, ruleKey);
+    if (choice.kind === "session" && grantRule) {
+      // 会话级授权：命中的 ask 规则从 ask 集合移入 allow，同类命令后续不再询问
+      if (evaluation.matchedRule) {
+        this.rules.ask = this.rules.ask.filter(
+          (r) => r !== evaluation.matchedRule,
+        );
+      }
+      this.rules.allow = [...this.rules.allow, grantRule];
     }
-    if (choice.kind === "always" && evaluation.matchedRule) {
-      appendGrant(evaluation.matchedRule, this.grantsPath);
-      this.rules.allow = [...this.rules.allow, evaluation.matchedRule];
+    if (choice.kind === "always" && grantRule) {
+      // 持久授权落盘到项目空间 .tx-cli/config.json（仅当前项目生效）
+      appendProjectGrant(this.cwd, grantRule, this.projectConfigPath);
+      this.rules.allow = [...this.rules.allow, grantRule];
     }
     this.recordAudit({
       tool: toolName,
@@ -250,6 +296,15 @@ export class SandboxContext {
    */
   async askEscalation(commandText: string, reason: string): Promise<boolean> {
     return this.approver.askEscalation(commandText, reason);
+  }
+
+  /**
+   * 项目根目录（cwd）的只读暴露
+   * 供 MCP roots 等装配方获取授权归属目录，不暴露可变引用
+   * @returns {string} 项目根目录绝对路径
+   */
+  get rootDir(): string {
+    return this.cwd;
   }
 
   /**

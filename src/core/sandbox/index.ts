@@ -17,6 +17,9 @@ export {
   APPROVAL_POLICIES,
   loadSandboxConfig,
   DEFAULT_SANDBOX_CONFIG,
+  resolveProjectConfigPath,
+  readProjectGrants,
+  appendProjectGrant,
 } from "./config";
 export type {
   SandboxBashConfig,
@@ -45,7 +48,9 @@ export {
   DEFAULT_DENY_READ,
   DEFAULT_DENY_WRITE,
 } from "./defaults";
-export { readGrants, appendGrant, appendAudit } from "./audit";
+export {
+  appendAudit,
+} from "./audit";
 export type { AuditEntry } from "./audit";
 export { getProvider, listProviderNames } from "./provider";
 export { landlockProvider } from "./providers/landlock";

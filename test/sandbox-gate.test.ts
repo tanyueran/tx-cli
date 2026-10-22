@@ -3,7 +3,10 @@ import { mkdtempSync, rmSync, readFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SandboxContext } from "../src/core/sandbox/gate";
-import { DEFAULT_SANDBOX_CONFIG } from "../src/core/sandbox/config";
+import {
+  DEFAULT_SANDBOX_CONFIG,
+  readProjectGrants,
+} from "../src/core/sandbox/config";
 import { noopProvider } from "../src/core/sandbox/providers/noop";
 import type { ApprovalChoice, Approver } from "../src/core/sandbox/types";
 import type { SandboxFileConfig } from "../src/core/sandbox/config";
@@ -74,7 +77,9 @@ function makeContext(
     provider: noopProvider,
     isInteractive: interactive,
     approver,
-    grantsPath: join(dir, "grants.json"),
+    cwd: dir,
+    projectConfigPath: join(dir, "project-config.json"),
+    projectAllow: readProjectGrants(dir, join(dir, "project-config.json")),
     auditPath: join(dir, "audit.jsonl"),
   });
 }
@@ -141,17 +146,42 @@ describe("SandboxContext.guard", () => {
     expect(approver.askCalls).toBe(1);
   });
 
-  it("ask 判定 + 始终允许 → 授权写入 grants 文件", async () => {
+  it("ask 判定 + 始终允许 → 授权写入项目授权文件", async () => {
     const approver = new FakeApprover([{ kind: "always" }]);
     const context = makeContext(
       { rules: { allow: [], ask: ["Bash(git status)"], deny: [] } },
       approver,
     );
     expect(await context.guard("bash", "bash(git status)")).toBeNull();
-    const grants = JSON.parse(
-      readFileSync(join(dir, "grants.json"), "utf-8"),
+    const projectConfig = JSON.parse(
+      readFileSync(join(dir, "project-config.json"), "utf-8"),
     );
-    expect(grants.allow).toEqual(["Bash(git status)"]);
+    expect(projectConfig.sandbox.rules.allow).toEqual(["Bash(git status)"]);
+  });
+
+  it("always-ask 默认询问 + 本会话允许 → 同前缀命令不再询问", async () => {
+    const approver = new FakeApprover([{ kind: "session" }]);
+    const context = makeContext(
+      { level: "read-only", approval: "always-ask", rules: { allow: [], ask: [], deny: [] } },
+      approver,
+    );
+    expect(await context.guard("bash", "bash(git status)")).toBeNull();
+    // 前缀规则 bash(git status:*) 覆盖带参变体，不再询问
+    expect(await context.guard("bash", "bash(git status --porcelain)")).toBeNull();
+    expect(approver.askCalls).toBe(1);
+  });
+
+  it("always-ask 默认询问 + 始终允许 → 前缀授权落盘项目授权文件", async () => {
+    const approver = new FakeApprover([{ kind: "always" }]);
+    const context = makeContext(
+      { level: "read-only", approval: "always-ask", rules: { allow: [], ask: [], deny: [] } },
+      approver,
+    );
+    expect(await context.guard("bash", "bash(git status)")).toBeNull();
+    const projectConfig = JSON.parse(
+      readFileSync(join(dir, "project-config.json"), "utf-8"),
+    );
+    expect(projectConfig.sandbox.rules.allow).toEqual(["bash(git status:*)"]);
   });
 
   it("grants 文件中的授权在新上下文中生效", async () => {

@@ -2,6 +2,7 @@ import pico from "picocolors";
 import type { Tool } from "../tools/types";
 import { printWarnings } from "../../shared/warnings";
 import { loadMcpServers } from "./config";
+import type { McpRoot } from "./manager";
 import { McpManager } from "./manager";
 
 /** connectMcpServers 的返回值：管理器供会话结束时关闭连接，工具供并入会话工具列表 */
@@ -17,10 +18,12 @@ export interface McpSetupResult {
  * 供 one-shot 与 repl 共用：禁用（--no-mcp）或未配置时直接返回空结果；
  * 配置警告与连接失败黄字提示、连接成功绿字提示
  * @param {boolean} enabled - 是否启用 MCP
+ * @param {McpRoot[]} [roots] - 下发给服务器的目录白名单（MCP roots capability，按沙箱档位由装配层生成）
  * @returns {Promise<McpSetupResult>} 管理器与工具列表
  */
 export async function connectMcpServers(
   enabled: boolean,
+  roots?: McpRoot[],
 ): Promise<McpSetupResult> {
   if (!enabled) {
     return { manager: undefined, tools: [] };
@@ -30,7 +33,7 @@ export async function connectMcpServers(
   if (servers.size === 0) {
     return { manager: undefined, tools: [] };
   }
-  const manager = new McpManager(servers);
+  const manager = new McpManager(servers, { roots });
   const statuses = await manager.connectAll();
   const okCount = statuses.filter((status) => status.ok).length;
   if (okCount > 0) {

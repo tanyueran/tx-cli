@@ -1,9 +1,18 @@
+import { realpathSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
-import type { Tool as McpTool } from "@modelcontextprotocol/sdk/types.js";
+import type {
+  ListRootsRequestSchema,
+  Root as McpRoot,
+  Tool as McpTool,
+} from "@modelcontextprotocol/sdk/types.js";
 import { CliError } from "../../shared/errors";
 import { withTimeout } from "../../shared/timeout";
 import { getVersion } from "../../shared/paths";
+import type { SandboxLevel } from "../sandbox/types";
 import type { Tool } from "../tools/types";
 import { createMcpTool } from "./tool-adapter";
 import type {
@@ -11,6 +20,9 @@ import type {
   McpServerStatus,
   StdioServerConfig,
 } from "./types";
+
+/** 下发给 MCP 服务器的目录白名单条目（MCP roots capability 的 Root 结构） */
+export type { McpRoot };
 
 /** 单服务器连接超时（毫秒）：覆盖建立传输、协议握手与首次工具列举 */
 const CONNECT_TIMEOUT_MS = 10_000;
@@ -49,6 +61,11 @@ function buildServerEnv(config: StdioServerConfig): Record<string, string> {
 /** 传输工厂选项：把服务器配置翻译为 Transport 实例，测试可注入 InMemoryTransport */
 export interface McpManagerOptions {
   createTransport?: (config: McpServerConfig) => Promise<Transport>;
+  /**
+   * 下发给支持 roots capability 服务器的目录白名单（file:// URI 列表）
+   * 由装配层按沙箱档位生成（buildMcpRoots）；缺省时 roots/list 返回空列表
+   */
+  roots?: McpRoot[];
 }
 
 /**
@@ -86,9 +103,13 @@ export class McpManager {
    */
   async connectAll(): Promise<McpServerStatus[]> {
     let ClientCtor: typeof Client;
+    let listRootsSchema: typeof ListRootsRequestSchema;
     try {
       ({ Client: ClientCtor } = await import(
         "@modelcontextprotocol/sdk/client/index.js"
+      ));
+      ({ ListRootsRequestSchema: listRootsSchema } = await import(
+        "@modelcontextprotocol/sdk/types.js"
       ));
     } catch (err) {
       throw new CliError(
@@ -100,7 +121,7 @@ export class McpManager {
     this.statuses.length = 0;
     const statuses = await Promise.all(
       [...this.servers.entries()].map(([name, config]) =>
-        this.connectOne(name, config, ClientCtor),
+        this.connectOne(name, config, ClientCtor, listRootsSchema),
       ),
     );
     this.statuses.push(...statuses);
@@ -112,14 +133,24 @@ export class McpManager {
    * @param {string} name - 服务器名
    * @param {McpServerConfig} config - 服务器配置
    * @param {typeof Client} ClientCtor - SDK Client 构造器
+   * @param {typeof ListRootsRequestSchema} listRootsSchema - roots/list 请求 schema
    * @returns {Promise<McpServerStatus>} 连接结果（失败时含原因）
    */
   private async connectOne(
     name: string,
     config: McpServerConfig,
     ClientCtor: typeof Client,
+    listRootsSchema: typeof ListRootsRequestSchema,
   ): Promise<McpServerStatus> {
-    const client = new ClientCtor({ name: "tx-cli", version: getVersion() });
+    const client = new ClientCtor(
+      { name: "tx-cli", version: getVersion() },
+      // 声明 roots capability：支持该协议的服务器（如 chrome-devtools-mcp）可经 roots/list 获取文件白名单
+      { capabilities: { roots: {} } },
+    );
+    // 静态 roots：会话内工作区不变，不声明 listChanged，不做变更通知
+    client.setRequestHandler(listRootsSchema, () => ({
+      roots: this.options?.roots ?? [],
+    }));
     try {
       const transport = await this.createTransportFor(config);
       const { tools } = await withTimeout(
@@ -231,4 +262,43 @@ export class McpManager {
     this.clients.clear();
     this.remoteTools.clear();
   }
+}
+
+/**
+ * realpath 的容错封装：路径不存在或不可解析时返回 undefined
+ * @param {string} target - 目标路径
+ * @returns {string | undefined} 规范化后的绝对路径
+ */
+function safeRealpath(target: string): string | undefined {
+  try {
+    return realpathSync(target);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * 按沙箱档位构建下发给 MCP 服务器的 roots 列表（MCP roots capability）
+ * read-only 档承诺全禁写，不下发任何目录（服务器回退自身默认白名单）；
+ * 其余档位下发项目根与 OS 临时目录。路径经 realpath 规范化后转 file:// URL，
+ * 避免 macOS 符号链接（/tmp → /private/tmp、/var → /private/var）导致服务器端前缀比对失配
+ * @param {SandboxLevel | undefined} level - 沙箱档位；undefined 表示无沙箱会话，与 full-access 同权
+ * @param {string} cwd - 项目根目录
+ * @returns {McpRoot[]} roots 列表（uri 为 file:// URL）
+ */
+export function buildMcpRoots(
+  level: SandboxLevel | undefined,
+  cwd: string,
+): McpRoot[] {
+  if (level === "read-only") {
+    return [];
+  }
+  const roots: McpRoot[] = [];
+  const workspace = safeRealpath(cwd) ?? resolve(cwd);
+  roots.push({ uri: pathToFileURL(workspace).href, name: "workspace" });
+  const temp = safeRealpath(tmpdir());
+  if (temp) {
+    roots.push({ uri: pathToFileURL(temp).href, name: "temp" });
+  }
+  return roots;
 }

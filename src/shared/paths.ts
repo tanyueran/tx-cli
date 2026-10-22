@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
-import { dirname, isAbsolute, join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 let cachedRoot: string | undefined;
 
@@ -57,9 +57,11 @@ export function getVersion(): string {
 
 /**
  * 把路径解析为绝对路径：空值回退到当前工作目录，相对路径基于当前工作目录解析
+ * 绝对路径同样经 resolve 词法规范化（消解 .. 与 .），防止未规范化字符串
+ * 绕过沙箱边界检查的前缀/glob 匹配（如 /a/b/../../etc 伪装成 /a/b 内路径）
  * @param {string} input - 原始路径（可为空）
  * @param {string} [fallback] - 输入为空时的回退路径，缺省为当前工作目录
- * @returns {string} 绝对路径
+ * @returns {string} 规范化后的绝对路径
  */
 export function resolveFromCwd(
   input: string,
@@ -69,5 +71,5 @@ export function resolveFromCwd(
   if (!raw) {
     return fallback;
   }
-  return isAbsolute(raw) ? raw : resolve(raw);
+  return resolve(raw);
 }

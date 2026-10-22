@@ -228,12 +228,16 @@ export type ToolCategory = "command" | "tool" | "mcp-tool";
  * - danger-full-access：沙箱与规则全关，默认放行
  * - mcp-tool：MCP 工具在沙箱硬边界之外，不走"沙箱兜底放行"，默认改为审批；
  *   never 策略无法征询，按拒绝处理（fail-closed）
+ * - tool 且声明 net 能力（read-only 档）：read-only 承诺禁网，而进程内网络工具
+ *   不受沙箱网络白名单约束，未命中规则时默认审批（与 MCP 工具口径对齐）；
+ *   never 策略无法征询，按拒绝处理
  * - 其余类目：read-only/workspace-write 依赖沙箱硬边界兜底默认放行；
  *   always-ask 策略下未知命令交由用户裁决
  * @param {SandboxLevel} level - 沙箱档位
  * @param {ApprovalPolicy} approval - 审批策略
  * @param {ToolCategory} category - 工具类目（bash 为 command，内置工具为 tool，MCP 工具为 mcp-tool）
- * @param {string} ruleKey - 规则键（mcp-tool 默认审批时用作授权粒度，其余类目忽略）
+ * @param {string} ruleKey - 规则键（默认审批时用作授权粒度，其余类目忽略）
+ * @param {readonly string[]} capabilities - 工具能力声明（net 等空格分隔键）
  * @returns {RuleEvaluation} 默认判定
  */
 function defaultDecision(
@@ -241,6 +245,7 @@ function defaultDecision(
   approval: ApprovalPolicy,
   category: ToolCategory,
   ruleKey = "",
+  capabilities: readonly string[] = [],
 ): RuleEvaluation {
   if (level === "danger-full-access") {
     return {
@@ -262,6 +267,21 @@ function defaultDecision(
       // matchedRule 取工具键本身：用户选"本会话/始终允许"时按该工具粒度复用授权
       matchedRule: ruleKey,
       reason: `MCP 工具 ${ruleKey} 未命中任何规则，默认需要审批`,
+    };
+  }
+  if (level === "read-only" && category === "tool" && capabilities.includes("net")) {
+    if (approval === "never") {
+      return {
+        decision: "deny",
+        matchedRule: "",
+        reason: `网络工具 ${ruleKey} 在 read-only 档默认需要审批，never 策略无法征询已拒绝（可配置 allow 规则放行）`,
+      };
+    }
+    return {
+      decision: "ask",
+      // matchedRule 取规则键本身：用户选"本会话/始终允许"时按该工具粒度复用授权
+      matchedRule: ruleKey,
+      reason: `网络工具 ${ruleKey} 在 read-only 档默认需要审批（该档承诺禁网，进程内网络调用不受沙箱边界约束）`,
     };
   }
   if (approval === "always-ask") {
@@ -400,6 +420,7 @@ function nameMatches(ruleName: string, keyName: string): boolean {
  * @param {SandboxLevel} level - 沙箱档位
  * @param {ApprovalPolicy} approval - 审批策略
  * @param {ToolCategory} category - 工具类目（默认内置工具 tool）
+ * @param {readonly string[]} capabilities - 工具能力声明（read-only 档 net 能力默认审批用）
  * @returns {RuleEvaluation} 判定结果
  */
 export function evaluateRuleKey(
@@ -408,6 +429,7 @@ export function evaluateRuleKey(
   level: SandboxLevel,
   approval: ApprovalPolicy,
   category: ToolCategory = "tool",
+  capabilities: readonly string[] = [],
 ): RuleEvaluation {
   const parsedKey = parseRule(ruleKey);
   if (!parsedKey) {
@@ -449,5 +471,5 @@ export function evaluateRuleKey(
   if (allowed) {
     return allowed;
   }
-  return defaultDecision(level, approval, category, ruleKey);
+  return defaultDecision(level, approval, category, ruleKey, capabilities);
 }

@@ -460,3 +460,66 @@ describe("evaluateRuleKey: MCP 类目", () => {
     expect(result.decision).toBe("deny");
   });
 });
+
+describe("evaluateRuleKey: capabilities（read-only 档禁网语义）", () => {
+  it("read-only 档下声明 net 能力的工具未命中规则默认询问", () => {
+    const result = evaluateRuleKey(
+      "web_search(天气)",
+      rules({ allow: [], ask: [], deny: [] }),
+      "read-only",
+      "on-failure",
+      "tool",
+      ["net"],
+    );
+    expect(result.decision).toBe("ask");
+    expect(result.matchedRule).toBe("web_search(天气)");
+  });
+
+  it("read-only 档下 net 工具 + never 策略默认拒绝（fail-closed）", () => {
+    const result = evaluateRuleKey(
+      "web_search(天气)",
+      rules({ allow: [], ask: [], deny: [] }),
+      "read-only",
+      "never",
+      "tool",
+      ["net"],
+    );
+    expect(result.decision).toBe("deny");
+  });
+
+  it("workspace-write 档下 net 工具未命中规则仍默认放行（由沙箱边界兜底）", () => {
+    const result = evaluateRuleKey(
+      "web_search(天气)",
+      rules({ allow: [], ask: [], deny: [] }),
+      "workspace-write",
+      "on-failure",
+      "tool",
+      ["net"],
+    );
+    expect(result.decision).toBe("allow");
+  });
+
+  it("allow 规则命中优先于 net 默认审批", () => {
+    const result = evaluateRuleKey(
+      "web_search(天气)",
+      rules({ allow: ["WebSearch"], ask: [], deny: [] }),
+      "read-only",
+      "on-failure",
+      "tool",
+      ["net"],
+    );
+    expect(result.decision).toBe("allow");
+  });
+
+  it("未声明 net 能力的工具不受禁网默认审批影响", () => {
+    const result = evaluateRuleKey(
+      "read_file(/tmp/a)",
+      rules({ allow: [], ask: [], deny: [] }),
+      "read-only",
+      "on-failure",
+      "tool",
+      ["fs.read"],
+    );
+    expect(result.decision).toBe("allow");
+  });
+});
