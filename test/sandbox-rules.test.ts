@@ -4,11 +4,13 @@ import {
   matchSpec,
   splitTopLevel,
   stripWrappers,
+} from "../src/core/sandbox/policy/syntax";
+import {
   evaluateCommand,
   evaluateRuleKey,
-} from "../src/core/sandbox/rules";
-import { BUILTIN_DANGER_RULES } from "../src/core/sandbox/danger-rules";
-import type { SandboxRulesConfig } from "../src/core/sandbox/config";
+} from "../src/core/sandbox/policy/evaluate";
+import { BUILTIN_DANGER_RULES } from "../src/core/sandbox/policy/danger";
+import type { SandboxRulesConfig } from "../src/core/sandbox/config/schema";
 
 /** 空规则集（全部走档位默认） */
 const noRules: SandboxRulesConfig = { allow: [], ask: [], deny: [] };
@@ -456,6 +458,58 @@ describe("evaluateRuleKey: MCP 类目", () => {
       "read-only",
       "on-failure",
       "mcp-tool",
+    );
+    expect(result.decision).toBe("deny");
+  });
+});
+
+describe("evaluateRuleKey: MCP 只读类目", () => {
+  it("未命中规则时 mcp-read 默认放行（on-failure）", () => {
+    const result = evaluateRuleKey(
+      "mcp__github__get_issue",
+      noRules,
+      "read-only",
+      "on-failure",
+      "mcp-read",
+      ["net"],
+    );
+    expect(result.decision).toBe("allow");
+    expect(result.matchedRule).toBe("");
+  });
+
+  it("never 策略下 mcp-read 仍默认放行（只读无副作用）", () => {
+    const result = evaluateRuleKey(
+      "mcp__github__get_issue",
+      noRules,
+      "workspace-write",
+      "never",
+      "mcp-read",
+      ["net"],
+    );
+    expect(result.decision).toBe("allow");
+  });
+
+  it("always-ask 策略下 mcp-read 仍征询，且按工具粒度复用授权", () => {
+    const result = evaluateRuleKey(
+      "mcp__github__get_issue",
+      noRules,
+      "read-only",
+      "always-ask",
+      "mcp-read",
+      ["net"],
+    );
+    expect(result.decision).toBe("ask");
+    expect(result.matchedRule).toBe("mcp__github__get_issue");
+  });
+
+  it("显式 deny 规则优先于 mcp-read 默认放行", () => {
+    const result = evaluateRuleKey(
+      "mcp__github__get_issue",
+      rules({ deny: ["mcp__github__get_issue"] }),
+      "read-only",
+      "on-failure",
+      "mcp-read",
+      ["net"],
     );
     expect(result.decision).toBe("deny");
   });

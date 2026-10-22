@@ -15,12 +15,8 @@ export type {
 export {
   SANDBOX_LEVELS,
   APPROVAL_POLICIES,
-  loadSandboxConfig,
   DEFAULT_SANDBOX_CONFIG,
-  resolveProjectConfigPath,
-  readProjectGrants,
-  appendProjectGrant,
-} from "./config";
+} from "./config/schema";
 export type {
   SandboxBashConfig,
   SandboxConfigResult,
@@ -28,33 +24,37 @@ export type {
   SandboxFsConfig,
   SandboxNetworkConfig,
   SandboxRulesConfig,
-} from "./config";
+} from "./config/schema";
+export { loadSandboxConfig } from "./config/load";
+export {
+  resolveProjectConfigPath,
+  readProjectGrants,
+  appendProjectGrant,
+} from "./config/grants";
 export {
   parseRule,
   matchSpec,
   splitTopLevel,
   stripWrappers,
   normalizeCommand,
-  evaluateCommand,
-  evaluateRuleKey,
-} from "./rules";
-export type { ParsedRule, RuleEvaluation } from "./rules";
-export { BUILTIN_DANGER_RULES, matchDangerRule } from "./danger-rules";
-export type { DangerRule } from "./danger-rules";
+} from "./policy/syntax";
+export type { ParsedRule } from "./policy/syntax";
+export { evaluateCommand, evaluateRuleKey } from "./policy/evaluate";
+export type { RuleEvaluation } from "./policy/evaluate";
+export { BUILTIN_DANGER_RULES, matchDangerRule } from "./policy/danger";
+export type { DangerRule } from "./policy/danger";
 export {
   buildTierConfig,
-  expandHome,
-  matchPathPattern,
   DEFAULT_DENY_READ,
   DEFAULT_DENY_WRITE,
-} from "./defaults";
-export {
-  appendAudit,
-} from "./audit";
+} from "./policy/tier";
+export { expandHome, matchPathPattern } from "./policy/path-match";
+export { appendAudit } from "./audit";
 export type { AuditEntry } from "./audit";
-export { getProvider, listProviderNames } from "./provider";
-export { landlockProvider } from "./providers/landlock";
-export { SandboxContext, interactiveApprover, detectInteractive } from "./gate";
-export type { SandboxContextOptions } from "./gate";
+export { getProvider, listProviderNames } from "./providers/registry";
+export { landlockProvider } from "./providers/backends/landlock";
+export { SandboxContext } from "./runtime/context";
+export type { SandboxContextOptions } from "./runtime/context";
+export { interactiveApprover, detectInteractive } from "./runtime/approver";
 export { createSandboxContext } from "./assembly";
 export type { SandboxCliOptions } from "./assembly";

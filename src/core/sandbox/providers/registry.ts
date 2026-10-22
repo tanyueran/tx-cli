@@ -1,7 +1,7 @@
-import { srtProvider } from "./providers/srt";
-import { noopProvider } from "./providers/noop";
-import { landlockProvider } from "./providers/landlock";
-import type { SandboxProvider } from "./types";
+import { srtProvider } from "./backends/srt";
+import { noopProvider } from "./backends/noop";
+import { landlockProvider } from "./backends/landlock";
+import type { SandboxProvider } from "../types";
 
 /**
  * Provider 注册表：编译期固定的已知实现

@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import type { SandboxContext } from "../../sandbox/gate";
+import type { SandboxContext } from "../../sandbox/runtime/context";
 import type { Tool, ToolOutput } from "../types";
 
 /** bash 参数中 timeout 的下限（毫秒） */

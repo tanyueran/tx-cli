@@ -2,14 +2,16 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, rmSync, readFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { SandboxContext } from "../src/core/sandbox/gate";
-import {
-  DEFAULT_SANDBOX_CONFIG,
-  readProjectGrants,
-} from "../src/core/sandbox/config";
-import { noopProvider } from "../src/core/sandbox/providers/noop";
-import type { ApprovalChoice, Approver } from "../src/core/sandbox/types";
-import type { SandboxFileConfig } from "../src/core/sandbox/config";
+import { SandboxContext } from "../src/core/sandbox/runtime/context";
+import { DEFAULT_SANDBOX_CONFIG } from "../src/core/sandbox/config/schema";
+import { readProjectGrants } from "../src/core/sandbox/config/grants";
+import { noopProvider } from "../src/core/sandbox/providers/backends/noop";
+import type {
+  ApprovalAskContext,
+  ApprovalChoice,
+  Approver,
+} from "../src/core/sandbox/types";
+import type { SandboxFileConfig } from "../src/core/sandbox/config/schema";
 
 /** 测试用临时目录 */
 let dir: string;
@@ -20,6 +22,8 @@ class FakeApprover implements Approver {
   askCalls = 0;
   /** askEscalation 被调用的次数 */
   escalateCalls = 0;
+  /** 最近一次 ask 的问询上下文（断言 MCP 元信息下传用） */
+  lastContext?: ApprovalAskContext;
   /** 预设的 ask 应答队列（耗尽后重复最后一项） */
   private readonly queue: ApprovalChoice[];
   /** 预设的升级应答 */
@@ -38,8 +42,13 @@ class FakeApprover implements Approver {
    * 记录调用并返回队首选择
    * @returns {Promise<ApprovalChoice>} 预设选择
    */
-  async ask(): Promise<ApprovalChoice> {
+  async ask(
+    _ruleKey?: string,
+    _reason?: string,
+    context?: ApprovalAskContext,
+  ): Promise<ApprovalChoice> {
     this.askCalls += 1;
+    this.lastContext = context;
     return this.queue[Math.min(this.askCalls - 1, this.queue.length - 1)];
   }
 
@@ -276,5 +285,132 @@ describe("SandboxContext.evaluate", () => {
     });
     const evaluation = context.evaluate("web_search", "websearch");
     expect(evaluation.decision).toBe("allow");
+  });
+});
+
+describe("SandboxContext.guard: MCP 授权粒度", () => {
+  /** 可写 MCP 工具元信息 */
+  const writableMeta = {
+    server: "github",
+    serverKey: "github",
+    readOnly: false,
+  };
+  /** 只读 MCP 工具元信息 */
+  const readMeta = { server: "github", serverKey: "github", readOnly: true };
+
+  it("只读 MCP 工具默认放行且不触发审批", async () => {
+    const approver = new FakeApprover([{ kind: "deny" }]);
+    const context = makeContext({}, approver);
+    const blocked = await context.guard(
+      "mcp__github__get_issue",
+      "mcp__github__get_issue",
+      ["net"],
+      readMeta,
+    );
+    expect(blocked).toBeNull();
+    expect(approver.askCalls).toBe(0);
+  });
+
+  it("always-ask 策略下只读 MCP 工具仍征询，并下传服务器元信息", async () => {
+    const approver = new FakeApprover([{ kind: "once" }]);
+    const context = makeContext(
+      { approval: "always-ask" },
+      approver,
+    );
+    const blocked = await context.guard(
+      "mcp__github__get_issue",
+      "mcp__github__get_issue",
+      ["net"],
+      readMeta,
+    );
+    expect(blocked).toBeNull();
+    expect(approver.askCalls).toBe(1);
+    expect(approver.lastContext?.mcp?.server).toBe("github");
+  });
+
+  it("可写 MCP 工具默认询问，选服务器级会话授权后同服务器其他工具不再询问", async () => {
+    const approver = new FakeApprover([{ kind: "session-server" }]);
+    const context = makeContext({}, approver);
+    expect(
+      await context.guard(
+        "mcp__github__create_issue",
+        "mcp__github__create_issue",
+        ["net", "exec"],
+        writableMeta,
+      ),
+    ).toBeNull();
+    expect(
+      await context.guard(
+        "mcp__github__delete_repo",
+        "mcp__github__delete_repo",
+        ["net", "exec"],
+        writableMeta,
+      ),
+    ).toBeNull();
+    expect(approver.askCalls).toBe(1);
+    expect(context.listRules().allow).toContain("mcp__github__*");
+  });
+
+  it("服务器级始终授权落盘，新会话不再询问", async () => {
+    const approver = new FakeApprover([{ kind: "always-server" }]);
+    const context = makeContext({}, approver);
+    await context.guard(
+      "mcp__github__create_issue",
+      "mcp__github__create_issue",
+      ["net", "exec"],
+      writableMeta,
+    );
+    expect(
+      readProjectGrants(dir, join(dir, "project-config.json")),
+    ).toContain("mcp__github__*");
+    // 新上下文读取落盘授权：同服务器其他工具直接放行
+    const second = makeContext(
+      {},
+      new FakeApprover([{ kind: "deny" }]),
+    );
+    expect(
+      await second.guard(
+        "mcp__github__delete_repo",
+        "mcp__github__delete_repo",
+        ["net", "exec"],
+        writableMeta,
+      ),
+    ).toBeNull();
+  });
+
+  it("服务器名含非法字符时授权规则使用净化后的 serverKey", async () => {
+    const meta = { server: "my.mcp", serverKey: "my_mcp", readOnly: false };
+    const approver = new FakeApprover([{ kind: "always-server" }]);
+    const context = makeContext({}, approver);
+    await context.guard(
+      "mcp__my_mcp__ping",
+      "mcp__my_mcp__ping",
+      ["net", "exec"],
+      meta,
+    );
+    expect(
+      readProjectGrants(dir, join(dir, "project-config.json")),
+    ).toContain("mcp__my_mcp__*");
+  });
+
+  it("服务器级授权不覆盖显式 ask 规则", async () => {
+    const approver = new FakeApprover([{ kind: "session-server" }]);
+    const context = makeContext(
+      { rules: { allow: [], ask: ["mcp__github__delete_*"], deny: [] } },
+      approver,
+    );
+    await context.guard(
+      "mcp__github__create_issue",
+      "mcp__github__create_issue",
+      ["net", "exec"],
+      writableMeta,
+    );
+    await context.guard(
+      "mcp__github__delete_repo",
+      "mcp__github__delete_repo",
+      ["net", "exec"],
+      writableMeta,
+    );
+    expect(approver.askCalls).toBe(2);
   });
 });

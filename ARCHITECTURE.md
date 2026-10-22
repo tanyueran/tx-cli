@@ -61,8 +61,13 @@ src/
 │   │                          #   grep / web_search / write_todos（agent 模式装配，
 │   │                          #   工厂创建）/ bash（工厂创建，按需拼入）
 │   ├── sandbox/               # 沙箱与权限（四层模型，见下文）
-│   │   └── providers/         #   srt（sandbox-runtime 适配）/ noop（直通）/
-│   │                          #   landlock（外部 helper 方案）
+│   │   ├── config/            #   配置 schema / 加载校验 / 项目授权读写
+│   │   ├── policy/            #   L2 纯策略：规则语法、危险类目、判定引擎、档位与路径匹配
+│   │   ├── runtime/           #   L3 运行时：SandboxContext、fs 边界、审批器、串行队列
+│   │   ├── providers/         #   Provider 注册表 + backends/（srt / noop / landlock）
+│   │   ├── assembly.ts        #   L1 装配（createSandboxContext）
+│   │   ├── audit.ts           #   审计日志（JSONL）
+│   │   └── types.ts           #   领域类型与 Provider / Approver 接口
 │   ├── llm/                   # LLM 接入：client、config 向导、thinking 适配（含档位解析）
 │   ├── mcp/                   # MCP：config 解析、manager 连接管理、tool-adapter
 │   ├── skills/                # 技能：discovery 扫描、catalog、load_skill 工具
@@ -153,6 +158,11 @@ interface Tool extends ToolDefinition {
     capabilities: Array<"fs.read" | "fs.write" | "net" | "exec">;
     ruleKey(args): string;   // 如 bash(git status)
     serial?: boolean;        // 串行工具在会话级队列中依次执行
+    mcp?: {                  // MCP 工具元信息（服务器展示名 / 规则键段 / 只读标记）
+      server: string;
+      serverKey: string;
+      readOnly: boolean;
+    };
   };
   execute(args): Promise<ToolOutput>;
 }
@@ -160,7 +170,7 @@ interface Tool extends ToolDefinition {
 
 - **执行器**（`executor.ts`）负责参数 JSON 解析、超时（全局 30s，工具可覆盖）、输出 8KB 截断；工具抛错转为失败输出回传模型自纠。
 - **权限门卫**（`permission.ts`）：声明了 `permission` 的工具被 `wrapToolWithPermission` 包装，先经 L2 规则判定 + L3 审批再执行；未声明的工具原样放行（零破坏渐进迁移）。
-- **MCP 工具**经 `tool-adapter` 适配为 `Tool`，命名带 `mcp__server__tool` 前缀隔离。
+- **MCP 工具**经 `tool-adapter` 适配为 `Tool`，命名带 `mcp__server__tool` 前缀隔离；适配时读取远端工具定义的 `annotations.readOnlyHint`，把服务器名、净化后的规则键段与只读标记一并下传权限门卫。
 
 ## 沙箱与权限（四层模型）
 
@@ -172,23 +182,25 @@ interface Tool extends ToolDefinition {
 | `workspace-write`    | 可写 cwd 与临时目录，禁写 `.env` `*.pem` 等    | 按 allowedDomains | srt      |
 | `danger-full-access` | 无隔离                                 | 无限制              | noop（直通） |
 
-审批策略：`always-ask`（每次询问）/ `on-failure`（默认，沙箱拦截失败时提供升级重跑）/ `never`（仅信任目录生效）。
+审批策略：`always-ask`（每次询问）/ `on-failure`（默认，沙箱拦截失败时提供升级重跑）/ `never`（仅信任目录生效）。MCP 工具不经 OS 沙箱，判定独立于档位：只读工具默认放行，可写工具默认 ask（`never` 下按拒绝处理）。
 
 ```mermaid
 flowchart TD
     L1["L1 装配（assembly.ts）<br/>CLI > env(TX_SANDBOX_*) > 配置文件<br/>信任目录降级 / Provider 可用性探测"]
-    L2["L2 规则（rules.ts）<br/>deny（含内置危险类目）> ask > allow > 档位默认<br/>复合命令逐段判定，包装穿透"]
-    L3["L3 审批（gate.ts）<br/>一次 / 本会话 / 始终（授权落项目 .tx-cli/config.json）<br/>非 TTY 时 ask→deny；JSONL 审计"]
+    L2["L2 规则（policy/evaluate.ts）<br/>deny（含内置危险类目）> ask > allow > 档位默认<br/>复合命令逐段判定，包装穿透"]
+    L3["L3 审批（runtime/context.ts）<br/>一次 / 本会话 / 始终（MCP 为服务器级：mcp__server__*）<br/>授权落项目 .tx-cli/config.json；非 TTY 时 ask→deny；JSONL 审计"]
     L4["L4 执行（bash.ts + Provider）<br/>wrapCommand → spawn → 违规标注回传<br/>on-failure 升级重跑"]
     L1 --> L2 --> L3 --> L4
 ```
 
-- **Provider 插拔**（核心解耦）：`SandboxProvider` 接口（`isAvailable` / `initialize` / `wrapCommand` / `annotateStderr` / `dispose`），注册表编译期固定。`providers/srt.ts` 是全库唯一 import `@anthropic-ai/sandbox-runtime` 的文件；`providers/landlock.ts` 走外部 helper 方案（Node 无法直接发起 Landlock syscall，用户自装 `landlock-exec` 到 PATH 或 `~/.tx-cli/bin`，或经 `TX_SANDBOX_LANDLOCK_HELPER` 指定路径；denyRead 子树排除由应用层兜底）——新增沙箱实现只需实现 Provider 并注册，上层无感知。
+- **Provider 插拔**（核心解耦）：`SandboxProvider` 接口（`isAvailable` / `initialize` / `wrapCommand` / `annotateStderr` / `dispose`），注册表编译期固定。`providers/backends/srt.ts` 是全库唯一 import `@anthropic-ai/sandbox-runtime` 的文件；`providers/backends/landlock.ts` 走外部 helper 方案（Node 无法直接发起 Landlock syscall，用户自装 `landlock-exec` 到 PATH 或 `~/.tx-cli/bin`，或经 `TX_SANDBOX_LANDLOCK_HELPER` 指定路径；denyRead 子树排除由应用层兜底）——新增沙箱实现只需实现 Provider 并注册，上层无感知。
 - **Provider 不可用**：默认 fail-closed（bash 返回失败 + 提示），`--sandbox-missing allow` 显式降级为无隔离执行（规则与审批仍生效）。
 - **规则语法**：`Bash(git push:*)` 前缀、`Bash(git status)` 精确、`Bash(git log *)` glob、`Read(/src/**)` 路径、`WebSearch` 整工具。deny/ask 匹配时剥离 `FOO=bar` / `env` / `nohup` / `xargs` 包装看真实命令（allow 不穿透）。
 - **规则名别名归一化**：`Read`→`read_file`、`WebSearch`→`web_search`、`ListDir`→`list_dir`（Claude Code 风格短名 ↔ 内部工具名），规则键与规则两侧都归一化后匹配。
-- **权限纳管范围**：bash（exec，串行）、read\_file / list\_dir / glob / grep（fs.read，规则键以绝对路径为主体）、web\_search（net，规则键 `web_search(关键词)`）、MCP 工具（整工具级键 `mcp__server__tool`，保守标注 net+exec）。无沙箱会话（`sandbox` 为 undefined）不包装、行为不变。
+- **权限纳管范围**：bash（exec，串行）、read\_file / list\_dir / glob / grep（fs.read，规则键以绝对路径为主体）、web\_search（net，规则键 `web_search(关键词)`）、MCP 工具（整工具级键 `mcp__server__tool`；按 `annotations.readOnlyHint` 区分只读/可写，只读仅标注 net，其余保守标注 net+exec）。无沙箱会话（`sandbox` 为 undefined）不包装、行为不变。
 - **capabilities 禁网语义**：工具声明的能力（如 net）随 guard 链路传入规则判定；read-only 档承诺禁网，net 工具未命中规则时默认 ask（OS 沙箱只拦子进程，进程内网络调用不受边界约束，故由审批层兜底），`never` 策略下直接 deny。
+- **MCP 只读自动放行**：判定类目分 `mcp-tool`（可写）与 `mcp-read`（`readOnlyHint === true` 且未声明 `destructiveHint`）；`mcp-read` 未命中规则时默认 allow（`always-ask` 仍 ask），显式 deny/ask 规则依旧优先。
+- **MCP 服务器级授权**：可写 MCP 工具首次审批时提供「本次 / 本会话允许该服务器 / 始终允许该服务器 / 拒绝」，服务器级授权落 `mcp__server__*`（`serverKey` 为净化后的规则键段，与工具名同口径），同服务器其余工具不再逐个询问；显式 ask 规则优先，服务器级授权不覆盖。
 - **fs 应用层边界**：fs 工具是进程内代码不经沙箱进程，权限门卫在规则放行后按 TierConfig 逐路径校验（`SandboxContext.checkFsRead/checkFsWrite`，路径模式支持目录前缀、`*` 单段、`**` 跨目录与纯文件名如 `.env`/`*.pem`），danger-full-access 档跳过检查。
 - **/permissions 内联命令**（REPL）：只读展示档位、审批策略、Provider、fs 边界与三段规则（allow 含会话授权与「始终允许」的持久授权）。
 - **内置危险类目**（可 `sandbox.builtinDangerRules: false` 关闭）：`rm -rf`、`sudo/su`、`chmod 777`、磁盘写入、`curl|sh`、`git push -f`、保护路径。
@@ -201,7 +213,7 @@ flowchart TD
 | ------------ | ------------------------------------ | ------------------------ |
 | `llm`        | 模型接入（baseURL、apiKey、thinkingLevel 等） | `core/llm/config.ts`     |
 | `mcpServers` | MCP 服务器（stdio/http）                  | `core/mcp/config.ts`     |
-| `sandbox`    | 沙箱（档位/策略/规则/文件系统/网络/bash）            | `core/sandbox/config.ts` |
+| `sandbox`    | 沙箱（档位/策略/规则/文件系统/网络/bash）            | `core/sandbox/config/load.ts` |
 
 辅助文件：`~/.tx-cli/sandbox-audit.jsonl`（沙箱审计日志）；「始终允许」授权落项目空间 `<cwd>/.tx-cli/config.json`（结构与全局配置同构，装配时加载 `sandbox.rules.allow` 并提示）；技能目录为 `~/.tx-cli/skills` 与 `./.tx-cli/skills`。
 
@@ -213,7 +225,7 @@ flowchart TD
 | ---------- | ------------------------------------------------------------------------------------------ |
 | 新增命令       | `src/program/command/` 新建文件并在 `program/index.ts` 的 registrars 注册                           |
 | 新增内置工具     | `src/core/tools/builtin/` 实现 `Tool` 接口并加入 `builtinTools`；需权限管控则声明 `permission` 字段（自动被门卫包装） |
-| 新增沙箱实现     | `src/core/sandbox/providers/` 实现 `SandboxProvider` 并在 `provider.ts` 注册                     |
+| 新增沙箱实现     | `src/core/sandbox/providers/backends/` 实现 `SandboxProvider` 并在 `providers/registry.ts` 注册                     |
 | 新增模板       | `template/` 目录（create/add 共用脚手架流程 `core/scaffold`）                                         |
 | 接入新 LLM 能力 | 思考档位等协议差异统一收敛在 `core/llm/thinking.ts` 适配层                                                  |
 

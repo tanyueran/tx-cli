@@ -3,7 +3,7 @@ import { builtinTools, createTodoTool, type Tool } from "../../tools";
 import type { TodoToolHandle } from "../../tools";
 import { createBashTool } from "../../tools/builtin/bash";
 import { wrapToolWithPermission } from "../../tools/permission";
-import type { SandboxContext } from "../../sandbox/gate";
+import type { SandboxContext } from "../../sandbox/runtime/context";
 import { buildSystemPrompt } from "./prompt";
 import { CliError } from "../../../shared/errors";
 

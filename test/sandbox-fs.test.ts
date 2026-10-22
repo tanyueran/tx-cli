@@ -4,16 +4,16 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   matchPathPattern,
-} from "../src/core/sandbox/defaults";
-import { SandboxContext } from "../src/core/sandbox/gate";
-import { DEFAULT_SANDBOX_CONFIG } from "../src/core/sandbox/config";
-import { noopProvider } from "../src/core/sandbox/providers/noop";
+} from "../src/core/sandbox/policy/path-match";
+import { SandboxContext } from "../src/core/sandbox/runtime/context";
+import { DEFAULT_SANDBOX_CONFIG } from "../src/core/sandbox/config/schema";
+import { noopProvider } from "../src/core/sandbox/providers/backends/noop";
 import {
   landlockProvider,
   __resetLandlockForTest,
-} from "../src/core/sandbox/providers/landlock";
+} from "../src/core/sandbox/providers/backends/landlock";
 import type { ApprovalChoice, Approver, TierConfig } from "../src/core/sandbox/types";
-import type { SandboxFileConfig } from "../src/core/sandbox/config";
+import type { SandboxFileConfig } from "../src/core/sandbox/config/schema";
 import { wrapToolWithPermission } from "../src/core/tools/permission";
 import { readFileTool } from "../src/core/tools/builtin/read-file";
 import { webSearchTool } from "../src/core/tools/builtin/web-search";

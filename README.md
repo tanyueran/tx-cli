@@ -207,6 +207,9 @@ tx-cli commit-fix "#532311 优化属性设置 https://ones.x.cn/abc"
 
 - 字符串值支持 `${VAR}` 环境变量展开（如 `Bearer ${MY_TOKEN}`），未定义变量展开为空串
 - 单个服务器连接失败只黄字告警，不影响其他服务器与本次对话；也可用 `tx-cli chat --no-mcp` 按次禁用全部 MCP 服务器
+- 工具审批按服务器粒度授权：首次调用可写工具时选择“本会话/始终允许该服务器”，同服务器其余工具不再逐个询问；选择“始终”会写入 `<cwd>/.tx-cli/config.json` 的 `sandbox.rules.allow`（形如 `mcp__server__*`）
+- 声明了 `readOnlyHint` 的只读 MCP 工具默认放行（`always-ask` 策略下仍会询问），其余工具默认需要审批；显式 `ask`/`deny` 规则始终优先
+- `chat` 与 `agent` 共用同一套 MCP 审批与授权规则，与沙箱档位无关
 
 ```bash
 # 启用全部已配置的 MCP 服务器（缺省行为）
@@ -256,6 +259,8 @@ TX_LLM_API_KEY=sk-xxx TX_LLM_BASE_URL=https://api.deepseek.com/v1 TX_LLM_MODEL=d
 | `--sandbox-missing <action>` | 沙箱在当前环境不可用时的处置：`deny`（默认，失败关闭）\| `allow`（降级为无隔离执行，规则与审批仍生效） |
 
 沙箱档位与审批策略的优先级均为：命令行 > 环境变量（`TX_SANDBOX_LEVEL` / `TX_SANDBOX_APPROVAL`）> 配置文件 `sandbox` 段 > 内置默认，也可写入 `~/.tx-cli/config.json` 的 `sandbox` 段持久化（档位、审批、文件系统边界、权限规则等）。
+
+审批策略与 MCP：MCP 工具不经 OS 沙箱，判定独立于 `--sandbox` 档位——声明 `readOnlyHint` 的只读工具默认放行（`always-ask` 下仍询问）；可写工具首次调用时提供服务器级授权选项，`never` 策略下无显式 allow 规则则拒绝。授权粒度与配置示例见下方 [MCP 服务器](#mcp-服务器)。
 
 ```bash
 # 单次执行任务（默认 read-only 沙箱，bash 仅能执行只读操作）

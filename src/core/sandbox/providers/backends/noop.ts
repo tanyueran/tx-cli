@@ -1,7 +1,7 @@
 import type {
   SandboxProvider,
   SandboxViolationInfo,
-} from "../types";
+} from "../../types";
 
 /**
  * noop Provider：直通实现，不提供任何隔离

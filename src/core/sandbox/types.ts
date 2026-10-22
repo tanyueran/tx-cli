@@ -87,11 +87,37 @@ export interface SandboxProvider {
   dispose(): Promise<void>;
 }
 
-/** 审批选择：用户对 ask 判定的回答 */
+/**
+ * MCP 工具元信息：由适配层从远端工具定义提取，供沙箱判定与审批使用
+ * 服务器名用于生成服务器级授权规则（mcp__<server>__*），
+ * 只读标记来自 MCP 协议的 annotations.readOnlyHint，未标注时为 false（保守口径）
+ */
+export interface McpToolMeta {
+  /** MCP 服务器名（配置中的原始键名，审批提示展示用） */
+  server: string;
+  /** 规则键中的服务器段（净化后，与 mcp__ 工具名保持同一口径，授权规则用） */
+  serverKey: string;
+  /** 是否为只读工具（readOnlyHint 为 true 且 destructiveHint 非 true） */
+  readOnly: boolean;
+}
+
+/** 审批问询的上下文：区分普通命令与 MCP 工具，决定展示哪些授权粒度 */
+export interface ApprovalAskContext {
+  /** MCP 工具元信息（非 MCP 工具时为 undefined） */
+  mcp?: McpToolMeta;
+}
+
+/**
+ * 审批选择：用户对 ask 判定的回答
+ * session-server / always-server 为 MCP 专属：按整个服务器（mcp__server__*）授权，
+ * 避免同一服务器多个工具逐个询问
+ */
 export type ApprovalChoice =
   | { kind: "once" }
   | { kind: "session" }
   | { kind: "always" }
+  | { kind: "session-server" }
+  | { kind: "always-server" }
   | { kind: "deny" };
 
 /**
@@ -103,9 +129,14 @@ export interface Approver {
    * 征询审批
    * @param {string} ruleKey - 触发审批的规则键（如 bash(git push)）
    * @param {string} reason - 判定说明（命中规则或档位默认）
+   * @param {ApprovalAskContext} context - 问询上下文（MCP 工具时携带服务器与只读信息）
    * @returns {Promise<ApprovalChoice>} 用户选择
    */
-  ask(ruleKey: string, reason: string): Promise<ApprovalChoice>;
+  ask(
+    ruleKey: string,
+    reason: string,
+    context?: ApprovalAskContext,
+  ): Promise<ApprovalChoice>;
   /**
    * 沙箱内失败后的升级问询（on-failure 策略专用）
    * @param {string} commandText - 用户可见的命令文本

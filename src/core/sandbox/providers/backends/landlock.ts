@@ -5,7 +5,7 @@ import type {
   SandboxProvider,
   SandboxViolationInfo,
   TierConfig,
-} from "../types";
+} from "../../types";
 
 /** 外部 helper 的可执行文件名（PATH 或 ~/.tx-cli/bin 下探测） */
 const HELPER_BIN = "landlock-exec";

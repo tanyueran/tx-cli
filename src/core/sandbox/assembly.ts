@@ -1,14 +1,13 @@
 import { resolve } from "node:path";
 import type { ApprovalPolicy, SandboxLevel } from "./types";
-import {
-  loadSandboxConfig,
-  readProjectGrants,
-  resolveProjectConfigPath,
-  type SandboxFileConfig,
-} from "./config";
-import { buildTierConfig, expandHome } from "./defaults";
-import { getProvider } from "./provider";
-import { SandboxContext, detectInteractive, interactiveApprover } from "./gate";
+import { loadSandboxConfig } from "./config/load";
+import { readProjectGrants, resolveProjectConfigPath } from "./config/grants";
+import type { SandboxFileConfig } from "./config/schema";
+import { buildTierConfig } from "./policy/tier";
+import { expandHome } from "./policy/path-match";
+import { getProvider } from "./providers/registry";
+import { SandboxContext } from "./runtime/context";
+import { detectInteractive, interactiveApprover } from "./runtime/approver";
 
 /** conversation 命令传入的沙箱 CLI 选项（均可选，未指定时走 env/配置文件） */
 export interface SandboxCliOptions {
@@ -92,8 +91,7 @@ function resolveOptions(
     level,
     approval,
     levelFromFile: cli.level === undefined && envLevel === undefined,
-    approvalFromFile:
-      cli.approval === undefined && envApproval === undefined,
+    approvalFromFile: cli.approval === undefined && envApproval === undefined,
     missingAction: cli.missingAction ?? "deny",
   };
 }

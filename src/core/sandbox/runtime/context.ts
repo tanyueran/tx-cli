@@ -1,22 +1,27 @@
 import { randomUUID } from "node:crypto";
-import { resolve } from "node:path";
-import pico from "picocolors";
-import type { ToolOutput } from "../tools/types";
-import { askConfirm, askSelect } from "../../shared/interactive-prompt";
-import { BUILTIN_DANGER_RULES, type DangerRule } from "./danger-rules";
-import { evaluateCommand, evaluateRuleKey, parseRule } from "./rules";
-import { appendProjectGrant } from "./config";
-import { appendAudit, type AuditEntry } from "./audit";
+import type { ToolOutput } from "../../tools/types";
 import type {
-  ApprovalChoice,
   ApprovalPolicy,
   Approver,
+  McpToolMeta,
   SandboxLevel,
   SandboxProvider,
-} from "./types";
-import { buildTierConfig, matchPathPattern } from "./defaults";
-import type { SandboxFileConfig, SandboxRulesConfig } from "./config";
-import type { TierConfig } from "./types";
+  TierConfig,
+} from "../types";
+import type { SandboxFileConfig, SandboxRulesConfig } from "../config/schema";
+import { appendProjectGrant } from "../config/grants";
+import { appendAudit, type AuditEntry } from "../audit";
+import { BUILTIN_DANGER_RULES, type DangerRule } from "../policy/danger";
+import {
+  evaluateCommand,
+  evaluateRuleKey,
+  type RuleEvaluation,
+  type ToolCategory,
+} from "../policy/evaluate";
+import { parseRule } from "../policy/syntax";
+import { buildTierConfig } from "../policy/tier";
+import { checkFsRead, checkFsWrite, type FsBoundaryResult } from "./fs-boundary";
+import { SerialQueue } from "./serial-queue";
 
 /** 会话级沙箱上下文的构造参数 */
 export interface SandboxContextOptions {
@@ -91,8 +96,8 @@ export class SandboxContext {
   private readonly cwd: string;
   /** 项目授权文件路径（缺省 <cwd>/.tx-cli/config.json） */
   private readonly projectConfigPath?: string;
-  /** 串行工具的执行队列尾（保证 bash 等串行工具不并发执行） */
-  private serialTail: Promise<unknown> = Promise.resolve();
+  /** 串行工具的执行队列（保证 bash 等串行工具不并发执行） */
+  private readonly serialQueue = new SerialQueue();
 
   /**
    * @param {SandboxContextOptions} options - 构造参数
@@ -126,13 +131,20 @@ export class SandboxContext {
 
   /**
    * L2 规则判定入口：bash 工具走复合命令判定，其余工具走规则键判定
-   * MCP 工具（规则键 mcp__ 前缀）按 mcp-tool 类目判定，未命中规则时默认审批
+   * MCP 工具按 mcp 元信息区分类目：声明 readOnlyHint 的走 mcp-read（默认放行），
+   * 其余走 mcp-tool（默认审批）；未携带元信息但规则键为 mcp__ 前缀时按 mcp-tool 兜底
    * @param {string} toolName - 工具名
    * @param {string} ruleKey - 工具生成的规则键
    * @param {readonly string[]} capabilities - 工具能力声明（read-only 档禁网语义判定用）
-   * @returns {import("./rules").RuleEvaluation} 判定结果
+   * @param {McpToolMeta} mcp - MCP 工具元信息（服务器名与只读标记，非 MCP 工具时缺省）
+   * @returns {RuleEvaluation} 判定结果
    */
-  evaluate(toolName: string, ruleKey: string, capabilities: readonly string[] = []) {
+  evaluate(
+    toolName: string,
+    ruleKey: string,
+    capabilities: readonly string[] = [],
+    mcp?: McpToolMeta,
+  ): RuleEvaluation {
     if (toolName === "bash") {
       const parsed = parseRule(ruleKey);
       const command = parsed?.spec ?? ruleKey;
@@ -144,7 +156,13 @@ export class SandboxContext {
         this.approval,
       );
     }
-    const category = ruleKey.startsWith("mcp__") ? "mcp-tool" : "tool";
+    const category: ToolCategory = mcp
+      ? mcp.readOnly
+        ? "mcp-read"
+        : "mcp-tool"
+      : ruleKey.startsWith("mcp__")
+        ? "mcp-tool"
+        : "tool";
     return evaluateRuleKey(
       ruleKey,
       this.rules,
@@ -157,79 +175,39 @@ export class SandboxContext {
 
   /**
    * 应用层 fs 读边界：fs 工具是进程内代码不经沙箱进程，读取前对照档位 TierConfig 校验
-   * danger-full-access 档跳过检查；denyRead 命中即拒绝（deny-then-allow 语义）；
-   * 路径先经 resolve 词法规范化（消解 .. 与 .），防止伪装路径绕过前缀/glob 匹配
    * @param {string} path - 待读取的绝对路径
-   * @returns {{ allowed: boolean; reason?: string }} 拒绝时带中文原因
+   * @returns {FsBoundaryResult} 拒绝时带中文原因
    */
-  checkFsRead(path: string): { allowed: boolean; reason?: string } {
-    if (this.level === "danger-full-access") {
-      return { allowed: true };
-    }
-    const target = resolve(path);
-    for (const pattern of this.tier.denyRead) {
-      if (matchPathPattern(pattern, target)) {
-        return {
-          allowed: false,
-          reason: `路径 ${target} 命中当前档位禁读边界 ${pattern}`,
-        };
-      }
-    }
-    return { allowed: true };
+  checkFsRead(path: string): FsBoundaryResult {
+    return checkFsRead(this.level, this.tier, path);
   }
 
   /**
    * 应用层 fs 写边界：写入前对照档位 TierConfig 校验（allow-only 语义）
-   * danger-full-access 档跳过检查；路径必须落在 allowWrite 某个可写根内，
-   * 且不命中 denyWrite 敏感模式（.env、*.pem 等）；
-   * 路径先经 resolve 词法规范化（消解 .. 与 .），防止伪装路径绕过前缀匹配
    * @param {string} path - 待写入的绝对路径
-   * @returns {{ allowed: boolean; reason?: string }} 拒绝时带中文原因
+   * @returns {FsBoundaryResult} 拒绝时带中文原因
    */
-  checkFsWrite(path: string): { allowed: boolean; reason?: string } {
-    if (this.level === "danger-full-access") {
-      return { allowed: true };
-    }
-    const target = resolve(path);
-    if (this.tier.allowWrite.length === 0) {
-      return {
-        allowed: false,
-        reason: `当前档位为 ${this.level}，禁止一切文件写入`,
-      };
-    }
-    const writable = this.tier.allowWrite.some(
-      (root) => target === root || target.startsWith(`${root}/`),
-    );
-    if (!writable) {
-      return {
-        allowed: false,
-        reason: `路径 ${target} 不在可写范围内（可写根：${this.tier.allowWrite.join("、")}）`,
-      };
-    }
-    for (const pattern of this.tier.denyWrite) {
-      if (matchPathPattern(pattern, target)) {
-        return {
-          allowed: false,
-          reason: `文件 ${target} 命中禁写模式 ${pattern}`,
-        };
-      }
-    }
-    return { allowed: true };
+  checkFsWrite(path: string): FsBoundaryResult {
+    return checkFsWrite(this.level, this.tier, path);
   }
 
   /**
    * L3 门卫：按 L2 判定放行、拒绝或征询审批
+   * MCP 工具审批时额外提供服务器级授权（mcp__server__*），
+   * 用户选「本会话/始终允许该服务器」后，同服务器其余工具不再逐个询问
    * @param {string} toolName - 工具名
    * @param {string} ruleKey - 规则键
    * @param {readonly string[]} capabilities - 工具能力声明（read-only 档禁网语义判定用）
+   * @param {McpToolMeta} mcp - MCP 工具元信息（服务器名与只读标记，非 MCP 工具时缺省）
    * @returns {Promise<ToolOutput | null>} 拒绝时返回失败输出，放行时返回 null
    */
   async guard(
     toolName: string,
     ruleKey: string,
     capabilities: readonly string[] = [],
+    mcp?: McpToolMeta,
   ): Promise<ToolOutput | null> {
-    const evaluation = this.evaluate(toolName, ruleKey, capabilities);
+    const evaluation = this.evaluate(toolName, ruleKey, capabilities, mcp);
     if (evaluation.decision === "deny") {
       this.recordAudit({
         tool: toolName,
@@ -253,7 +231,7 @@ export class SandboxContext {
         output: `命令需要审批但当前为非交互环境，已拒绝：${evaluation.reason}`,
       };
     }
-    const choice = await this.approver.ask(ruleKey, evaluation.reason);
+    const choice = await this.approver.ask(ruleKey, evaluation.reason, { mcp });
     if (choice.kind === "deny") {
       this.recordAudit({
         tool: toolName,
@@ -262,20 +240,33 @@ export class SandboxContext {
       });
       return { ok: false, output: "用户拒绝了本次命令执行" };
     }
-    // 授权粒度：优先复用命中的规则原文；always-ask 默认判定无规则可复用时按工具粒度推导
+    // 授权粒度：服务器级选择（MCP）落 mcp__server__*；其余优先复用命中的规则原文，
+    // always-ask 默认判定无规则可复用时按工具粒度推导
     // （bash 取命令前缀 bash(git status) → bash(git status:*)，其余工具取工具名），
     // 保证「本会话/始终允许」在任何 ask 场景都有可复用的同类粒度
-    const grantRule = evaluation.matchedRule || deriveGrantRule(toolName, ruleKey);
-    if (choice.kind === "session" && grantRule) {
-      // 会话级授权：命中的 ask 规则从 ask 集合移入 allow，同类命令后续不再询问
-      if (evaluation.matchedRule) {
+    const serverGrant = mcp ? `mcp__${mcp.serverKey}__*` : undefined;
+    const isServerChoice =
+      choice.kind === "session-server" || choice.kind === "always-server";
+    const grantRule = isServerChoice
+      ? serverGrant
+      : evaluation.matchedRule || deriveGrantRule(toolName, ruleKey);
+    if (
+      (choice.kind === "session" || choice.kind === "session-server") &&
+      grantRule
+    ) {
+      // 会话级授权：命中的 ask 规则从 ask 集合移入 allow，同类命令后续不再询问；
+      // 服务器级授权不撤销显式 ask 规则（显式规则优先，保持用户配置意图）
+      if (choice.kind === "session" && evaluation.matchedRule) {
         this.rules.ask = this.rules.ask.filter(
           (r) => r !== evaluation.matchedRule,
         );
       }
       this.rules.allow = [...this.rules.allow, grantRule];
     }
-    if (choice.kind === "always" && grantRule) {
+    if (
+      (choice.kind === "always" || choice.kind === "always-server") &&
+      grantRule
+    ) {
       // 持久授权落盘到项目空间 .tx-cli/config.json（仅当前项目生效）
       appendProjectGrant(this.cwd, grantRule, this.projectConfigPath);
       this.rules.allow = [...this.rules.allow, grantRule];
@@ -347,9 +338,7 @@ export class SandboxContext {
    * @returns {Promise<T>} fn 的执行结果
    */
   runSerial<T>(fn: () => Promise<T>): Promise<T> {
-    const run = this.serialTail.then(fn, fn);
-    this.serialTail = run.catch(() => undefined);
-    return run;
+    return this.serialQueue.run(fn);
   }
 
   /**
@@ -367,49 +356,4 @@ export class SandboxContext {
   async dispose(): Promise<void> {
     await this.provider?.dispose();
   }
-}
-
-/**
- * 交互式审批器：prompts 实现，供 TTY 环境使用
- */
-export const interactiveApprover: Approver = {
-  /**
-   * 征询命令审批：一次/本会话/始终/拒绝
-   * @param {string} ruleKey - 规则键
-   * @param {string} reason - 判定说明
-   * @returns {Promise<ApprovalChoice>} 用户选择
-   */
-  async ask(ruleKey: string, reason: string): Promise<ApprovalChoice> {
-    console.log(pico.yellow(`\n命令需要审批：${ruleKey}`));
-    console.log(pico.gray(`原因：${reason}`));
-    const choice = await askSelect("是否允许执行？", [
-      { title: "本次允许", value: "once" as const },
-      { title: "本会话内允许同类命令", value: "session" as const },
-      { title: "始终允许同类命令（写入配置）", value: "always" as const },
-      { title: "拒绝执行", value: "deny" as const },
-    ]);
-    return { kind: choice };
-  },
-  /**
-   * 沙箱内失败后的升级问询
-   * @param {string} commandText - 命令文本
-   * @param {string} reason - 失败说明
-   * @returns {Promise<boolean>} 批准脱离沙箱重跑时为 true
-   */
-  async askEscalation(commandText: string, reason: string): Promise<boolean> {
-    console.log(pico.yellow(`\n命令在沙箱内失败：${commandText}`));
-    console.log(pico.gray(reason));
-    return askConfirm("是否脱离沙箱重跑本次命令？（风险自担）", false);
-  },
-};
-
-/**
- * 判断当前环境是否可交互（TTY 且非 CI）
- * @returns {boolean} 可交互时为 true
- */
-export function detectInteractive(): boolean {
-  if (process.env.CI || process.env.TX_SANDBOX_HEADLESS) {
-    return false;
-  }
-  return Boolean(process.stdin.isTTY && process.stdout.isTTY);
 }

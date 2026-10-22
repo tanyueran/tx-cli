@@ -46,6 +46,11 @@ export function createMcpTool(
   mcpTool: McpTool,
 ): Tool {
   const name = `mcp__${sanitizeName(serverName)}__${sanitizeName(mcpTool.name)}`;
+  // 只读标记来自 MCP 协议 annotations：readOnlyHint 为 true 且未声明 destructiveHint
+  // 时才视为只读；未标注按保守口径（非只读）处理
+  const readOnly =
+    mcpTool.annotations?.readOnlyHint === true &&
+    mcpTool.annotations?.destructiveHint !== true;
   return {
     name,
     description: `[MCP:${serverName}] ${mcpTool.description ?? ""}`.trim(),
@@ -54,12 +59,14 @@ export function createMcpTool(
       : { type: "object", properties: {} },
     timeoutMs: MCP_TOOL_TIMEOUT_MS,
     permission: {
-      // MCP 工具的真实能力未知（外部进程），按保守口径标注 net + exec；
-      // 规则键为整工具级（无细粒度 spec），用户按 mcp__server__tool 粒度配置
-      capabilities: ["net", "exec"],
+      // 只读工具不涉及外部副作用，仅标注 net；其余外部工具能力未知，按 net + exec 保守标注
+      capabilities: readOnly ? ["net"] : ["net", "exec"],
       // 涉及外部副作用且默认走审批：判定+审批+执行进会话串行队列，
       // 避免同轮多调用并发弹审批窗交互错乱（与 bash 工具对齐）
       serial: true,
+      // 服务器名与只读标记下传沙箱：只读工具默认放行，授权可按整个服务器粒度复用；
+      // server 为展示名，serverKey 为净化后的规则键段（与 mcp__ 工具名同口径）
+      mcp: { server: serverName, serverKey: sanitizeName(serverName), readOnly },
       /**
        * 生成规则键：整工具级（远端参数结构不可知，不做细粒度拆分）
        * @returns {string} 形如 mcp__server__tool 的规则键

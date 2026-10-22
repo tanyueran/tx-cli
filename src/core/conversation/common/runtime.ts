@@ -2,7 +2,7 @@ import { buildMcpRoots, connectMcpServers } from "../../mcp";
 import type { McpManager } from "../../mcp";
 import { createSandboxContext } from "../../sandbox";
 import type { SandboxCliOptions } from "../../sandbox";
-import type { SandboxContext } from "../../sandbox/gate";
+import type { SandboxContext } from "../../sandbox/runtime/context";
 import type { Tool } from "../../tools";
 import { setupSkillContext } from "./skill-context";
 import type { SkillContext } from "./skill-context";

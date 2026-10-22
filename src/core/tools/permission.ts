@@ -1,4 +1,4 @@
-import type { SandboxContext } from "../sandbox/gate";
+import type { SandboxContext } from "../sandbox/runtime/context";
 import type { Tool, ToolOutput, ToolPermission } from "./types";
 
 /**
@@ -33,6 +33,7 @@ export function wrapToolWithPermission(
           tool.name,
           ruleKey,
           permission.capabilities,
+          permission.mcp,
         );
         if (blocked) {
           return blocked;

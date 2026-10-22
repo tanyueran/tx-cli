@@ -6,7 +6,7 @@ import type {
   SandboxProvider,
   SandboxViolationInfo,
   TierConfig,
-} from "../types";
+} from "../../types";
 
 /**
  * srt Provider：@anthropic-ai/sandbox-runtime 的适配层

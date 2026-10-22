@@ -8,7 +8,7 @@ import {
 } from "./runtime";
 import type { ConversationRuntime } from "./runtime";
 import type { ConversationModeConfig } from "./mode";
-import type { SandboxContext } from "../../sandbox/gate";
+import type { SandboxContext } from "../../sandbox/runtime/context";
 import type { SandboxCliOptions } from "../../sandbox";
 import { formatTodoList } from "../../tools";
 import type { TodoToolHandle, Tool } from "../../tools";

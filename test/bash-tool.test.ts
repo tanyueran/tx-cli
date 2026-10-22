@@ -4,16 +4,16 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createBashTool } from "../src/core/tools/builtin/bash";
 import { wrapToolWithPermission } from "../src/core/tools/permission";
-import { SandboxContext } from "../src/core/sandbox/gate";
-import { DEFAULT_SANDBOX_CONFIG } from "../src/core/sandbox/config";
-import { noopProvider } from "../src/core/sandbox/providers/noop";
+import { SandboxContext } from "../src/core/sandbox/runtime/context";
+import { DEFAULT_SANDBOX_CONFIG } from "../src/core/sandbox/config/schema";
+import { noopProvider } from "../src/core/sandbox/providers/backends/noop";
 import type {
   ApprovalChoice,
   Approver,
   SandboxProvider,
   SandboxViolationInfo,
 } from "../src/core/sandbox/types";
-import type { SandboxFileConfig } from "../src/core/sandbox/config";
+import type { SandboxFileConfig } from "../src/core/sandbox/config/schema";
 
 /** 测试用临时目录 */
 let dir: string;

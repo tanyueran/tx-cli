@@ -4,9 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   loadSandboxConfig,
-  DEFAULT_SANDBOX_CONFIG,
-} from "../src/core/sandbox/config";
-import { buildTierConfig } from "../src/core/sandbox/defaults";
+} from "../src/core/sandbox/config/load";
+import { DEFAULT_SANDBOX_CONFIG } from "../src/core/sandbox/config/schema";
+import { buildTierConfig } from "../src/core/sandbox/policy/tier";
 
 /** 测试用临时目录 */
 let dir: string;
