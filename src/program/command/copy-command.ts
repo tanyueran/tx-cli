@@ -4,7 +4,7 @@ import pico from "picocolors";
 import { copyPath, resolveCopyTarget } from "../../core/copy";
 import { resolveFromCwd } from "../../shared/paths";
 import { CancelError } from "../../shared/errors";
-import { askConfirm } from "../../shared/prompt";
+import { askConfirm } from "../../shared/interactive-prompt";
 
 /** copy 命令的选项 */
 interface CopyCommandOptions {

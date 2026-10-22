@@ -1,7 +1,6 @@
 import { createResponsesTurn } from "./responses-turn";
 import { createStreamRenderer, createToolCallLogger, createSoftConvergeNotice } from "./renderer";
 import { runAgentLoop, DEFAULT_MAX_ITERATIONS } from "./loop";
-import { resolveThinkingLevel, warnThinkingFallback } from "./thinking";
 import {
   createConversationRuntime,
   disposeConversationRuntime,
@@ -10,14 +9,16 @@ import type { ConversationModeConfig } from "./mode";
 import { printWarnings } from "../../../shared/warnings";
 import {
   resolveResponsesThinkingFields,
+  resolveThinkingLevel,
   resolveThinkingStyle,
+  warnThinkingFallback,
 } from "../../llm";
 import type { SandboxCliOptions } from "../../sandbox";
 import type {
   LlmConfig,
   ResponseHistoryItem,
   ThinkingLevel,
-} from "../../../types/llm";
+} from "../../llm/types";
 
 /**
  * 单次会话（chat、agent 命令共用的单次入口）：走 Responses API（无状态模式）+ agentic loop

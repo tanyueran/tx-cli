@@ -29,11 +29,10 @@ flowchart TD
         LLM["llm 接入与思考档位"]
         MCP["mcp 服务器连接"]
         SKILLS["skills 技能发现"]
-        SCAFFOLD["scaffold / copy / server / ones-message"]
+        SCAFFOLD["scaffold / copy / server / commit-fix"]
     end
     subgraph 共享层["共享层"]
-        SHARED["shared 通用工具<br/>fs / paths / prompt / errors / user-config"]
-        TYPES["types 协议结构<br/>llm / mcp / template / server"]
+        SHARED["shared 通用工具<br/>fs / paths / interactive-prompt / errors / user-config"]
     end
     CLI --> CMDS --> 领域层
     领域层 --> 共享层
@@ -48,12 +47,12 @@ src/
 ├── cli.ts                     # 进程入口：装配 program 并接管退出码
 ├── program/                   # CLI 层：命令注册（仅参数解析与分流）
 │   └── command/               #   每个命令一个文件
-├── core/                      # 领域层
-│   ├── conversation/          # 对话编排（chat 单次/多轮共用机制）
-│   │   ├── common/            #   会话机制：agentic loop、Responses 适配、
-│   │   │                      #   流式渲染、思考档位、技能装配（skill-context）
-│   │   ├── chat/              #   chat 命令实现：one-shot（单次）与 repl（多轮）
-│   │   └── agent/             #   agent 命令实现：one-shot（单次）与 repl（多轮）
+├── core/                      # 领域层（协议类型内聚在各模块 types.ts）
+│   ├── conversation/          # 对话编排（chat / agent 命令共用机制，模式即配置）
+│   │   ├── chat.ts            #   chat 命令实现：CHAT_MODE + one-shot（单次）/ repl（多轮）入口
+│   │   ├── agent.ts           #   agent 命令实现：AGENT_MODE + one-shot（单次）/ repl（多轮）入口
+│   │   └── common/            #   会话机制：agentic loop、Responses 适配、
+│   │                          #   流式渲染、技能装配（skill-context）
 │   ├── tools/                 # 工具系统
 │   │   ├── types.ts           #   Tool 接口（含 permission 权限声明、renderCall 调用渲染扩展点）
 │   │   ├── executor.ts        #   执行器：参数解析、超时、8KB 截断
@@ -64,16 +63,15 @@ src/
 │   ├── sandbox/               # 沙箱与权限（四层模型，见下文）
 │   │   └── providers/         #   srt（sandbox-runtime 适配）/ noop（直通）/
 │   │                          #   landlock（外部 helper 方案）
-│   ├── llm/                   # LLM 接入：client、config 向导、thinking 适配
+│   ├── llm/                   # LLM 接入：client、config 向导、thinking 适配（含档位解析）
 │   ├── mcp/                   # MCP：config 解析、manager 连接管理、tool-adapter
 │   ├── skills/                # 技能：discovery 扫描、catalog、load_skill 工具
 │   ├── scaffold/              # 脚手架：templates 加载、render 渲染（create/add 共用）
 │   ├── copy/                  # copy 命令的复制实现
 │   ├── server/                # server 命令的静态文件服务
-│   └── ones-message.ts        # commit-fix 的 ONES 消息转换
-├── shared/                    # 共享层：fs / paths / prompt（prompts 封装）/
-│                              # errors / user-config / warnings / string / text
-└── types/                     # 协议结构：llm / mcp / template / server
+│   └── commit-fix/            # commit-fix 命令的 ONES 消息转换
+└── shared/                    # 共享层：fs / paths / interactive-prompt（交互问答封装）/
+                               # errors / user-config / warnings / string / text
 ```
 
 ## 对话链路（chat / agent 命令）

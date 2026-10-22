@@ -9,6 +9,8 @@ export {
   parseThinkingStyle,
   resolveThinkingStyle,
   resolveResponsesThinkingFields,
+  resolveThinkingLevel,
+  warnThinkingFallback,
   isToggleOnlyStyle,
   describeThinkingStyle,
   THINKING_LEVELS,

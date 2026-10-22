@@ -3,7 +3,7 @@ import type {
   LlmConfig,
   ResponseHistoryItem,
   ToolDefinition,
-} from "../../../types/llm";
+} from "../../llm/types";
 import type { ToolResult } from "../../tools";
 import type { RunTurn, TurnOutcome } from "./loop";
 

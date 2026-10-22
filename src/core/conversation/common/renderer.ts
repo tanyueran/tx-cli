@@ -1,5 +1,5 @@
 import pico from "picocolors";
-import type { ToolCall } from "../../../types/llm";
+import type { ToolCall } from "../../llm/types";
 import type { Tool } from "../../tools";
 
 /**

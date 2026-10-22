@@ -6,7 +6,7 @@ import type {
   HttpServerConfig,
   McpServerConfig,
   StdioServerConfig,
-} from "../../types/mcp";
+} from "./types";
 
 /** ${VAR} 形式的环境变量引用 */
 const ENV_VAR_RE = /\$\{([^}]+)\}/g;

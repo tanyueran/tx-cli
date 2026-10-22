@@ -1,6 +1,6 @@
 import pico from "picocolors";
-import { ask } from "../../shared/prompt";
-import type { LlmConfig } from "../../types/llm";
+import { ask } from "../../shared/interactive-prompt";
+import type { LlmConfig } from "./types";
 
 /** 必填文本的统一校验：空白输入不允许通过 */
 function required(input: string): true | string {

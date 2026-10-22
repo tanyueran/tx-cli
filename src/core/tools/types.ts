@@ -1,4 +1,4 @@
-import type { ToolDefinition } from "../../types/llm";
+import type { ToolDefinition } from "../llm/types";
 
 /**
  * 工具执行的输出载体：不含调用配对信息（callId 由执行器统一包装）

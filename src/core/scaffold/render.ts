@@ -11,7 +11,7 @@ import path from "node:path";
 import Handlebars from "handlebars";
 import { toPascalCase } from "../../shared/string";
 import { CliError } from "../../shared/errors";
-import type { TemplateData } from "../../types/template";
+import type { TemplateData } from "./types";
 
 /** 模板的自描述文件名，含有该文件的目录即被视为一个模板 */
 export const TEMPLATE_MANIFEST = "template.json";

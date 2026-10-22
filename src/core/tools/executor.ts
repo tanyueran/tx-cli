@@ -1,6 +1,6 @@
 import { CancelError } from "../../shared/errors";
 import { withTimeout } from "../../shared/timeout";
-import type { ToolCall } from "../../types/llm";
+import type { ToolCall } from "../llm/types";
 import type { Tool, ToolOutput, ToolResult } from "./types";
 
 /** 单个工具执行的超时时间（毫秒） */

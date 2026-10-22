@@ -2,10 +2,10 @@ import path from "node:path";
 import { existsSync } from "node:fs";
 import { removeSync } from "fs-extra";
 import pico from "picocolors";
-import { askConfirm, askSelect, askText } from "../../shared/prompt";
+import { askConfirm, askSelect, askText } from "../../shared/interactive-prompt";
 import { renderTemplate } from "./render";
 import { loadTemplates } from "./templates";
-import type { TemplateKind } from "../../types/template";
+import type { TemplateKind } from "./types";
 
 /**
  * 通用脚手架流程：确认名称 -> 选择模板 -> 确认覆盖 -> 生成文件

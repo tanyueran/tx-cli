@@ -1,4 +1,8 @@
 /**
+ * core/commit-fix：commit-fix 命令的 ONES 消息转换
+ */
+
+/**
  * 处理ones上的信息，将其改为fix(【id】): 【title】格式
  *  示例：
  *    #532311 【资产化中心】优化批量设置扩展属性时【多选自定义】入参。（【多选自定义】没传attributeValue，【多选人员&组织】传了空数组）

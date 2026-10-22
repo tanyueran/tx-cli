@@ -1,4 +1,4 @@
-import { ServerOptions } from "../../types/server";
+import { ServerOptions } from "./types";
 import http from "node:http";
 import connect from "connect";
 import serveStatic from "serve-static";

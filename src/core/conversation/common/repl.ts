@@ -2,7 +2,6 @@ import pico from "picocolors";
 import { createResponsesTurn } from "./responses-turn";
 import { createStreamRenderer, createToolCallLogger, createSoftConvergeNotice } from "./renderer";
 import { runAgentLoop, DEFAULT_MAX_ITERATIONS } from "./loop";
-import { resolveThinkingLevel, warnThinkingFallback } from "./thinking";
 import {
   createConversationRuntime,
   disposeConversationRuntime,
@@ -14,20 +13,22 @@ import type { SandboxCliOptions } from "../../sandbox";
 import { formatTodoList } from "../../tools";
 import type { TodoToolHandle, Tool } from "../../tools";
 import { CancelError, CliError } from "../../../shared/errors";
-import { askText } from "../../../shared/prompt";
+import { askText } from "../../../shared/interactive-prompt";
 import { printWarnings } from "../../../shared/warnings";
 import {
   parseThinkingLevel,
   resolveResponsesThinkingFields,
+  resolveThinkingLevel,
   resolveThinkingStyle,
   THINKING_LEVELS,
+  warnThinkingFallback,
 } from "../../llm";
 import type {
   LlmConfig,
   ResponseHistoryItem,
   ThinkingLevel,
   ThinkingStyle,
-} from "../../../types/llm";
+} from "../../llm/types";
 
 /** REPL 会话上下文：会话期间不变的依赖打包，避免逐参数透传 */
 interface ReplSession {

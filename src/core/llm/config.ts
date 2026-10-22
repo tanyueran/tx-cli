@@ -6,7 +6,7 @@ import {
 } from "../../shared/user-config";
 import { runSetupWizard } from "./config-wizard";
 import { parseThinkingLevel, parseThinkingStyle } from "./thinking";
-import type { LlmConfig, ThinkingLevel, ThinkingStyle } from "../../types/llm";
+import type { LlmConfig, ThinkingLevel, ThinkingStyle } from "./types";
 
 /** 配置文件结构：llm 段存放大模型接入配置，其余段位预留给后续功能 */
 interface LlmFileConfig {

@@ -14,4 +14,4 @@ export type {
   McpServerConfig,
   McpServerStatus,
   StdioServerConfig,
-} from "../../types/mcp";
+} from "./types";

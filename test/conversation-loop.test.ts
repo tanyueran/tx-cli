@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { runAgentLoop } from "../src/core/conversation/common/loop";
 import type { RunTurn, TurnOutcome } from "../src/core/conversation/common/loop";
 import type { Tool } from "../src/core/tools";
-import type { ToolCall } from "../src/types/llm";
+import type { ToolCall } from "../src/core/llm/types";
 
 /**
  * 构造一个用于测试的假工具，execute 直接返回预设输出

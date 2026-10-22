@@ -1,15 +1,10 @@
 import { randomUUID } from "node:crypto";
 import pico from "picocolors";
 import type { ToolOutput } from "../tools/types";
-import { askConfirm, askSelect } from "../../shared/prompt";
+import { askConfirm, askSelect } from "../../shared/interactive-prompt";
 import { BUILTIN_DANGER_RULES, type DangerRule } from "./danger-rules";
 import { evaluateCommand, evaluateRuleKey, parseRule } from "./rules";
-import {
-  appendAudit,
-  appendGrant,
-  readGrants,
-  type AuditEntry,
-} from "./audit";
+import { appendAudit, appendGrant, readGrants, type AuditEntry } from "./audit";
 import type {
   ApprovalChoice,
   ApprovalPolicy,
@@ -17,10 +12,7 @@ import type {
   SandboxLevel,
   SandboxProvider,
 } from "./types";
-import {
-  buildTierConfig,
-  matchPathPattern,
-} from "./defaults";
+import { buildTierConfig, matchPathPattern } from "./defaults";
 import type { SandboxFileConfig, SandboxRulesConfig } from "./config";
 import type { TierConfig } from "./types";
 
@@ -93,21 +85,14 @@ export class SandboxContext {
     this.grantsPath = options.grantsPath;
     this.tier =
       options.tier ??
-      buildTierConfig(
-        options.level,
-        options.config,
-        process.cwd(),
-      );
+      buildTierConfig(options.level, options.config, process.cwd());
     this.dangerRules = options.config.builtinDangerRules
       ? BUILTIN_DANGER_RULES
       : null;
     // 持久授权（「始终允许」）合并进 allow 规则集
     this.rules = {
       ...options.config.rules,
-      allow: [
-        ...options.config.rules.allow,
-        ...readGrants(options.grantsPath),
-      ],
+      allow: [...options.config.rules.allow, ...readGrants(options.grantsPath)],
     };
   }
 
@@ -131,7 +116,13 @@ export class SandboxContext {
       );
     }
     const category = ruleKey.startsWith("mcp__") ? "mcp-tool" : "tool";
-    return evaluateRuleKey(ruleKey, this.rules, this.level, this.approval, category);
+    return evaluateRuleKey(
+      ruleKey,
+      this.rules,
+      this.level,
+      this.approval,
+      category,
+    );
   }
 
   /**
@@ -257,10 +248,7 @@ export class SandboxContext {
    * @param {string} reason - 失败/违规说明
    * @returns {Promise<boolean>} 用户批准脱离沙箱重跑时为 true
    */
-  async askEscalation(
-    commandText: string,
-    reason: string,
-  ): Promise<boolean> {
+  async askEscalation(commandText: string, reason: string): Promise<boolean> {
     return this.approver.askEscalation(commandText, reason);
   }
 
@@ -282,9 +270,7 @@ export class SandboxContext {
    * @param {Omit<AuditEntry, "ts" | "tier" | "approval">} partial - 审计事件（时间戳与档位自动补全）
    * @returns {void}
    */
-  recordAudit(
-    partial: Omit<AuditEntry, "ts" | "tier" | "approval">,
-  ): void {
+  recordAudit(partial: Omit<AuditEntry, "ts" | "tier" | "approval">): void {
     if (!this.auditEnabled) {
       return;
     }
@@ -355,10 +341,7 @@ export const interactiveApprover: Approver = {
    * @param {string} reason - 失败说明
    * @returns {Promise<boolean>} 批准脱离沙箱重跑时为 true
    */
-  async askEscalation(
-    commandText: string,
-    reason: string,
-  ): Promise<boolean> {
+  async askEscalation(commandText: string, reason: string): Promise<boolean> {
     console.log(pico.yellow(`\n命令在沙箱内失败：${commandText}`));
     console.log(pico.gray(reason));
     return askConfirm("是否脱离沙箱重跑本次命令？（风险自担）", false);

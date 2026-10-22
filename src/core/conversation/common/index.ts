@@ -5,7 +5,6 @@
 export { runAgentLoop } from "./loop";
 export type { RunTurn, TurnOutcome } from "./loop";
 export { createResponsesTurn } from "./responses-turn";
-export { DEFAULT_THINKING_LEVEL } from "./constants";
 export { buildSystemPrompt } from "./prompt";
 export {
   createStreamRenderer,
@@ -23,4 +22,3 @@ export {
   disposeConversationRuntime,
 } from "./runtime";
 export type { ConversationRuntime, ConversationOptions } from "./runtime";
-export { resolveThinkingLevel, warnThinkingFallback } from "./thinking";

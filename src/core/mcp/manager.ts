@@ -10,7 +10,7 @@ import type {
   McpServerConfig,
   McpServerStatus,
   StdioServerConfig,
-} from "../../types/mcp";
+} from "./types";
 
 /** 单服务器连接超时（毫秒）：覆盖建立传输、协议握手与首次工具列举 */
 const CONNECT_TIMEOUT_MS = 10_000;

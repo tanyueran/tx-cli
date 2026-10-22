@@ -1,5 +1,5 @@
 import { CliError } from "../../../shared/errors";
-import type { ToolCall } from "../../../types/llm";
+import type { ToolCall } from "../../llm/types";
 import { executeToolCall } from "../../tools";
 import type { Tool, ToolResult } from "../../tools";
 

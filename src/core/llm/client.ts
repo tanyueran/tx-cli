@@ -5,7 +5,7 @@ import type {
   ResponseHistoryItem,
   ToolCall,
   ToolDefinition,
-} from "../../types/llm";
+} from "./types";
 
 /**
  * 把 openai SDK / 网络层抛出的原始错误转换为带友好提示的 CliError
