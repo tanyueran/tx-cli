@@ -30,8 +30,8 @@ interface AgentLoopParams {
   tools: Tool[];
   /** 最大迭代轮数，默认 DEFAULT_MAX_ITERATIONS；超出后进入软收敛 */
   maxIterations?: number;
-  /** 每次工具调用执行前的回调，用于渲染调用提示（如"→ 调用 read_file(...)"） */
-  onToolCall?: (call: ToolCall) => void;
+  /** 每次工具调用执行前的回调，用于渲染调用提示（如"→ 调用 read_file(...)"）；附带工具实例供自定义渲染 */
+  onToolCall?: (call: ToolCall, tool?: Tool) => void;
   /** 首次进入软收敛轮（达到轮数上限）时的回调，用于向用户提示模型将被迫直接作答 */
   onSoftConverge?: () => void;
 }
@@ -70,8 +70,8 @@ export async function runAgentLoop(params: AgentLoopParams): Promise<string> {
     // onToolCall 为同步回调，在各自执行前按序触发提示；未注册工具（模型幻觉）转为失败结果回传，由模型自行纠正
     toolResults = await Promise.all(
       outcome.toolCalls.map(async (call) => {
-        params.onToolCall?.(call);
         const tool = toolMap.get(call.name);
+        params.onToolCall?.(call, tool);
         return tool
           ? executeToolCall(tool, call)
           : {

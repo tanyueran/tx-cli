@@ -6,6 +6,8 @@ export interface ConversationModeConfig {
   modeLabel: string;
   /** bash 工具是否装配；未指定时跟随 sandboxCli/配置默认（agent 模式），chat 模式固定传 false */
   bashEnabled?: boolean;
+  /** 任务清单工具（write_todos）是否装配；agent 模式开启，chat 只读问答不装配 */
+  todosEnabled?: boolean;
   /** agentic 循环的工具调用轮数上限，超出后软收敛为直接作答；未指定时由 loop 回退默认值 */
   maxIterations?: number;
 }

@@ -240,7 +240,8 @@ TX_LLM_API_KEY=sk-xxx TX_LLM_BASE_URL=https://api.deepseek.com/v1 TX_LLM_MODEL=d
 
 - 传入任务：单次执行，完成后退出
 - 不传参数：进入多轮任务模式，持续输入任务，输入 `exit`/`quit` 或按 `Ctrl+C` 退出
-- 工具带为全量：`chat` 的只读工具集之外额外装配 `bash` 工具，技能、MCP、Responses 无状态模式等机制与 `chat` 一致；多轮模式同样支持 `/think`、`/skills`、`/permissions` 内联命令
+- 工具带为全量：`chat` 的只读工具集之外额外装配 `bash` 与 `write_todos`（任务清单）工具，技能、MCP、Responses 无状态模式等机制与 `chat` 一致；多轮模式支持 `/think`、`/skills`、`/todos`、`/permissions` 内联命令
+- 任务清单：对 3 步以上的任务，模型会先用 `write_todos` 建立清单并随进度更新（调用时打印清单视图：`☐` 待办 / `◐` 进行中 / `☑` 已完成），多轮模式可用 `/todos` 随时查看
 - 单轮任务的工具调用轮数上限为 20 轮（chat 为 8 轮），达到上限后模型将基于已有信息直接作答（黄字提示）
 
 **选项：**

@@ -65,6 +65,13 @@ export interface Tool extends ToolDefinition {
    */
   permission?: ToolPermission;
   /**
+   * 自定义调用提示渲染（可选）：返回的文本替代默认的"→ 调用 name(原始 JSON 参数)"打印
+   * 用于参数可读性差的工具（如 write_todos 渲染任务清单），可含换行多行展示
+   * @param {Record<string, unknown>} args - 模型给出的参数（已解析的 JSON 对象）
+   * @returns {string} 展示文本（在"→ 调用 name"提示行之后打印）
+   */
+  renderCall?(args: Record<string, unknown>): string;
+  /**
    * 执行工具
    * @param {Record<string, unknown>} args - 模型给出的参数（已解析的 JSON 对象）
    * @returns {Promise<ToolOutput>} 执行输出（成功或失败的说明）

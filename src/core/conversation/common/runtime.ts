@@ -30,6 +30,8 @@ export interface ConversationOptions {
   sandboxCli?: SandboxCliOptions;
   /** bash 工具是否装配；未指定时回退 sandboxCli/配置默认，chat 模式固定传 false */
   bashEnabled?: boolean;
+  /** 任务清单工具（write_todos）是否装配；agent 模式传 true，chat 模式不装配 */
+  todosEnabled?: boolean;
 }
 
 /**
@@ -53,6 +55,7 @@ export async function createConversationRuntime(
     manager = mcp.manager;
     const skill = setupSkillContext(basePrompt, mcp.tools, sandbox, {
       bash: opts.bashEnabled ?? bashEnabled,
+      todos: opts.todosEnabled,
     });
     return { manager, sandbox, mcpTools: mcp.tools, skill };
   } catch (err) {

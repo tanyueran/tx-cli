@@ -55,11 +55,12 @@ src/
 │   │   ├── chat/              #   chat 命令实现：one-shot（单次）与 repl（多轮）
 │   │   └── agent/             #   agent 命令实现：one-shot（单次）与 repl（多轮）
 │   ├── tools/                 # 工具系统
-│   │   ├── types.ts           #   Tool 接口（含 permission 权限声明）
+│   │   ├── types.ts           #   Tool 接口（含 permission 权限声明、renderCall 调用渲染扩展点）
 │   │   ├── executor.ts        #   执行器：参数解析、超时、8KB 截断
 │   │   ├── permission.ts      #   权限门卫包装层（wrapToolWithPermission）
 │   │   └── builtin/           #   内置工具：read_file / list_dir / glob /
-│   │                          #   grep / web_search / bash（工厂创建，按需拼入）
+│   │                          #   grep / web_search / write_todos（agent 模式装配，
+│   │                          #   工厂创建）/ bash（工厂创建，按需拼入）
 │   ├── sandbox/               # 沙箱与权限（四层模型，见下文）
 │   │   └── providers/         #   srt（sandbox-runtime 适配）/ noop（直通）/
 │   │                          #   landlock（外部 helper 方案）
@@ -91,7 +92,8 @@ flowchart LR
 关键设计：
 
 - **无状态 Responses**：`store=false`，对话历史由本地维护、每轮全量发送；`instructions`（system 提示词）每轮重传。
-- **工具装配**：内置工具（静态清单）+ `load_skill`（仅存在技能时）+ bash（沙箱启用时）+ MCP 工具（连接成功时），在 `setupSkillContext` 一次性拼装，不支持运行时动态注册。
+- **工具装配**：内置工具（静态清单）+ `load_skill`（仅存在技能时）+ `write_todos`（agent 模式）+ bash（沙箱启用时）+ MCP 工具（连接成功时），在 `setupSkillContext` 一次性拼装，不支持运行时动态注册。
+- **任务清单**（agent 模式）：`write_todos` 全量替换式维护会话内计划（对标 TodoWrite），状态存工具实例闭包、不持久化；调用提示经 `renderCall` 扩展点渲染为清单视图（☐ 待办 / ◐ 进行中 / ☑ 完成），REPL 以 `/todos` 查看。
 - **MCP 与沙箱同生命周期**：随会话创建、`finally` 中统一释放。
 - **失败隔离**：REPL 中单轮业务错误只提示不终止会话。
 - **工具调用轮数上限按模式配置**：`ConversationModeConfig.maxIterations`，chat 8 轮、agent 20 轮（未指定回退 loop 默认 `DEFAULT_MAX_ITERATIONS`）；达到上限后软收敛为直接作答，经 `onSoftConverge` 回调黄字提示，避免用户不知情。

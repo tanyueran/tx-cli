@@ -11,7 +11,8 @@ import type { ConversationRuntime } from "./runtime";
 import type { ConversationModeConfig } from "./mode";
 import type { SandboxContext } from "../../sandbox/gate";
 import type { SandboxCliOptions } from "../../sandbox";
-import type { Tool } from "../../tools";
+import { formatTodoList } from "../../tools";
+import type { TodoToolHandle, Tool } from "../../tools";
 import { CancelError, CliError } from "../../../shared/errors";
 import { askText } from "../../../shared/prompt";
 import { printWarnings } from "../../../shared/warnings";
@@ -36,8 +37,10 @@ interface ReplSession {
   style: ThinkingStyle;
   /** 组装后的 system 提示词（含技能元数据清单） */
   systemPrompt: string;
-  /** 本会话可用的工具列表（按模式装配：内置 + load_skill + bash + MCP） */
+  /** 本会话可用的工具列表（按模式装配：内置 + load_skill + write_todos + bash + MCP） */
   tools: Tool[];
+  /** 任务清单工具句柄（agent 模式装配 write_todos 时存在，/todos 读取清单状态） */
+  todoHandle?: TodoToolHandle;
   /** 工具调用轮数上限（按模式装配：chat 8 轮、agent 20 轮），超出后软收敛为直接作答 */
   maxIterations: number;
 }
@@ -171,10 +174,29 @@ function printPermissions(sandbox: SandboxContext | undefined): void {
 }
 
 /**
+ * 打印当前任务清单（/todos 内联命令）：复用 write_todos 的清单视图符号
+ * @param {TodoToolHandle | undefined} todoHandle - 任务清单工具句柄（未装配时为 undefined）
+ * @returns {void}
+ */
+function printTodos(todoHandle: TodoToolHandle | undefined): void {
+  if (!todoHandle) {
+    console.log(pico.yellow("本次会话未启用任务清单工具（仅 Agent 模式装配）"));
+    return;
+  }
+  const todos = todoHandle.getTodos();
+  if (todos.length === 0) {
+    console.log(pico.gray("任务清单为空"));
+    return;
+  }
+  console.log(pico.cyan(`任务清单（${todos.length} 项）`));
+  console.log(formatTodoList(todos));
+}
+
+/**
  * 多轮对话 REPL 主循环（chat、agent 命令共用）：循环提问，直到用户输入 exit/quit 或按 Ctrl+C 退出
  * 基于 Responses API（无状态模式）+ agentic loop：历史由本地维护、每轮全量发送，
  * 模型可在任意一轮发起工具调用，工具带与沙箱由调用方经会话运行时按模式装配
- * 支持内联命令 /think（查看/切换思考档位）、/skills（列出技能）、/permissions（查看沙箱与权限状态）
+ * 支持内联命令 /think（查看/切换思考档位）、/skills（列出技能）、/todos（查看任务清单）、/permissions（查看沙箱与权限状态）
  * 单轮请求失败（网络抖动、限流等可预期错误）只提示不终止会话，避免丢失整个对话上下文
  * @param {ReplOptions} opts - 启动参数（配置、会话运行时、思考风格与初始档位、模式标签）
  * @returns {Promise<void>}
@@ -183,7 +205,7 @@ export async function runConversationRepl(opts: ReplOptions): Promise<void> {
   const { config, runtime, style, modeLabel } = opts;
   // 档位由 /think 在会话内切换，仅本函数持有可变状态
   let currentLevel = opts.initialLevel;
-  const { systemPrompt, tools, catalog, warnings } = runtime.skill;
+  const { systemPrompt, tools, catalog, warnings, todoHandle } = runtime.skill;
   const { sandbox, mcpTools } = runtime;
   printWarnings(warnings);
   const skillNote = catalog.size > 0 ? `，已发现 ${catalog.size} 个技能` : "";
@@ -203,6 +225,9 @@ export async function runConversationRepl(opts: ReplOptions): Promise<void> {
   if (sandbox) {
     hints.push("/permissions 查看沙箱与权限状态");
   }
+  if (todoHandle) {
+    hints.push("/todos 查看任务清单");
+  }
   console.log(pico.cyan(`提示：${hints.join("；")}`));
   // 服务能力折算警告：off 档位本就对应关闭，此时不提示
   warnThinkingFallback(currentLevel, style);
@@ -211,6 +236,7 @@ export async function runConversationRepl(opts: ReplOptions): Promise<void> {
     style,
     systemPrompt,
     tools,
+    todoHandle,
     maxIterations: opts.maxIterations,
   };
   // 本地维护的对话历史：store=false 模式下每轮全量发送给服务端，跨轮累积
@@ -239,6 +265,12 @@ export async function runConversationRepl(opts: ReplOptions): Promise<void> {
     // 内联命令 /permissions：查看当前会话的沙箱与权限状态（只读展示）
     if (lower === "/permissions") {
       printPermissions(sandbox);
+      continue;
+    }
+
+    // 内联命令 /todos：查看当前任务清单（write_todos 工具的会话状态，只读展示）
+    if (lower === "/todos") {
+      printTodos(todoHandle);
       continue;
     }
 
@@ -330,6 +362,7 @@ export async function runReplConversation(
   const runtime = await createConversationRuntime(mode.basePrompt, {
     mcpEnabled,
     bashEnabled: mode.bashEnabled,
+    todosEnabled: mode.todosEnabled,
     sandboxCli,
   });
   try {

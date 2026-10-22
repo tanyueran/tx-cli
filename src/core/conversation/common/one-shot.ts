@@ -49,6 +49,7 @@ export async function runOneShotConversation(
   const runtime = await createConversationRuntime(mode.basePrompt, {
     mcpEnabled,
     bashEnabled: mode.bashEnabled,
+    todosEnabled: mode.todosEnabled,
     sandboxCli,
   });
   try {

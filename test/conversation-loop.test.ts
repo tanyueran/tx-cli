@@ -67,7 +67,8 @@ describe("runAgentLoop", () => {
     });
 
     expect(result).toBe("答案是 42");
-    expect(onToolCall).toHaveBeenCalledWith(makeCall("read_file"));
+    // onToolCall 附带工具实例（供调用提示自定义渲染）
+    expect(onToolCall).toHaveBeenCalledWith(makeCall("read_file"), tool);
   });
 
   it("模型请求未注册的工具时转为失败结果回传", async () => {
