@@ -1,10 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   loadSandboxConfig,
 } from "../src/core/sandbox/config/load";
+import { appendProjectGrant } from "../src/core/sandbox/config/grants";
 import { DEFAULT_SANDBOX_CONFIG } from "../src/core/sandbox/config/schema";
 import { buildTierConfig } from "../src/core/sandbox/policy/tier";
 
@@ -165,6 +166,101 @@ describe("loadSandboxConfig", () => {
     const { config, warnings } = loadSandboxConfig(globalPath, projectPath);
     expect(config.level).toBe("read-only");
     expect(warnings).toEqual([]);
+  });
+});
+
+describe("mcp.rules 段", () => {
+  it("mcp.rules 规则解析生效：短格式自动补 mcp__ 前缀，带前缀写法原样保留", () => {
+    const path = writeConfig({
+      mcp: {
+        rules: {
+          allow: ["Chrome_DevTools_MCP__*", "mcp__github__*"],
+          deny: ["untrusted_server__*"],
+        },
+      },
+    });
+    const { config, warnings } = loadSandboxConfig(path);
+    expect(warnings).toEqual([]);
+    expect(config.rules.allow).toEqual([
+      "mcp__Chrome_DevTools_MCP__*",
+      "mcp__github__*",
+    ]);
+    expect(config.rules.deny).toEqual(["mcp__untrusted_server__*"]);
+  });
+
+  it("mcp.rules 与 sandbox.rules 同文件合并进同一组规则并去重", () => {
+    const path = writeConfig({
+      sandbox: { rules: { allow: ["Bash(git status)", "mcp__github__*"] } },
+      mcp: { rules: { allow: ["mcp__github__*"] } },
+    });
+    const { config, warnings } = loadSandboxConfig(path);
+    expect(warnings).toEqual([]);
+    expect(config.rules.allow).toEqual(["Bash(git status)", "mcp__github__*"]);
+  });
+
+  it("两级合并：全局与项目的 mcp.rules 并集去重（全局在前、项目在后）", () => {
+    const globalPath = writeConfig({
+      mcp: { rules: { allow: ["mcp__a__*"] } },
+    });
+    const projectPath = join(dir, "project-config.json");
+    writeFileSync(
+      projectPath,
+      JSON.stringify({
+        mcp: { rules: { allow: ["mcp__b__*"], deny: ["mcp__evil__*"] } },
+      }),
+    );
+    const { config, warnings } = loadSandboxConfig(globalPath, projectPath);
+    expect(config.rules.allow).toEqual(["mcp__a__*", "mcp__b__*"]);
+    expect(config.rules.deny).toEqual(["mcp__evil__*"]);
+    expect(warnings.some((w) => w.includes("已加载项目配置"))).toBe(true);
+  });
+
+  it("mcp 段或规则非法时跳过并警告，不影响其余配置", () => {
+    const path = writeConfig({
+      sandbox: { level: "workspace-write" },
+      mcp: { rules: { allow: "not-array", deny: [42] } },
+    });
+    const { config, warnings } = loadSandboxConfig(path);
+    expect(config.level).toBe("workspace-write");
+    expect(config.rules.allow).toEqual([]);
+    expect(warnings.some((w) => w.includes("mcp.rules.allow 必须是字符串数组"))).toBe(true);
+  });
+
+  it("mcp 段不是对象时忽略整段", () => {
+    const path = writeConfig({ mcp: [1, 2] });
+    const { config, warnings } = loadSandboxConfig(path);
+    expect(config.rules).toEqual({ allow: [], ask: [], deny: [] });
+    expect(warnings[0]).toContain("mcp 段必须是对象");
+  });
+});
+
+describe("appendProjectGrant", () => {
+  it("mcp__ 前缀规则落盘 mcp.rules.allow，其余字段保留", () => {
+    const path = join(dir, "config.json");
+    writeFileSync(
+      path,
+      JSON.stringify({ sandbox: { level: "read-only" } }),
+    );
+    appendProjectGrant(dir, "mcp__github__*", path);
+    const raw = JSON.parse(readFileSync(path, "utf-8")) as Record<string, any>;
+    expect(raw.mcp.rules.allow).toEqual(["mcp__github__*"]);
+    expect(raw.sandbox.level).toBe("read-only");
+  });
+
+  it("非 mcp 规则落盘 sandbox.rules.allow，不创建 mcp 段", () => {
+    const path = join(dir, "config.json");
+    appendProjectGrant(dir, "bash(git status:*)", path);
+    const raw = JSON.parse(readFileSync(path, "utf-8")) as Record<string, any>;
+    expect(raw.sandbox.rules.allow).toEqual(["bash(git status:*)"]);
+    expect(raw.mcp).toBeUndefined();
+  });
+
+  it("重复规则不重复写入", () => {
+    const path = join(dir, "config.json");
+    appendProjectGrant(dir, "mcp__github__*", path);
+    appendProjectGrant(dir, "mcp__github__*", path);
+    const raw = JSON.parse(readFileSync(path, "utf-8")) as Record<string, any>;
+    expect(raw.mcp.rules.allow).toEqual(["mcp__github__*"]);
   });
 });
 

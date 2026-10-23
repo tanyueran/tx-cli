@@ -62,9 +62,9 @@ class FakeApprover implements Approver {
 }
 
 /**
- * 读取项目授权文件中的 sandbox.rules.allow（文件不存在或损坏时返回空数组）
+ * 读取项目授权文件中的 sandbox.rules.allow 与 mcp.rules.allow（文件不存在或损坏时返回空数组）
  * @param {string} path - 项目配置文件路径
- * @returns {string[]} allow 规则列表
+ * @returns {string[]} allow 规则列表（sandbox 段在前，mcp 段在后）
  */
 function readProjectAllow(path: string): string[] {
   if (!existsSync(path)) {
@@ -73,9 +73,14 @@ function readProjectAllow(path: string): string[] {
   try {
     const parsed = JSON.parse(readFileSync(path, "utf-8")) as {
       sandbox?: { rules?: { allow?: unknown } };
+      mcp?: { rules?: { allow?: unknown } };
     };
-    const allow = parsed.sandbox?.rules?.allow;
-    return Array.isArray(allow) ? (allow as string[]) : [];
+    const sandboxAllow = parsed.sandbox?.rules?.allow;
+    const mcpAllow = parsed.mcp?.rules?.allow;
+    return [
+      ...(Array.isArray(sandboxAllow) ? (sandboxAllow as string[]) : []),
+      ...(Array.isArray(mcpAllow) ? (mcpAllow as string[]) : []),
+    ];
   } catch {
     return [];
   }

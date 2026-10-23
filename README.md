@@ -155,9 +155,20 @@ tx-cli commit-fix "#532311 优化属性设置 https://ones.x.cn/abc"
 1. 首次运行时的交互式引导，配置会保存到 `~/.tx-cli/config.json`（文件权限仅限当前用户读写）
 2. 直接写入配置文件的 `llm` 段：全局 `~/.tx-cli/config.json` 或项目 `<cwd>/.tx-cli/config.json`（同名字段项目配置优先）
 
-**配置分层合并规则**（适用于 `llm`、`sandbox`、`mcpServers` 各段）：优先级为命令行选项 > 项目配置（`<cwd>/.tx-cli/config.json`）> 全局配置（`~/.tx-cli/config.json`）；标量字段高层覆盖低层，数组字段（如 `sandbox.rules.allow`、`sandbox.network.allowedDomains`、`sandbox.trustDirectories`）两层合并去重（全局在前、项目在后），`mcpServers` 按服务器名合并（同名以项目为准，启动时告警提示）。
+**配置分层合并规则**（适用于 `llm`、`sandbox`、`mcp`、`mcpServers` 各段）：优先级为命令行选项 > 项目配置（`<cwd>/.tx-cli/config.json`）> 全局配置（`~/.tx-cli/config.json`）；标量字段高层覆盖低层，数组字段（如 `sandbox.rules.allow`、`mcp.rules.allow`、`sandbox.network.allowedDomains`、`sandbox.trustDirectories`）两层合并去重（全局在前、项目在后），`mcpServers` 按服务器名合并（同名以项目为准，启动时告警提示）。
 
-思考配置写入 `~/.tx-cli/config.json` 的 `llm` 段（项目配置可覆盖全局同名字段）：
+**`llm` 段字段：**
+
+| 字段 | 必填 | 说明 |
+|---|---|---|
+| `apiKey` | 是 | 服务 API Key，缺失时首次运行进入交互式引导 |
+| `baseUrl` | 是 | OpenAI 兼容接口地址（Responses API 无状态模式） |
+| `model` | 是 | 模型名 |
+| `thinkingLevel` | 否 | 全局默认思考档位：`off` \| `low` \| `medium` \| `high`；未配置时随命令兜底（`chat` 为 `low`，`agent` 为 `medium`） |
+| `thinkingStyle` | 否 | 思考协议风格：`reasoning_effort` \| `thinking` \| `enable_thinking` \| `none`，缺省按 `baseUrl` 推断（见上方协议风格表） |
+| `thinkingEffortMap` | 否 | 档位 → 服务端实际值映射（适配仅支持部分档位的服务） |
+
+`llm` 段与 `mcpServers` 段示例（写入 `~/.tx-cli/config.json`，项目配置可覆盖/合并同名字段）：
 
 ```jsonc
 {
@@ -165,7 +176,7 @@ tx-cli commit-fix "#532311 优化属性设置 https://ones.x.cn/abc"
     "apiKey": "sk-xxx",
     "baseUrl": "https://api.deepseek.com/v1",
     "model": "deepseek-chat",
-    // 全局默认思考档位，缺省 medium
+    // 全局默认思考档位，未配置时 chat 兜底 low、agent 兜底 medium
     "thinkingLevel": "medium",
     // 思考协议风格，缺省按 baseUrl 推断
     "thinkingStyle": "reasoning_effort",
@@ -200,9 +211,23 @@ tx-cli commit-fix "#532311 优化属性设置 https://ones.x.cn/abc"
 
 - 字符串值支持 `${VAR}` 环境变量展开（如 `Bearer ${MY_TOKEN}`），未定义变量展开为空串
 - 单个服务器连接失败只黄字告警，不影响其他服务器与本次对话；也可用 `tx-cli agent --no-mcp` 按次禁用全部 MCP 服务器
-- 工具审批按服务器粒度授权：首次调用可写工具时选择“本会话/始终允许该服务器”，同服务器其余工具不再逐个询问；选择“始终”会写入 `<cwd>/.tx-cli/config.json` 的 `sandbox.rules.allow`（形如 `mcp__server__*`）
+- 工具审批按服务器粒度授权：首次调用可写工具时选择“本会话/始终允许该服务器”，同服务器其余工具不再逐个询问；选择“始终”会写入 `<cwd>/.tx-cli/config.json` 的 `mcp.rules.allow`（形如 `server__*`，加载时自动补全 `mcp__` 前缀）
+- MCP 工具的放行/审批/拒绝规则配置在顶层 `mcp.rules` 段（与 `mcpServers` 平级），规则名可省略 `mcp__` 前缀；兼容旧写法（`sandbox.rules` 中的 `mcp__*` 规则仍生效），新配置建议统一写 `mcp.rules`
 - 声明了 `readOnlyHint` 的只读 MCP 工具默认放行（`always-ask` 策略下仍会询问），其余工具默认需要审批；显式 `ask`/`deny` 规则始终优先
 - MCP 仅在 `agent` 命令装配（`chat` 不支持），审批与授权规则与沙箱档位无关
+
+```jsonc
+// mcp.rules 示例：放行/审批/拒绝 MCP 工具（规则名可省略 mcp__ 前缀）
+{
+  "mcp": {
+    "rules": {
+      "allow": ["Chrome_DevTools_MCP__*"],
+      "ask": ["github__create_issue"],
+      "deny": ["untrusted_server__*"]
+    }
+  }
+}
+```
 
 ```bash
 # 启用全部已配置的 MCP 服务器（缺省行为）
@@ -249,6 +274,84 @@ tx-cli chat --think low
 | `--sandbox-missing <action>` | 沙箱在当前环境不可用时的处置：`deny`（默认，失败关闭）\| `allow`（降级为无隔离执行，规则与审批仍生效） |
 
 沙箱档位与审批策略的优先级均为：命令行 > 项目配置 `sandbox` 段 > 全局配置 `sandbox` 段 > 内置默认（标量字段项目覆盖全局，数组字段两层合并去重），也可写入 `~/.tx-cli/config.json` 或 `<cwd>/.tx-cli/config.json` 的 `sandbox` 段持久化（档位、审批、文件系统边界、权限规则等）。
+
+**`sandbox` 段完整字段**（全部可选，未配置取内置默认）：
+
+| 字段 | 说明 | 默认值 |
+|---|---|---|
+| `enabled` | 沙箱总开关：`false` 时不装配 bash 工具，文件读写门卫也一并关闭 | `true` |
+| `level` | 默认沙箱档位：`read-only` \| `workspace-write` \| `danger-full-access` | `read-only` |
+| `approval` | 默认审批策略：`always-ask` \| `on-failure` \| `never` | `on-failure` |
+| `provider` | 沙箱 Provider 名称（`srt` 为内置沙箱实现） | `srt` |
+| `trustDirectories` | 信任目录列表（支持 `~`），见下方「信任目录」说明 | `[]` |
+| `builtinDangerRules` | 内置危险命令类目拦截开关（如 `rm -rf /`），`false` 时关闭该层 | `true` |
+| `filesystem.denyRead` | 追加的禁读路径模式（在档位默认之上叠加） | `[]` |
+| `filesystem.denyWrite` | 追加的禁写路径模式（在档位默认之上叠加） | `[]` |
+| `filesystem.writableRoots` | 追加的可写根目录（`workspace-write` 档生效） | `[]` |
+| `network.allowedDomains` | bash 网络白名单域名（`workspace-write` 档生效，支持 `*.example.com` 通配，子域名不自动继承） | `[]` |
+| `bash.enabled` | 是否装配 bash 工具（命令行 `--no-bash` 可按次关闭） | `true` |
+| `bash.timeoutMs` | 单命令执行超时（毫秒） | `120000` |
+| `rules.allow` / `rules.ask` / `rules.deny` | 权限规则（bash 命令、内置工具与 MCP 工具通用），见下方「权限规则」 | `[]` |
+| `audit` | 是否写审批审计日志 | `true` |
+
+**`sandbox` 段完整示例：**
+
+```jsonc
+{
+  "sandbox": {
+    "enabled": true,
+    "level": "workspace-write",
+    "approval": "on-failure",
+    "provider": "srt",
+    "trustDirectories": ["~/work"],
+    "builtinDangerRules": true,
+    "filesystem": {
+      "denyRead": ["~/.config"],
+      "denyWrite": ["*.key"],
+      "writableRoots": ["~/data"]
+    },
+    "network": { "allowedDomains": ["registry.npmmirror.com", "github.com", "*.githubusercontent.com"] },
+    "bash": { "enabled": true, "timeoutMs": 120000 },
+    "rules": {
+      "allow": ["Bash(git status)", "Bash(npm run:*)"],
+      "ask": ["Bash(git push:*)"],
+      "deny": ["Bash(rm -rf:*)", "Bash(sudo:*)"]
+    },
+    "audit": true
+  },
+  "mcp": {
+    "rules": {
+      "allow": ["github__*"]
+    }
+  }
+}
+```
+
+**沙箱三档语义：**
+
+| 档位 | 文件写入 | bash 网络 | 读侧限制 |
+|---|---|---|---|
+| `read-only` | 全禁写 | 全禁网 | 默认禁读 `~/.ssh`、`~/.aws`、`~/.gnupg` 等凭据目录，可经 `filesystem.denyRead` 追加 |
+| `workspace-write` | 仅可写当前目录、系统临时目录与 `filesystem.writableRoots`；`.env`、`*.pem` 等敏感文件仍禁写，可经 `filesystem.denyWrite` 追加 | 仅放行 `network.allowedDomains` 白名单域名（allow-only） | 同 `read-only` 的禁读限制 |
+| `danger-full-access` | 不限 | 不限 | 无（无隔离） |
+
+**权限规则（rules）：**
+
+- 判定优先级：`deny`（含内置危险类目）> `ask` > `allow` > 档位默认；bash 复合命令逐段判定，任一段命中 deny 则整条拒绝，任一段命中 ask 则整条进入审批
+- 规则语法：`工具名` 整工具生效（如 `web_search`）；`工具名(模式)` 细粒度生效（如 `Bash(git push:*)`、`Read(/src/**)`）；规则名不区分大小写，支持 `Read`、`Write`、`Edit`、`ListDir`、`WebSearch` 等短名（自动映射到内部工具名）
+- 模式三种写法：`cmd` 精确匹配、`prefix:*` 前缀匹配、含 `*` 的 glob 通配
+- `sandbox.rules` 管 bash 与内置工具；MCP 工具规则写在顶层 `mcp.rules` 段，支持 `服务器名__*` 通配整组放行/审批/拒绝（兼容旧写法 `mcp__服务器名__*`，两层规则加载后合并判定）
+- `read-only` 档下 `web_search` 等联网工具未命中规则时默认进入审批（该档承诺禁网，进程内网络调用不受沙箱边界约束）
+- 审批时选择「始终允许」会把授权规则写入项目配置 `<cwd>/.tx-cli/config.json`（MCP 授权落 `mcp.rules.allow`，其余落 `sandbox.rules.allow`，仅对当前项目生效）
+
+**信任目录（trustDirectories）：**
+
+- 来自配置文件的 `danger-full-access` 档与 `never` 审批策略，仅在当前工作目录位于任一信任目录内（含其子目录）时生效，否则自动降级（full → `workspace-write`、never → `on-failure`）并黄字告警，防止误配置放大权限
+- 命令行显式指定（`--sandbox danger-full-access`、`--approval never`）不受信任目录限制
+
+**审计日志（audit）：**
+
+- 默认开启：每次拦截与审批判定追加一行 JSON 到 `~/.tx-cli/sandbox-audit.jsonl`，便于事后追溯；`"audit": false` 关闭
 
 **沙箱网络白名单（allow-only）**：bash 命令的所有网络访问都经沙箱代理强制走域名白名单，未放行的域名会被代理以 `HTTP 403` 拒绝（空白名单 = 全禁网）。`workspace-write` 档若需 `npm install`、`curl`、`git push` 等联网操作，须显式放行域名（支持 `*.example.com` 通配，子域名不自动继承）：
 

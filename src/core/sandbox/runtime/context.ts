@@ -118,7 +118,7 @@ export class SandboxContext {
       ? BUILTIN_DANGER_RULES
       : null;
     // 规则副本：guard 运行期会把 ask 移入 allow、追加会话/持久授权，不污染构造入参
-    // 项目空间授权（<cwd>/.tx-cli/config.json）已由装配层合并进 config.rules.allow
+    // 项目空间授权（<cwd>/.tx-cli/config.json）与 mcp.rules 段的 MCP 规则已由装配层合并进 config.rules
     this.rules = {
       allow: [...options.config.rules.allow],
       ask: [...options.config.rules.ask],

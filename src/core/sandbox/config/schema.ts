@@ -44,7 +44,7 @@ export interface SandboxBashConfig {
   timeoutMs: number;
 }
 
-/** sandbox 段的规则子配置 */
+/** sandbox 段的规则子配置（bash 与内置工具规则；mcp__ 前缀的 MCP 规则兼容保留，新配置请写顶层 mcp.rules 段） */
 export interface SandboxRulesConfig {
   /** 允许规则（命中直接放行） */
   allow: string[];

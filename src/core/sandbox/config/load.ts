@@ -11,6 +11,7 @@ import {
   type PartialSandboxFileConfig,
   type SandboxConfigResult,
   type SandboxFileConfig,
+  type SandboxRulesConfig,
 } from "./schema";
 
 /**
@@ -314,6 +315,87 @@ function parseSandboxSection(
 }
 
 /**
+ * 归一化 MCP 规则：mcp.rules 段为 MCP 工具专属，规则名可省略 mcp__ 前缀，统一补全
+ * （带前缀的写法原样保留，兼容从 sandbox.rules 迁移过来的规则文本）
+ * @param {string} rule - 规则原文，如 Chrome_DevTools_MCP__* 或 mcp__github__*
+ * @returns {string} 归一化后的规则（统一以 mcp__ 开头）
+ */
+function normalizeMcpRule(rule: string): string {
+  const text = rule.trim();
+  return text.startsWith("mcp__") ? text : `mcp__${text}`;
+}
+
+/**
+ * 解析配置文件顶层 mcp 段的 rules 子段：MCP 工具专属的 allow/ask/deny 规则，
+ * 与 sandbox.rules 分离存放，避免 MCP 规则混入沙箱配置造成误解；
+ * 仅收录显式配置且合法的字段，单个字段非法只跳过并记录警告（失败隔离）
+ * @param {unknown} raw - 配置文件 mcp 段原始值
+ * @param {string[]} warnings - 警告收集器（就地追加）
+ * @returns {Partial<SandboxRulesConfig> | undefined} 归一化后的部分规则，段缺失时为 undefined
+ */
+function parseMcpRulesSection(
+  raw: unknown,
+  warnings: string[],
+): Partial<SandboxRulesConfig> | undefined {
+  if (raw === undefined) {
+    return undefined;
+  }
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+    warnings.push("配置文件 mcp 段必须是对象，已忽略整段 MCP 规则");
+    return undefined;
+  }
+  const rules = (raw as Record<string, unknown>).rules;
+  if (rules === undefined) {
+    return undefined;
+  }
+  if (typeof rules !== "object" || rules === null || Array.isArray(rules)) {
+    warnings.push("mcp.rules 必须是对象，已忽略该段");
+    return undefined;
+  }
+  const record = rules as Record<string, unknown>;
+  const partial: Partial<SandboxRulesConfig> = {};
+  for (const key of ["allow", "ask", "deny"] as const) {
+    const list = record[key];
+    if (list === undefined) {
+      continue;
+    }
+    if (!isStringArray(list)) {
+      warnings.push(`mcp.rules.${key} 必须是字符串数组，已忽略该项`);
+      continue;
+    }
+    partial[key] = list.map(normalizeMcpRule);
+  }
+  return partial;
+}
+
+/**
+ * 把同文件的 mcp.rules 解析结果并入 sandbox.rules 部分配置：键内拼接去重，
+ * 使 MCP 规则与 bash/内置工具规则在运行时共用同一组规则判定
+ * @param {PartialSandboxFileConfig} partial - sandbox 段解析结果（就地修改）
+ * @param {Partial<SandboxRulesConfig> | undefined} mcpRules - mcp.rules 解析结果
+ * @returns {void}
+ */
+function mergeMcpRules(
+  partial: PartialSandboxFileConfig,
+  mcpRules: Partial<SandboxRulesConfig> | undefined,
+): void {
+  if (!mcpRules) {
+    return;
+  }
+  const rules: Partial<SandboxRulesConfig> = { ...partial.rules };
+  if (mcpRules.allow !== undefined) {
+    rules.allow = mergeStringArrays(rules.allow ?? [], mcpRules.allow);
+  }
+  if (mcpRules.ask !== undefined) {
+    rules.ask = mergeStringArrays(rules.ask ?? [], mcpRules.ask);
+  }
+  if (mcpRules.deny !== undefined) {
+    rules.deny = mergeStringArrays(rules.deny ?? [], mcpRules.deny);
+  }
+  partial.rules = rules;
+}
+
+/**
  * 将部分配置套用到默认配置：单个文件内数组字段整段替换（维持既有语义）
  * @param {PartialSandboxFileConfig} partial - 解析出的部分配置
  * @returns {SandboxFileConfig} 完整配置（未配置字段取内置默认）
@@ -434,9 +516,10 @@ function mergeProjectConfig(
 }
 
 /**
- * 加载 sandbox 配置：全局 ~/.tx-cli/config.json 与项目 <cwd>/.tx-cli/config.json 两级合并，
+ * 加载 sandbox 与 mcp.rules 配置：全局 ~/.tx-cli/config.json 与项目 <cwd>/.tx-cli/config.json 两级合并，
  * 优先级为 CLI（命令层处理）> 项目配置 > 全局配置 > 内置默认；
  * 标量字段项目覆盖全局，数组字段（trustDirectories、filesystem、network、rules）并集合并；
+ * mcp.rules 段为 MCP 工具专属规则，与 sandbox.rules 同步解析并在文件内合并后参与两级合并；
  * 单个字段非法只跳过并记录警告，不影响其余字段与整个会话（失败隔离）
  * @param {string} configPath - 全局配置文件路径（缺省 ~/.tx-cli/config.json，测试可注入）
  * @param {string} projectPath - 项目配置文件路径（缺省跳过项目层，生产由装配层传入，测试可注入）
@@ -449,7 +532,9 @@ export function loadSandboxConfig(
   const warnings: string[] = [];
   const { data, warnings: readWarnings } = readUserConfig(configPath);
   warnings.push(...readWarnings);
-  const config = applyToDefaults(parseSandboxSection(data.sandbox, warnings));
+  const globalPartial = parseSandboxSection(data.sandbox, warnings);
+  mergeMcpRules(globalPartial, parseMcpRulesSection(data.mcp, warnings));
+  const config = applyToDefaults(globalPartial);
   if (projectPath === undefined) {
     return { config, warnings };
   }
@@ -457,9 +542,10 @@ export function loadSandboxConfig(
     readUserConfig(projectPath);
   warnings.push(...projectWarnings);
   const projectPartial = parseSandboxSection(projectData.sandbox, warnings);
-  if (projectData.sandbox !== undefined) {
+  mergeMcpRules(projectPartial, parseMcpRulesSection(projectData.mcp, warnings));
+  if (projectData.sandbox !== undefined || projectData.mcp !== undefined) {
     warnings.push(
-      `已加载项目配置 ${projectPath} 的 sandbox 配置（标量以项目为准，数组与全局配置合并）`,
+      `已加载项目配置 ${projectPath} 的 sandbox 与 mcp 规则配置（标量以项目为准，数组与全局配置合并）`,
     );
   }
   return { config: mergeProjectConfig(config, projectPartial), warnings };

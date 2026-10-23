@@ -203,7 +203,7 @@ flowchart TD
 - **权限纳管范围**：bash（exec，串行）、read\_file / list\_dir / glob / grep（fs.read，规则键以绝对路径为主体）、write\_file / edit\_file（fs.write，串行，规则键以绝对路径为主体，read-only 档被可写边界拒绝）、web\_search（net，规则键 `web_search(关键词)`）、MCP 工具（整工具级键 `mcp__server__tool`；按 `annotations.readOnlyHint` 区分只读/可写，只读仅标注 net，其余保守标注 net+exec）。无沙箱会话（`sandbox` 为 undefined）不包装、行为不变。
 - **capabilities 禁网语义**：工具声明的能力（如 net）随 guard 链路传入规则判定；read-only 档承诺禁网，net 工具未命中规则时默认 ask（OS 沙箱只拦子进程，进程内网络调用不受边界约束，故由审批层兜底），`never` 策略下直接 deny。
 - **MCP 只读自动放行**：判定类目分 `mcp-tool`（可写）与 `mcp-read`（`readOnlyHint === true` 且未声明 `destructiveHint`）；`mcp-read` 未命中规则时默认 allow（`always-ask` 仍 ask），显式 deny/ask 规则依旧优先。
-- **MCP 服务器级授权**：可写 MCP 工具首次审批时提供「本次 / 本会话允许该服务器 / 始终允许该服务器 / 拒绝」，服务器级授权落 `mcp__server__*`（`serverKey` 为净化后的规则键段，与工具名同口径），同服务器其余工具不再逐个询问；显式 ask 规则优先，服务器级授权不覆盖。
+- **MCP 服务器级授权**：可写 MCP 工具首次审批时提供「本次 / 本会话允许该服务器 / 始终允许该服务器 / 拒绝」，服务器级授权落 `mcp__server__*`（`serverKey` 为净化后的规则键段，与工具名同口径），同服务器其余工具不再逐个询问；显式 ask 规则优先，服务器级授权不覆盖。「始终允许」落盘按前缀分流：MCP 授权写入项目配置 `mcp.rules.allow`，其余写入 `sandbox.rules.allow`。
 - **fs 应用层边界**：fs 工具是进程内代码不经沙箱进程，权限门卫在规则放行后按 TierConfig 逐路径校验（`SandboxContext.checkFsRead/checkFsWrite`，路径模式支持目录前缀、`*` 单段、`**` 跨目录与纯文件名如 `.env`/`*.pem`），danger-full-access 档跳过检查。
 - **/permissions 内联命令**（REPL）：只读展示档位、审批策略、Provider、fs 边界与三段规则（allow 含会话授权与「始终允许」的持久授权）。
 - **内置危险类目**（可 `sandbox.builtinDangerRules: false` 关闭）：`rm -rf`、`sudo/su`、`chmod 777`、磁盘写入、`curl|sh`、`git push -f`、保护路径。
@@ -216,9 +216,10 @@ flowchart TD
 | ------------ | ------------------------------------ | ------------------------ |
 | `llm`        | 模型接入（baseURL、apiKey、thinkingLevel 等） | `core/llm/config.ts`     |
 | `mcpServers` | MCP 服务器（stdio/http）                  | `core/mcp/config.ts`     |
+| `mcp.rules`  | MCP 工具专属规则（allow/ask/deny，规则名可省略 `mcp__` 前缀） | `core/sandbox/config/load.ts` |
 | `sandbox`    | 沙箱（档位/策略/规则/文件系统/网络/bash）            | `core/sandbox/config/load.ts` |
 
-辅助文件：`~/.tx-cli/sandbox-audit.jsonl`（沙箱审计日志）；「始终允许」授权落项目空间 `<cwd>/.tx-cli/config.json`（结构与全局配置同构，装配时加载 `sandbox.rules.allow` 并提示）；技能目录为 `~/.tx-cli/skills` 与 `./.tx-cli/skills`。
+辅助文件：`~/.tx-cli/sandbox-audit.jsonl`（沙箱审计日志）；「始终允许」授权落项目空间 `<cwd>/.tx-cli/config.json`（结构与全局配置同构，装配时加载 `sandbox.rules` 与 `mcp.rules` 并提示）；技能目录为 `~/.tx-cli/skills` 与 `./.tx-cli/skills`。
 
 配置解析遵循统一范式：坏项跳过 + 中文警告（失败隔离），不中断会话。
 
