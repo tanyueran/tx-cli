@@ -1,5 +1,5 @@
 import { buildMcpRoots, connectMcpServers } from "../../mcp";
-import type { McpManager } from "../../mcp";
+import type { McpConnectSummary, McpManager } from "../../mcp";
 import { createSandboxContext } from "../../sandbox";
 import type { SandboxCliOptions } from "../../sandbox";
 import type { SandboxContext } from "../../sandbox/runtime/context";
@@ -20,6 +20,10 @@ export interface ConversationRuntime {
   mcpTools: Tool[];
   /** 技能装配结果（system 提示词、工具列表、技能目录、扫描警告） */
   skill: SkillContext;
+  /** MCP 连接状态摘要（禁用或未配置服务器时为 undefined，就绪面板展示） */
+  mcpSummary: McpConnectSummary | undefined;
+  /** 装配阶段警告（沙箱装载、MCP 连接等），由 REPL 就绪面板统一展示 */
+  bootWarnings: string[];
 }
 
 /** 会话装配选项：chat、agent 命令各自的模式差异项 */
@@ -48,7 +52,8 @@ export async function createConversationRuntime(
   basePrompt: string,
   opts: ConversationOptions,
 ): Promise<ConversationRuntime> {
-  const { sandbox, bashEnabled } = await createSandboxContext(opts.sandboxCli);
+  const { sandbox, bashEnabled, warnings: sandboxWarnings } =
+    await createSandboxContext(opts.sandboxCli);
   let manager: McpManager | undefined;
   try {
     // roots 按沙箱档位联动：read-only 档不放权，其余下发项目根与 OS 临时目录
@@ -61,7 +66,14 @@ export async function createConversationRuntime(
       bash: opts.bashEnabled ?? bashEnabled,
       todos: opts.todosEnabled,
     });
-    return { manager, sandbox, mcpTools: mcp.tools, skill };
+    return {
+      manager,
+      sandbox,
+      mcpTools: mcp.tools,
+      skill,
+      mcpSummary: mcp.summary,
+      bootWarnings: [...sandboxWarnings, ...mcp.warnings],
+    };
   } catch (err) {
     // 引导中途失败：已建立的资源立即释放，避免泄漏到顶层报错之后
     await manager?.closeAll();

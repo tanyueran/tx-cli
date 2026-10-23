@@ -2,7 +2,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-/** 技能描述的长度上限（字符数）：超出截断并告警，防止元数据清单膨胀拖大每轮请求 */
+/** 技能描述的长度上限（字符数）：超出静默截断，防止元数据清单膨胀拖大每轮请求 */
 export const MAX_SKILL_DESCRIPTION_CHARS = 200;
 
 /** frontmatter 块：文件必须以 --- 起始行开头、以 --- 行结束 */
@@ -142,11 +142,9 @@ function parseSkillFile(
     warnings.push(`技能 ${dirName} 缺少正文，已跳过`);
     return undefined;
   }
+  // 描述超长仅静默截断（防止元数据清单膨胀拖大每轮请求），不产生警告噪音
   let desc = description;
   if (desc.length > MAX_SKILL_DESCRIPTION_CHARS) {
-    warnings.push(
-      `技能 ${dirName} 的 description 超过 ${MAX_SKILL_DESCRIPTION_CHARS} 字符，已截断`,
-    );
     desc = `${desc.slice(0, MAX_SKILL_DESCRIPTION_CHARS)}…`;
   }
   return { name, description: desc, source, path: skillFile };

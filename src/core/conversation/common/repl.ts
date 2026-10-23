@@ -193,6 +193,98 @@ function printTodos(todoHandle: TodoToolHandle | undefined): void {
   console.log(formatTodoList(todos));
 }
 
+/** 面板标签列的目标显示宽度（列数）：全角字符按 2 列计，当前标签最宽为「模型」等 4 列 */
+const PANEL_LABEL_WIDTH = 4;
+/** 标签列与内容列之间的间隙（空格数） */
+const PANEL_LABEL_GAP = 3;
+
+/**
+ * 计算字符串的终端显示宽度：全角（CJK 等）字符按 2 列、其余按 1 列计
+ * @param {string} text - 待测宽度的字符串
+ * @returns {number} 显示宽度（列数）
+ */
+function displayWidth(text: string): number {
+  let width = 0;
+  for (const char of text) {
+    width += char.charCodeAt(0) > 0xff ? 2 : 1;
+  }
+  return width;
+}
+
+/**
+ * 补齐面板标签到统一宽度并拼接列间隙，保证各行内容纵向对齐
+ * @param {string} label - 行标签（如「模型」「MCP」「提示」）
+ * @returns {string} 补齐后的标签前缀（标签 + 填充空格 + 列间隙）
+ */
+function padPanelLabel(label: string): string {
+  const padding = " ".repeat(Math.max(0, PANEL_LABEL_WIDTH - displayWidth(label)));
+  return `${label}${padding}${" ".repeat(PANEL_LABEL_GAP)}`;
+}
+
+/**
+ * 格式化连接耗时展示：不足 1 秒显示毫秒整数，达到 1 秒显示保留一位小数的秒
+ * @param {number} ms - 耗时（毫秒）
+ * @returns {string} 形如「820ms」「1.8s」的展示文本
+ */
+function formatElapsed(ms: number): string {
+  if (ms < 1000) {
+    return `${Math.round(ms)}ms`;
+  }
+  return `${(ms / 1000).toFixed(1)}s`;
+}
+
+/**
+ * 打印 REPL 启动就绪面板：信息分组行（模型/技能/MCP）与命令提示行，
+ * 装配阶段警告（技能扫描、沙箱装载、MCP 连接）统一缩进展示在面板下方，
+ * 替代原先分散的连接日志与长句欢迎语，默认状态只保留面板主体
+ * @param {ReplOptions} opts - 启动参数（配置、会话运行时）
+ * @param {ThinkingLevel} level - 初始思考档位
+ * @returns {void}
+ */
+function printReadyPanel(opts: ReplOptions, level: ThinkingLevel): void {
+  const { config, runtime } = opts;
+  const { sandbox, mcpSummary, bootWarnings } = runtime;
+  const { catalog, warnings, todoHandle } = runtime.skill;
+
+  const rows: Array<[string, string]> = [
+    ["模型", `${config.model} · 思考 ${level}`],
+  ];
+  if (catalog.size > 0) {
+    rows.push(["技能", `${catalog.size} 个`]);
+  }
+  if (mcpSummary) {
+    rows.push([
+      "MCP",
+      `${mcpSummary.okCount}/${mcpSummary.totalCount} 已连接 · ${mcpSummary.toolCount} 个工具 · ${formatElapsed(mcpSummary.elapsedMs)}`,
+    ]);
+  }
+  for (const [label, value] of rows) {
+    console.log(`  ${pico.gray(padPanelLabel(label))}${value}`);
+  }
+
+  console.log("");
+  const hints = [`/think <${THINKING_LEVELS.join("|")}>`];
+  if (catalog.size > 0) {
+    hints.push("/skills");
+  }
+  if (sandbox) {
+    hints.push("/permissions");
+  }
+  if (todoHandle) {
+    hints.push("/todos");
+  }
+  hints.push("exit 或 Ctrl+C 退出");
+  console.log(
+    `  ${pico.gray(padPanelLabel("提示"))}${pico.cyan(hints.join(" · "))}`,
+  );
+
+  const allWarnings = [...warnings, ...bootWarnings];
+  if (allWarnings.length > 0) {
+    console.log("");
+    printWarnings(allWarnings, "  ");
+  }
+}
+
 /**
  * 多轮对话 REPL 主循环（chat、agent 命令共用）：循环提问，直到用户输入 exit/quit 或按 Ctrl+C 退出
  * 基于 Responses API（无状态模式）+ agentic loop：历史由本地维护、每轮全量发送，
@@ -203,33 +295,13 @@ function printTodos(todoHandle: TodoToolHandle | undefined): void {
  * @returns {Promise<void>}
  */
 export async function runConversationRepl(opts: ReplOptions): Promise<void> {
-  const { config, runtime, style, modeLabel } = opts;
+  const { config, runtime, style } = opts;
   // 档位由 /think 在会话内切换，仅本函数持有可变状态
   let currentLevel = opts.initialLevel;
-  const { systemPrompt, tools, catalog, warnings, todoHandle } = runtime.skill;
-  const { sandbox, mcpTools } = runtime;
-  printWarnings(warnings);
-  const skillNote = catalog.size > 0 ? `，已发现 ${catalog.size} 个技能` : "";
-  const mcpNote =
-    mcpTools.length > 0 ? `，已连接 MCP 工具 ${mcpTools.length} 个` : "";
-  console.log(
-    pico.green(
-      `已连接模型 ${config.model}（${modeLabel}），思考档位 ${currentLevel}，支持工具调用${skillNote}${mcpNote}，输入问题开始对话，输入 exit 或按 Ctrl+C 退出`,
-    ),
-  );
-  const hints = [
-    `/think 查看思考档位，/think <${THINKING_LEVELS.join("|")}> 切换`,
-  ];
-  if (catalog.size > 0) {
-    hints.push("/skills 查看可用技能");
-  }
-  if (sandbox) {
-    hints.push("/permissions 查看沙箱与权限状态");
-  }
-  if (todoHandle) {
-    hints.push("/todos 查看任务清单");
-  }
-  console.log(pico.cyan(`提示：${hints.join("；")}`));
+  const { systemPrompt, tools, catalog, todoHandle } = runtime.skill;
+  const { sandbox } = runtime;
+  // 就绪面板：标题、模型/技能/MCP 信息行与命令提示，装配阶段警告统一缩进展示在其下
+  printReadyPanel(opts, currentLevel);
   // 服务能力折算警告：off 档位本就对应关闭，此时不提示
   warnThinkingFallback(currentLevel, style);
   const session: ReplSession = {

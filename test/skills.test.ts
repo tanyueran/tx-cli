@@ -104,7 +104,7 @@ describe("discoverSkills", () => {
     expect(warnings).toHaveLength(4);
   });
 
-  it("description 超长时截断并告警", () => {
+  it("description 超长时静默截断且不产生警告", () => {
     const longDesc = "描".repeat(MAX_SKILL_DESCRIPTION_CHARS + 10);
     writeSkill(userDir, "long-desc", skillContent("long-desc", longDesc, "正文"));
 
@@ -112,7 +112,7 @@ describe("discoverSkills", () => {
 
     expect(skills).toHaveLength(1);
     expect(skills[0].description).toHaveLength(MAX_SKILL_DESCRIPTION_CHARS + 1);
-    expect(warnings.some((w) => w.includes("截断"))).toBe(true);
+    expect(warnings).toEqual([]);
   });
 
   it("frontmatter 字段支持成对引号包裹", () => {

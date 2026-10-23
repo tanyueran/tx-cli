@@ -8,7 +8,7 @@ export { McpManager, buildMcpRoots } from "./manager";
 export type { McpManagerOptions, McpRoot } from "./manager";
 export { createMcpTool, MCP_TOOL_TIMEOUT_MS } from "./tool-adapter";
 export { connectMcpServers } from "./setup";
-export type { McpSetupResult } from "./setup";
+export type { McpConnectSummary, McpSetupResult } from "./setup";
 export type {
   HttpServerConfig,
   McpServerConfig,

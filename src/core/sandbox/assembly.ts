@@ -73,12 +73,14 @@ function isTrusted(cwd: string, trustDirectories: string[]): boolean {
   });
 }
 
-/** L1 装配结果：沙箱上下文与 bash 工具装配开关的组合 */
+/** L1 装配结果：沙箱上下文、bash 工具装配开关与装载警告的组合 */
 export interface SandboxAssembly {
   /** 会话级沙箱上下文（sandbox.enabled 为 false 时不装配，为 undefined） */
   sandbox: SandboxContext | undefined;
   /** bash 工具是否装配：--no-bash 显式关闭，否则回退配置 sandbox.bash.enabled */
   bashEnabled: boolean;
+  /** 装载警告（配置解析、信任目录降级、Provider 初始化等），由调用方统一展示 */
+  warnings: string[];
 }
 
 /**
@@ -103,7 +105,7 @@ export async function createSandboxContext(
   warnings.push(...configWarnings);
   const bashEnabled = cli.bashEnabled ?? config.bash.enabled;
   if (!config.enabled) {
-    return { sandbox: undefined, bashEnabled: false };
+    return { sandbox: undefined, bashEnabled: false, warnings };
   }
 
   const resolved = resolveOptions(cli, config);
@@ -173,11 +175,8 @@ export async function createSandboxContext(
   }
 
   // 项目空间配置（<cwd>/.tx-cli/config.json）已由 loadSandboxConfig 与全局配置合并装载，
-  // 授权归属当前项目，不跨项目生效；加载提示由 loadSandboxConfig 输出，保证用户知情
+  // 授权归属当前项目，不跨项目生效；装载警告随返回值交由调用方统一展示
 
-  for (const warning of warnings) {
-    console.warn(warning);
-  }
   return {
     sandbox: new SandboxContext({
       config,
@@ -189,5 +188,6 @@ export async function createSandboxContext(
       cwd,
     }),
     bashEnabled,
+    warnings,
   };
 }
