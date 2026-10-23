@@ -58,7 +58,8 @@ src/
 │   │   ├── executor.ts        #   执行器：参数解析、超时、8KB 截断
 │   │   ├── permission.ts      #   权限门卫包装层（wrapToolWithPermission）
 │   │   └── builtin/           #   内置工具：read_file / list_dir / glob /
-│   │                          #   grep / web_search / write_todos（agent 模式装配，
+│   │                          #   grep / web_search / write_file / edit_file（写侧，
+│   │                          #   受可写边界管控）/ write_todos（agent 模式装配，
 │   │                          #   工厂创建）/ bash（工厂创建，按需拼入）
 │   ├── sandbox/               # 沙箱与权限（四层模型，见下文）
 │   │   ├── config/            #   配置 schema / 加载校验 / 项目授权读写
@@ -196,8 +197,8 @@ flowchart TD
 - **Provider 插拔**（核心解耦）：`SandboxProvider` 接口（`isAvailable` / `initialize` / `wrapCommand` / `annotateStderr` / `dispose`），注册表编译期固定。`providers/backends/srt.ts` 是全库唯一 import `@anthropic-ai/sandbox-runtime` 的文件；`providers/backends/landlock.ts` 走外部 helper 方案（Node 无法直接发起 Landlock syscall，用户自装 `landlock-exec` 到 PATH 或 `~/.tx-cli/bin`，或经 `TX_SANDBOX_LANDLOCK_HELPER` 指定路径；denyRead 子树排除由应用层兜底）——新增沙箱实现只需实现 Provider 并注册，上层无感知。
 - **Provider 不可用**：默认 fail-closed（bash 返回失败 + 提示），`--sandbox-missing allow` 显式降级为无隔离执行（规则与审批仍生效）。
 - **规则语法**：`Bash(git push:*)` 前缀、`Bash(git status)` 精确、`Bash(git log *)` glob、`Read(/src/**)` 路径、`WebSearch` 整工具。deny/ask 匹配时剥离 `FOO=bar` / `env` / `nohup` / `xargs` 包装看真实命令（allow 不穿透）。
-- **规则名别名归一化**：`Read`→`read_file`、`WebSearch`→`web_search`、`ListDir`→`list_dir`（Claude Code 风格短名 ↔ 内部工具名），规则键与规则两侧都归一化后匹配。
-- **权限纳管范围**：bash（exec，串行）、read\_file / list\_dir / glob / grep（fs.read，规则键以绝对路径为主体）、web\_search（net，规则键 `web_search(关键词)`）、MCP 工具（整工具级键 `mcp__server__tool`；按 `annotations.readOnlyHint` 区分只读/可写，只读仅标注 net，其余保守标注 net+exec）。无沙箱会话（`sandbox` 为 undefined）不包装、行为不变。
+- **规则名别名归一化**：`Read`→`read_file`、`WebSearch`→`web_search`、`ListDir`→`list_dir`、`Write`→`write_file`、`Edit`→`edit_file`（Claude Code 风格短名 ↔ 内部工具名），规则键与规则两侧都归一化后匹配。
+- **权限纳管范围**：bash（exec，串行）、read\_file / list\_dir / glob / grep（fs.read，规则键以绝对路径为主体）、write\_file / edit\_file（fs.write，串行，规则键以绝对路径为主体，read-only 档被可写边界拒绝）、web\_search（net，规则键 `web_search(关键词)`）、MCP 工具（整工具级键 `mcp__server__tool`；按 `annotations.readOnlyHint` 区分只读/可写，只读仅标注 net，其余保守标注 net+exec）。无沙箱会话（`sandbox` 为 undefined）不包装、行为不变。
 - **capabilities 禁网语义**：工具声明的能力（如 net）随 guard 链路传入规则判定；read-only 档承诺禁网，net 工具未命中规则时默认 ask（OS 沙箱只拦子进程，进程内网络调用不受边界约束，故由审批层兜底），`never` 策略下直接 deny。
 - **MCP 只读自动放行**：判定类目分 `mcp-tool`（可写）与 `mcp-read`（`readOnlyHint === true` 且未声明 `destructiveHint`）；`mcp-read` 未命中规则时默认 allow（`always-ask` 仍 ask），显式 deny/ask 规则依旧优先。
 - **MCP 服务器级授权**：可写 MCP 工具首次审批时提供「本次 / 本会话允许该服务器 / 始终允许该服务器 / 拒绝」，服务器级授权落 `mcp__server__*`（`serverKey` 为净化后的规则键段，与工具名同口径），同服务器其余工具不再逐个询问；显式 ask 规则优先，服务器级授权不覆盖。

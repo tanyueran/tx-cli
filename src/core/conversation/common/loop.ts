@@ -39,7 +39,8 @@ interface AgentLoopParams {
 /**
  * 执行 agentic 循环：请求 → 工具调用 → 回传结果 → 再请求，直到模型给出最终回答
  * 同一轮的多个工具调用并发执行（Promise.all 保证结果顺序与请求一致），总延迟取决于最慢者；
- * 现有工具均为只读且无共享可变状态，并发安全，将来引入有副作用的工具时需重新评估
+ * 只读工具无共享可变状态，并发安全；有副作用的工具（bash、write_file、edit_file）
+ * 经 permission.serial 声明在会话级串行队列中依次执行，避免并发读-改-写竞态
  * 达到 maxIterations 后进入软收敛：最后一轮不再下发工具定义，迫使模型基于已有信息作答，
  * 避免硬截断导致用户等了半天什么都没有
  * @param {AgentLoopParams} params - 循环参数

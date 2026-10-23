@@ -159,6 +159,15 @@ export async function createSandboxContext(
     }
   }
 
+  // 网络白名单提示：workspace-write 档空白名单意味着 bash 内所有联网命令（npm install、curl 等）
+  // 都会被沙箱代理以 403 拒绝（allow-only 语义），提前告知配置入口而非让用户在报错里猜
+  if (level === "workspace-write" && config.network.allowedDomains.length === 0) {
+    warnings.push(
+      "sandbox.network.allowedDomains 为空：bash 命令的所有网络访问将被沙箱代理拒绝（HTTP 403），" +
+        "如需 npm install / curl 等联网操作，请在 ~/.tx-cli/config.json 的 sandbox.network.allowedDomains 中放行域名",
+    );
+  }
+
   // Provider 选择：full 档直通（noop）；其余档用配置的 Provider
   let provider =
     level === "danger-full-access"

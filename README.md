@@ -121,7 +121,7 @@ tx-cli commit-fix "#532311 优化属性设置 https://ones.x.cn/abc"
 
 - 传入问题：单次问答，流式输出回答后退出
 - 不传参数：进入多轮对话模式，持续输入问题对话，输入 `exit`/`quit` 或按 `Ctrl+C` 退出
-- 工具调用默认开启、不可关闭：仅支持随版本内置发布的固定工具集，不支持运行时动态注册——`read_file`、`list_dir`、`glob`、`grep` 用于读取与检索本地文件，`web_search` 用于联网搜索实时信息；每次调用会打印 `→ 调用 ...` 提示
+- 工具调用默认开启、不可关闭：仅支持随版本内置发布的固定工具集，不支持运行时动态注册——`read_file`、`list_dir`、`glob`、`grep` 用于读取与检索本地文件，`write_file`、`edit_file` 用于创建与精确修改文件（受沙箱可写边界管控，默认 `read-only` 档下不可写），`web_search` 用于联网搜索实时信息；每次调用会打印 `→ 调用 ...` 提示
 - 支持技能（skills）：扫描 `~/.tx-cli/skills`（用户级）与 `./.tx-cli/skills`（项目级，同名时项目级优先）中的 `SKILL.md` 技能手册，发现技能时自动装配 `load_skill` 工具，模型按需加载手册后按其指引执行；多轮对话中可用 `/skills` 查看技能清单
 - 支持 MCP 服务器：在 `~/.tx-cli/config.json` 配置 `mcpServers` 段即可接入外部工具（详见下方 [MCP 服务器](#mcp-服务器)），`--no-mcp` 可按次禁用
 - 单次问答与多轮对话均走 Responses API 无状态模式（要求所配置的服务支持该接口）：服务端不留存会话，多轮历史由本地维护并每轮全量发送
@@ -243,7 +243,7 @@ TX_LLM_API_KEY=sk-xxx TX_LLM_BASE_URL=https://api.deepseek.com/v1 TX_LLM_MODEL=d
 
 - 传入任务：单次执行，完成后退出
 - 不传参数：进入多轮任务模式，持续输入任务，输入 `exit`/`quit` 或按 `Ctrl+C` 退出
-- 工具带为全量：`chat` 的只读工具集之外额外装配 `bash` 与 `write_todos`（任务清单）工具，技能、MCP、Responses 无状态模式等机制与 `chat` 一致；多轮模式支持 `/think`、`/skills`、`/todos`、`/permissions` 内联命令
+- 工具带为全量：在 `chat` 工具集之外额外装配 `bash` 与 `write_todos`（任务清单）工具，模型创建/修改文件优先使用 `write_file`（整体写入）与 `edit_file`（精确字符串替换，片段不唯一即失败）；技能、MCP、Responses 无状态模式等机制与 `chat` 一致；多轮模式支持 `/think`、`/skills`、`/todos`、`/permissions` 内联命令
 - 任务清单：对 3 步以上的任务，模型会先用 `write_todos` 建立清单并随进度更新（调用时打印清单视图：`☐` 待办 / `◐` 进行中 / `☑` 已完成），多轮模式可用 `/todos` 随时查看
 - 单轮任务的工具调用轮数上限为 20 轮（chat 为 8 轮），达到上限后模型将基于已有信息直接作答（黄字提示）
 
@@ -259,6 +259,21 @@ TX_LLM_API_KEY=sk-xxx TX_LLM_BASE_URL=https://api.deepseek.com/v1 TX_LLM_MODEL=d
 | `--sandbox-missing <action>` | 沙箱在当前环境不可用时的处置：`deny`（默认，失败关闭）\| `allow`（降级为无隔离执行，规则与审批仍生效） |
 
 沙箱档位与审批策略的优先级均为：命令行 > 环境变量（`TX_SANDBOX_LEVEL` / `TX_SANDBOX_APPROVAL`）> 配置文件 `sandbox` 段 > 内置默认，也可写入 `~/.tx-cli/config.json` 的 `sandbox` 段持久化（档位、审批、文件系统边界、权限规则等）。
+
+**沙箱网络白名单（allow-only）**：bash 命令的所有网络访问都经沙箱代理强制走域名白名单，未放行的域名会被代理以 `HTTP 403` 拒绝（空白名单 = 全禁网）。`workspace-write` 档若需 `npm install`、`curl`、`git push` 等联网操作，须显式放行域名（支持 `*.example.com` 通配，子域名不自动继承）：
+
+```json
+{
+  "sandbox": {
+    "level": "workspace-write",
+    "network": {
+      "allowedDomains": ["registry.npmmirror.com", "github.com", "*.githubusercontent.com"]
+    }
+  }
+}
+```
+
+> 注意：`web_search` 工具是进程内网络请求，不经沙箱代理，不受此白名单管控。
 
 审批策略与 MCP：MCP 工具不经 OS 沙箱，判定独立于 `--sandbox` 档位——声明 `readOnlyHint` 的只读工具默认放行（`always-ask` 下仍询问）；可写工具首次调用时提供服务器级授权选项，`never` 策略下无显式 allow 规则则拒绝。授权粒度与配置示例见下方 [MCP 服务器](#mcp-服务器)。
 

@@ -221,7 +221,7 @@ export function createBashTool(sandbox: SandboxContext): Tool {
         }
         return {
           ok: false,
-          output: `${baseOutput}\n命令被沙箱拦截：${violation.events.join("；")}\n可调整命令（如改为只读操作）或在配置中扩展沙箱边界`,
+          output: `${baseOutput}\n命令被沙箱拦截：${violation.events.join("；")}\n可调整命令避开受限操作，或扩展沙箱边界：联网被拒时在 sandbox.network.allowedDomains 放行域名，文件写入被拒时在 sandbox.filesystem.writableRoots 扩展可写根（~/.tx-cli/config.json）`,
         };
       }
       return { ok: false, output: baseOutput };
