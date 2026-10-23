@@ -84,7 +84,8 @@ src/
 
 ```mermaid
 flowchart LR
-    A["chat / agent-command<br/>解析 --think/--no-mcp/<br/>--sandbox 等"] --> B["one-shot / repl<br/>会话生命周期"]
+    A["chat-command<br/>解析 --think（默认 low）"] --> B["one-shot / repl<br/>会话生命周期"]
+    A2["agent-command<br/>解析 --think/--no-mcp/<br/>--sandbox 等"] --> B["one-shot / repl<br/>会话生命周期"]
     B --> C["setupSkillContext<br/>装配提示词与工具"]
     C --> D["runAgentLoop<br/>agentic loop"]
     D --> E["Responses API<br/>（无状态，历史本地维护）"]
@@ -96,7 +97,7 @@ flowchart LR
 关键设计：
 
 - **无状态 Responses**：`store=false`，对话历史由本地维护、每轮全量发送；`instructions`（system 提示词）每轮重传。
-- **工具装配**：内置工具（静态清单）+ `load_skill`（仅存在技能时）+ `write_todos`（agent 模式）+ bash（沙箱启用时）+ MCP 工具（连接成功时），在 `setupSkillContext` 一次性拼装，不支持运行时动态注册。
+- **工具装配**：内置工具（静态清单）+ `load_skill`（仅存在技能时）+ `write_todos`（agent 模式）+ bash（沙箱启用时）+ MCP 工具（仅 agent 模式连接成功时），在 `setupSkillContext` 一次性拼装，不支持运行时动态注册。
 - **任务清单**（agent 模式）：`write_todos` 全量替换式维护会话内计划（对标 TodoWrite），状态存工具实例闭包、不持久化；调用提示经 `renderCall` 扩展点渲染为清单视图（☐ 待办 / ◐ 进行中 / ☑ 完成），REPL 以 `/todos` 查看。
 - **MCP 与沙箱同生命周期**：随会话创建、`finally` 中统一释放。
 - **MCP roots capability**：客户端声明 roots 能力并响应 `roots/list`，按沙箱档位联动下发目录白名单——read-only 档不放权（返回空），其余档位下发项目根与 OS 临时目录（均经 realpath 规范化为 file:// URI，规避 macOS 符号链接前缀失配）；支持该协议的服务器（如 chrome-devtools-mcp）将其文件白名单与 tx-cli 工作区对齐，不支持的服务器无感知。
@@ -115,6 +116,7 @@ flowchart LR
 命令行 --think  >  配置文件 llm.thinkingLevel  >  内置默认 medium
 ```
 
+- `chat` 命令为轻量只读问答：深度思考默认 `low`，`--think` 按次覆盖，不读取配置与环境变量档位；`agent` 命令走上述完整优先级。
 - 档位校验前置（`parseThinkingLevel`）：非法值在对话开始前报错退出，不带着错误配置发请求。
 - REPL 中可用 `/think` 内联命令会话内切换（无参查看、带参下一轮生效）。
 

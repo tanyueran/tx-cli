@@ -16,12 +16,12 @@ describe("createProgram", () => {
     ]);
   });
 
-  it("chat 命令不提供执行类选项（沙箱/审批/bash 归 agent 命令）", () => {
+  it("chat 命令不提供执行类与 MCP 选项（沙箱/审批/bash/MCP 归 agent 命令）", () => {
     const chat = createProgram().commands.find((cmd) => cmd.name() === "chat");
     expect(chat).toBeDefined();
     const flags = chat!.options.map((opt) => opt.long);
     expect(flags).toContain("--think");
-    expect(flags).toContain("--no-mcp");
+    expect(flags).not.toContain("--no-mcp");
     expect(flags).not.toContain("--sandbox");
     expect(flags).not.toContain("--approval");
     expect(flags).not.toContain("--no-bash");

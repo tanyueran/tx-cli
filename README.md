@@ -23,7 +23,7 @@ Commands:
   server [options]                            启动一个本地HTTP服务器
   git-rename <old-model-url> <new-model-url>  git重命名模块
   commit-fix <message...>                     根据ones信息改为 fix(#id): title 格式提交git commit
-  chat [options] [question...]                与大模型对话：传入问题为单次问答，不带参数进入多轮对话
+  chat [options] [question...]                与大模型轻量只读问答：传入问题为单次问答，不带参数进入多轮对话
   agent [options] [task...]                   让 AI Agent 执行任务：传入任务为单次执行，不带参数进入多轮任务模式
   help [command]                              display help for command
 ```
@@ -117,13 +117,13 @@ tx-cli commit-fix "#532311 优化属性设置 https://ones.x.cn/abc"
 
 #### `chat [question...]`
 
-与大模型对话，支持任何 OpenAI 兼容接口（DeepSeek、Kimi、GLM、OpenAI 等）。
+与大模型轻量对话，支持任何 OpenAI 兼容接口（DeepSeek、Kimi、GLM、OpenAI 等）。
 
 - 传入问题：单次问答，流式输出回答后退出
 - 不传参数：进入多轮对话模式，持续输入问题对话，输入 `exit`/`quit` 或按 `Ctrl+C` 退出
 - 工具调用默认开启、不可关闭：仅支持随版本内置发布的固定工具集，不支持运行时动态注册——`read_file`、`list_dir`、`glob`、`grep` 用于读取与检索本地文件，`write_file`、`edit_file` 用于创建与精确修改文件（受沙箱可写边界管控，默认 `read-only` 档下不可写），`web_search` 用于联网搜索实时信息；每次调用会打印 `→ 调用 ...` 提示
 - 支持技能（skills）：扫描 `~/.tx-cli/skills`（用户级）与 `./.tx-cli/skills`（项目级，同名时项目级优先）中的 `SKILL.md` 技能手册，发现技能时自动装配 `load_skill` 工具，模型按需加载手册后按其指引执行；多轮对话中可用 `/skills` 查看技能清单
-- 支持 MCP 服务器：在 `~/.tx-cli/config.json` 配置 `mcpServers` 段即可接入外部工具（详见下方 [MCP 服务器](#mcp-服务器)），`--no-mcp` 可按次禁用
+- 不支持 MCP：为保持轻量，`chat` 不装配 MCP 服务器，需要接入外部工具请用 `agent` 命令（详见下方 [MCP 服务器](#mcp-服务器)）
 - 单次问答与多轮对话均走 Responses API 无状态模式（要求所配置的服务支持该接口）：服务端不留存会话，多轮历史由本地维护并每轮全量发送
 - 单轮问答的工具调用轮数上限为 8 轮，达到上限后模型将基于已有信息直接作答（黄字提示）
 
@@ -131,12 +131,11 @@ tx-cli commit-fix "#532311 优化属性设置 https://ones.x.cn/abc"
 
 | 选项 | 说明 |
 |---|---|
-| `--think <level>` | 思考档位：`off` \| `low` \| `medium` \| `high`，仅影响本次对话 |
-| `--no-mcp` | 本次对话禁用 MCP 服务器（缺省启用） |
+| `--think <level>` | 思考档位：`off` \| `low` \| `medium` \| `high`，默认 `low`（轻量思考），仅按传入档位对本次对话覆盖 |
 
 **深度思考档位：**
 
-统一档位 `off / low / medium / high`，按服务的协议风格自动翻译为对应请求字段，档位优先级：`--think` > 配置文件 `llm.thinkingLevel` > `medium`。
+统一档位 `off / low / medium / high`，按服务的协议风格自动翻译为对应请求字段。`chat` 默认 `low`（轻量思考），`--think` 按次覆盖，不读取配置档位；`agent` 命令的档位优先级为：`--think` > 配置文件 `llm.thinkingLevel` > `medium`。
 
 | 协议风格 | 适配服务 | 档位翻译方式 |
 |---|---|---|
@@ -206,17 +205,17 @@ tx-cli commit-fix "#532311 优化属性设置 https://ones.x.cn/abc"
 | `type` | **可选**：`stdio` \| `http`，缺省时按字段自动推断——有 `command` 为 stdio，有 `url` 为 http |
 
 - 字符串值支持 `${VAR}` 环境变量展开（如 `Bearer ${MY_TOKEN}`），未定义变量展开为空串
-- 单个服务器连接失败只黄字告警，不影响其他服务器与本次对话；也可用 `tx-cli chat --no-mcp` 按次禁用全部 MCP 服务器
+- 单个服务器连接失败只黄字告警，不影响其他服务器与本次对话；也可用 `tx-cli agent --no-mcp` 按次禁用全部 MCP 服务器
 - 工具审批按服务器粒度授权：首次调用可写工具时选择“本会话/始终允许该服务器”，同服务器其余工具不再逐个询问；选择“始终”会写入 `<cwd>/.tx-cli/config.json` 的 `sandbox.rules.allow`（形如 `mcp__server__*`）
 - 声明了 `readOnlyHint` 的只读 MCP 工具默认放行（`always-ask` 策略下仍会询问），其余工具默认需要审批；显式 `ask`/`deny` 规则始终优先
-- `chat` 与 `agent` 共用同一套 MCP 审批与授权规则，与沙箱档位无关
+- MCP 仅在 `agent` 命令装配（`chat` 不支持），审批与授权规则与沙箱档位无关
 
 ```bash
 # 启用全部已配置的 MCP 服务器（缺省行为）
-tx-cli chat 帮我抓取 https://example.com 的标题
+tx-cli agent 帮我抓取 https://example.com 的标题
 
-# 本次对话禁用 MCP 服务器
-tx-cli chat --no-mcp 怎么用 fs.rm 递归删除目录
+# 本次任务禁用 MCP 服务器
+tx-cli agent --no-mcp 整理当前目录结构并输出报告
 ```
 
 ```bash
@@ -226,10 +225,10 @@ tx-cli chat 当前目录 package.json 的 name 是什么
 # 普通问答
 tx-cli chat 怎么用 fs.rm 递归删除目录
 
-# 指定思考档位
+# 指定思考档位（默认 low，--think 按次覆盖）
 tx-cli chat --think high "证明这道题"
 
-# 进入多轮对话（思考档位取配置默认，会话内 /think 随时切换）
+# 进入多轮对话（深度思考默认 low，会话内 /think 随时切换）
 tx-cli chat
 tx-cli chat --think low
 
@@ -243,7 +242,7 @@ TX_LLM_API_KEY=sk-xxx TX_LLM_BASE_URL=https://api.deepseek.com/v1 TX_LLM_MODEL=d
 
 - 传入任务：单次执行，完成后退出
 - 不传参数：进入多轮任务模式，持续输入任务，输入 `exit`/`quit` 或按 `Ctrl+C` 退出
-- 工具带为全量：在 `chat` 工具集之外额外装配 `bash` 与 `write_todos`（任务清单）工具，模型创建/修改文件优先使用 `write_file`（整体写入）与 `edit_file`（精确字符串替换，片段不唯一即失败）；技能、MCP、Responses 无状态模式等机制与 `chat` 一致；多轮模式支持 `/think`、`/skills`、`/todos`、`/permissions` 内联命令
+- 工具带为全量：在 `chat` 工具集之外额外装配 `bash`（受沙箱与审批管控）与 `write_todos`（任务清单）工具，并接入 MCP 服务器（`chat` 不装配），模型创建/修改文件优先使用 `write_file`（整体写入）与 `edit_file`（精确字符串替换，片段不唯一即失败）；技能、Responses 无状态模式等机制与 `chat` 一致；多轮模式支持 `/think`、`/skills`、`/todos`、`/permissions` 内联命令
 - 任务清单：对 3 步以上的任务，模型会先用 `write_todos` 建立清单并随进度更新（调用时打印清单视图：`☐` 待办 / `◐` 进行中 / `☑` 已完成），多轮模式可用 `/todos` 随时查看
 - 单轮任务的工具调用轮数上限为 20 轮（chat 为 8 轮），达到上限后模型将基于已有信息直接作答（黄字提示）
 
