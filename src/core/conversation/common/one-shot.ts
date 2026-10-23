@@ -23,7 +23,8 @@ import type {
 /**
  * 单次会话（chat、agent 命令共用的单次入口）：走 Responses API（无状态模式）+ agentic loop
  * store=false：服务端不留存会话，历史由本地维护，会话结束即丢弃；
- * 思考档位取值：命令行 > 配置文件 > medium，经 thinking 适配层翻译为协议扩展字段下发；
+ * 思考档位取值：命令行 > 配置文件（项目 > 全局）> 模式内置默认（chat low / agent medium），
+ * 经 thinking 适配层翻译为协议扩展字段下发；
  * 服务不支持分档思考时先打印折算警告，避免用户误以为 high 等档位真实生效；
  * 深度思考内容以暗色流式输出（模型未返回时不输出）
  * @param {LlmConfig} config - LLM 接入配置
@@ -42,7 +43,11 @@ export async function runOneShotConversation(
   mcpEnabled = true,
   sandboxCli?: SandboxCliOptions,
 ): Promise<void> {
-  const level = resolveThinkingLevel(thinkingLevel, config);
+  const level = resolveThinkingLevel(
+    thinkingLevel,
+    config,
+    mode.defaultThinkingLevel,
+  );
   const style = resolveThinkingStyle(config);
   warnThinkingFallback(level, style);
   const renderer = createStreamRenderer();

@@ -22,6 +22,16 @@ export function resolveUserConfigPath(): string {
 }
 
 /**
+ * 解析项目级配置文件路径：<cwd>/.tx-cli/config.json
+ * 与全局配置同构（llm/sandbox/mcpServers 等段），标量字段项目覆盖全局，数组字段两层合并
+ * @param {string} cwd - 项目根目录（绝对路径）
+ * @returns {string} 项目配置文件绝对路径
+ */
+export function resolveProjectConfigPath(cwd: string): string {
+  return join(cwd, ".tx-cli", "config.json");
+}
+
+/**
  * 读取用户级配置文件（带缓存）：首次读磁盘并缓存，后续直接返回缓存内容
  * 仅负责文件 IO 与 JSON 解析，不做任何输出；各段（llm、mcpServers 等）的校验由对应模块完成
  * 文件不存在时不缓存（存在性检查开销极小，保证进程运行期间新建的文件仍可被发现）；

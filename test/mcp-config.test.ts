@@ -163,4 +163,53 @@ describe("loadMcpServers", () => {
     expect(servers.size).toBe(0);
     expect(warnings.some((w) => w.includes("服务器名不能为空"))).toBe(true);
   });
+
+  it("项目与全局按服务器名合并：同名以项目为准并告警", () => {
+    const globalPath = writeConfig({
+      mcpServers: {
+        shared: { type: "stdio", command: "global-cmd" },
+        onlyGlobal: { type: "stdio", command: "node" },
+      },
+    });
+    const projectPath = join(dir, "project-config.json");
+    writeFileSync(
+      projectPath,
+      JSON.stringify({
+        mcpServers: {
+          shared: { type: "http", url: "https://project.example.com/mcp" },
+          onlyProject: { type: "stdio", command: "node" },
+        },
+      }),
+    );
+
+    const { servers, warnings } = loadMcpServers(globalPath, projectPath);
+
+    expect(servers.size).toBe(3);
+    // 同名服务器：项目配置覆盖全局
+    expect(servers.get("shared")).toEqual({
+      type: "http",
+      url: "https://project.example.com/mcp",
+    });
+    // 仅全局 / 仅项目定义的服务器均保留
+    expect(servers.get("onlyGlobal")).toEqual({ type: "stdio", command: "node" });
+    expect(servers.get("onlyProject")).toEqual({ type: "stdio", command: "node" });
+    expect(warnings.some((w) => w.includes("已加载项目配置"))).toBe(true);
+    expect(
+      warnings.some((w) => w.includes("重复定义") && w.includes("shared")),
+    ).toBe(true);
+  });
+
+  it("项目配置文件缺失时跳过项目层且无项目加载告警", () => {
+    const globalPath = writeConfig({
+      mcpServers: { local: { type: "stdio", command: "node" } },
+    });
+
+    const { servers, warnings } = loadMcpServers(
+      globalPath,
+      join(dir, "missing.json"),
+    );
+
+    expect(servers.size).toBe(1);
+    expect(warnings).toEqual([]);
+  });
 });

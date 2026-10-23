@@ -4,7 +4,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SandboxContext } from "../src/core/sandbox/runtime/context";
 import { DEFAULT_SANDBOX_CONFIG } from "../src/core/sandbox/config/schema";
-import { readProjectGrants } from "../src/core/sandbox/config/grants";
 import { noopProvider } from "../src/core/sandbox/providers/backends/noop";
 import type {
   ApprovalAskContext,
@@ -63,6 +62,26 @@ class FakeApprover implements Approver {
 }
 
 /**
+ * 读取项目授权文件中的 sandbox.rules.allow（文件不存在或损坏时返回空数组）
+ * @param {string} path - 项目配置文件路径
+ * @returns {string[]} allow 规则列表
+ */
+function readProjectAllow(path: string): string[] {
+  if (!existsSync(path)) {
+    return [];
+  }
+  try {
+    const parsed = JSON.parse(readFileSync(path, "utf-8")) as {
+      sandbox?: { rules?: { allow?: unknown } };
+    };
+    const allow = parsed.sandbox?.rules?.allow;
+    return Array.isArray(allow) ? (allow as string[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
  * 构造测试用沙箱上下文
  * @param {object} overrides - 配置覆盖项
  * @param {Approver} approver - 审批器
@@ -74,10 +93,16 @@ function makeContext(
   approver: Approver = new FakeApprover([{ kind: "once" }]),
   interactive = true,
 ): SandboxContext {
+  const projectConfigPath = join(dir, "project-config.json");
+  const baseRules = { ...DEFAULT_SANDBOX_CONFIG.rules, ...overrides.rules };
   const config: SandboxFileConfig = {
     ...DEFAULT_SANDBOX_CONFIG,
     ...overrides,
-    rules: { ...DEFAULT_SANDBOX_CONFIG.rules, ...overrides.rules },
+    // 模拟装配层行为：项目授权文件中的 allow 规则并入配置后传入上下文
+    rules: {
+      ...baseRules,
+      allow: [...baseRules.allow, ...readProjectAllow(projectConfigPath)],
+    },
   };
   return new SandboxContext({
     config,
@@ -87,8 +112,7 @@ function makeContext(
     isInteractive: interactive,
     approver,
     cwd: dir,
-    projectConfigPath: join(dir, "project-config.json"),
-    projectAllow: readProjectGrants(dir, join(dir, "project-config.json")),
+    projectConfigPath,
     auditPath: join(dir, "audit.jsonl"),
   });
 }
@@ -361,7 +385,7 @@ describe("SandboxContext.guard: MCP 授权粒度", () => {
       writableMeta,
     );
     expect(
-      readProjectGrants(dir, join(dir, "project-config.json")),
+      readProjectAllow(join(dir, "project-config.json")),
     ).toContain("mcp__github__*");
     // 新上下文读取落盘授权：同服务器其他工具直接放行
     const second = makeContext(
@@ -389,7 +413,7 @@ describe("SandboxContext.guard: MCP 授权粒度", () => {
       meta,
     );
     expect(
-      readProjectGrants(dir, join(dir, "project-config.json")),
+      readProjectAllow(join(dir, "project-config.json")),
     ).toContain("mcp__my_mcp__*");
   });
 

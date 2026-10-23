@@ -26,11 +26,7 @@ export type {
   SandboxRulesConfig,
 } from "./config/schema";
 export { loadSandboxConfig } from "./config/load";
-export {
-  resolveProjectConfigPath,
-  readProjectGrants,
-  appendProjectGrant,
-} from "./config/grants";
+export { appendProjectGrant } from "./config/grants";
 export {
   parseRule,
   matchSpec,

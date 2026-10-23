@@ -177,19 +177,20 @@ function parseServer(
  * 从配置文件加载 MCP 服务器：读取 mcpServers 段并逐项校验
  * 文件读取与 JSON 解析由共享模块完成；单个服务器非法只跳过并记录警告，
  * 不影响其他服务器与整个会话（失败隔离）
- * @param {string} configPath - 配置文件路径（缺省 ~/.tx-cli/config.json，测试可注入）
- * @returns {McpServersResult} 服务器配置表与加载警告
+ * @param {string} configPath - 配置文件路径
+ * @param {string[]} warnings - 警告收集器（就地追加）
+ * @returns {Map<string, McpServerConfig>} 服务器名 → 配置
  */
-export function loadMcpServers(
-  configPath: string = resolveUserConfigPath(),
-): McpServersResult {
-  const warnings: string[] = [];
+function loadServersFromFile(
+  configPath: string,
+  warnings: string[],
+): Map<string, McpServerConfig> {
   const servers = new Map<string, McpServerConfig>();
   const { data, warnings: readWarnings } = readUserConfig(configPath);
   warnings.push(...readWarnings);
   const { mcpServers } = data;
   if (mcpServers === undefined) {
-    return { servers, warnings };
+    return servers;
   }
   if (
     typeof mcpServers !== "object" ||
@@ -199,7 +200,7 @@ export function loadMcpServers(
     warnings.push(
       "配置文件 mcpServers 段必须是「服务器名 → 配置」的对象，已忽略全部 MCP 服务器",
     );
-    return { servers, warnings };
+    return servers;
   }
   for (const [name, raw] of Object.entries(mcpServers)) {
     if (!name.trim()) {
@@ -210,6 +211,39 @@ export function loadMcpServers(
     if (config) {
       servers.set(name, config);
     }
+  }
+  return servers;
+}
+
+/**
+ * 从配置文件加载 MCP 服务器：全局 ~/.tx-cli/config.json 与项目 <cwd>/.tx-cli/config.json 两级合并，
+ * 按服务器名合并，同名时项目配置覆盖全局并告警（与技能「项目级优先」语义一致）
+ * @param {string} configPath - 全局配置文件路径（缺省 ~/.tx-cli/config.json，测试可注入）
+ * @param {string} projectPath - 项目配置文件路径（缺省跳过项目层，生产由装配层传入，测试可注入）
+ * @returns {McpServersResult} 服务器配置表与加载警告
+ */
+export function loadMcpServers(
+  configPath: string = resolveUserConfigPath(),
+  projectPath?: string,
+): McpServersResult {
+  const warnings: string[] = [];
+  const servers = loadServersFromFile(configPath, warnings);
+  if (projectPath === undefined) {
+    return { servers, warnings };
+  }
+  const projectServers = loadServersFromFile(projectPath, warnings);
+  if (projectServers.size > 0) {
+    warnings.push(
+      `已加载项目配置 ${projectPath} 的 mcpServers（${projectServers.size} 个，与全局同名时以项目为准）`,
+    );
+  }
+  for (const [name, config] of projectServers) {
+    if (servers.has(name)) {
+      warnings.push(
+        `MCP 服务器 ${name} 在项目配置与全局配置中重复定义，已采用项目配置`,
+      );
+    }
+    servers.set(name, config);
   }
   return { servers, warnings };
 }

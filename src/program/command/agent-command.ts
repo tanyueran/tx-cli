@@ -19,9 +19,9 @@ interface AgentOptions {
   think?: string;
   /** 是否启用 MCP 服务器：--no-mcp 显式传入 false，缺省视为开启 */
   mcp?: boolean;
-  /** 沙箱档位（--sandbox），未指定时回退 env 与配置默认 */
+  /** 沙箱档位（--sandbox），未指定时回退配置默认（项目 > 全局） */
   sandbox?: string;
-  /** 审批策略（--approval），未指定时回退 env 与配置默认 */
+  /** 审批策略（--approval），未指定时回退配置默认（项目 > 全局） */
   approval?: string;
   /** 是否启用 bash 工具：--no-bash 显式传入 false，缺省视为开启 */
   bash?: boolean;
@@ -83,8 +83,8 @@ export async function runAgentAction(
 /**
  * 注册 agent 命令：让 AI Agent 执行任务（Agent 模式，对标 Codex CLI / Claude Code 默认模式）
  * 工具带为全量：只读内置工具 + bash（受三档沙箱与审批策略管控）+ 技能 + MCP；
- * 沙箱档位优先级：--sandbox > 环境变量 TX_SANDBOX_LEVEL > 配置文件 sandbox.level > read-only；
- * 审批策略优先级：--approval > 环境变量 TX_SANDBOX_APPROVAL > 配置文件 sandbox.approval > on-failure；
+ * 沙箱档位优先级：--sandbox > 项目配置 sandbox.level > 全局配置 sandbox.level > read-only；
+ * 审批策略优先级：--approval > 项目配置 sandbox.approval > 全局配置 sandbox.approval > on-failure；
  * 枚举型选项经 choices() 声明：非法值由 commander 在 action 执行前拒绝，无需命令内手工校验
  * @param {Command} program - commander 实例
  * @returns {void}
@@ -98,23 +98,23 @@ export function registerAgentCommand(program: Command): void {
     .addOption(
       new Option(
         "--think <level>",
-        `思考档位：${THINKING_LEVELS.join(" | ")}，优先级：命令行 > 环境变量 TX_LLM_THINKING_LEVEL > 配置文件 llm.thinkingLevel（最终默认 medium）`,
+        `思考档位：${THINKING_LEVELS.join(" | ")}，优先级：命令行 > 项目配置 > 全局配置（最终默认 medium）`,
       ).choices([...THINKING_LEVELS]),
     )
     .option(
       "--no-mcp",
-      "禁用 MCP 服务器（默认读取 ~/.tx-cli/config.json 的 mcpServers 段）",
+      "禁用 MCP 服务器（默认读取 ~/.tx-cli/config.json 与 <cwd>/.tx-cli/config.json 的 mcpServers 段）",
     )
     .addOption(
       new Option(
         "--sandbox <level>",
-        `bash 命令的沙箱档位：${SANDBOX_LEVELS.join(" | ")}，优先级：命令行 > 环境变量 TX_SANDBOX_LEVEL > 配置文件 sandbox.level（最终默认 read-only）`,
+        `bash 命令的沙箱档位：${SANDBOX_LEVELS.join(" | ")}，优先级：命令行 > 项目配置 > 全局配置（最终默认 read-only）`,
       ).choices([...SANDBOX_LEVELS]),
     )
     .addOption(
       new Option(
         "--approval <policy>",
-        `审批策略：${APPROVAL_POLICIES.join(" | ")}，优先级：命令行 > 环境变量 TX_SANDBOX_APPROVAL > 配置文件 sandbox.approval（最终默认 on-failure）`,
+        `审批策略：${APPROVAL_POLICIES.join(" | ")}，优先级：命令行 > 项目配置 > 全局配置（最终默认 on-failure）`,
       ).choices([...APPROVAL_POLICIES]),
     )
     .option(

@@ -18,11 +18,6 @@ export async function runSetupWizard(
   console.log(
     pico.yellow("首次使用需要配置大模型服务（支持任何 OpenAI 兼容接口）")
   );
-  console.log(
-    pico.yellow(
-      "也可以通过环境变量 TX_LLM_API_KEY / TX_LLM_BASE_URL / TX_LLM_MODEL 配置"
-    )
-  );
 
   const answers = await ask([
     {

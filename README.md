@@ -131,11 +131,11 @@ tx-cli commit-fix "#532311 优化属性设置 https://ones.x.cn/abc"
 
 | 选项 | 说明 |
 |---|---|
-| `--think <level>` | 思考档位：`off` \| `low` \| `medium` \| `high`，默认 `low`（轻量思考），仅按传入档位对本次对话覆盖 |
+| `--think <level>` | 思考档位：`off` \| `low` \| `medium` \| `high`，优先级：命令行 > 项目配置 > 全局配置（chat 最终默认 `low`，仅对本次对话生效） |
 
 **深度思考档位：**
 
-统一档位 `off / low / medium / high`，按服务的协议风格自动翻译为对应请求字段。`chat` 默认 `low`（轻量思考），`--think` 按次覆盖，不读取配置档位；`agent` 命令的档位优先级为：`--think` > 配置文件 `llm.thinkingLevel` > `medium`。
+统一档位 `off / low / medium / high`，按服务的协议风格自动翻译为对应请求字段。`chat` 与 `agent` 命令的档位优先级均为：`--think` > 配置文件 `llm.thinkingLevel`（项目配置优先于全局配置）> 内置默认（`chat` 为 `low`，`agent` 为 `medium`）。
 
 | 协议风格 | 适配服务 | 档位翻译方式 |
 |---|---|---|
@@ -144,7 +144,7 @@ tx-cli commit-fix "#532311 优化属性设置 https://ones.x.cn/abc"
 | `enable_thinking` | 阿里 Qwen DashScope 兼容模式 | `enable_thinking: true/false`，仅开/关 |
 | `none` | DeepSeek 等 | 不下发思考字段（靠换 reasoner 类模型切换） |
 
-风格按 `baseUrl` 自动推断（`volces.com`/`doubao`/`bigmodel.cn` → `thinking`，`dashscope.aliyuncs.com` → `enable_thinking`，其余 → `reasoning_effort`），推断不准时可用配置或环境变量覆盖。`off` 最为保守：`reasoning_effort`/`none` 风格下不下发任何思考字段，最大化兼容不支持思考扩展的服务。
+风格按 `baseUrl` 自动推断（`volces.com`/`doubao`/`bigmodel.cn` → `thinking`，`dashscope.aliyuncs.com` → `enable_thinking`，其余 → `reasoning_effort`），推断不准时可用配置覆盖。`off` 最为保守：`reasoning_effort`/`none` 风格下不下发任何思考字段，最大化兼容不支持思考扩展的服务。
 
 模型返回深度思考内容时以暗色流式输出（以 `……` 标记开始），未返回思考内容则不产生任何额外输出。
 
@@ -153,17 +153,11 @@ tx-cli commit-fix "#532311 优化属性设置 https://ones.x.cn/abc"
 首次使用需配置接入信息，任选一种方式：
 
 1. 首次运行时的交互式引导，配置会保存到 `~/.tx-cli/config.json`（文件权限仅限当前用户读写）
-2. 环境变量（优先级高于配置文件）：`TX_LLM_API_KEY`、`TX_LLM_BASE_URL`、`TX_LLM_MODEL`
+2. 直接写入配置文件的 `llm` 段：全局 `~/.tx-cli/config.json` 或项目 `<cwd>/.tx-cli/config.json`（同名字段项目配置优先）
 
-| 环境变量 | 说明 |
-|---|---|
-| `TX_LLM_API_KEY` | API 密钥 |
-| `TX_LLM_BASE_URL` | OpenAI 兼容接口地址 |
-| `TX_LLM_MODEL` | 模型名称 |
-| `TX_LLM_THINKING_LEVEL` | 全局默认思考档位：`off` \| `low` \| `medium` \| `high` |
-| `TX_LLM_THINKING_STYLE` | 思考协议风格：`reasoning_effort` \| `thinking` \| `enable_thinking` \| `none` |
+**配置分层合并规则**（适用于 `llm`、`sandbox`、`mcpServers` 各段）：优先级为命令行选项 > 项目配置（`<cwd>/.tx-cli/config.json`）> 全局配置（`~/.tx-cli/config.json`）；标量字段高层覆盖低层，数组字段（如 `sandbox.rules.allow`、`sandbox.network.allowedDomains`、`sandbox.trustDirectories`）两层合并去重（全局在前、项目在后），`mcpServers` 按服务器名合并（同名以项目为准，启动时告警提示）。
 
-思考配置也可以写入 `~/.tx-cli/config.json` 的 `llm` 段（与环境变量同名字段，风格/档位可被环境变量覆盖）：
+思考配置写入 `~/.tx-cli/config.json` 的 `llm` 段（项目配置可覆盖全局同名字段）：
 
 ```jsonc
 {
@@ -196,7 +190,7 @@ tx-cli commit-fix "#532311 优化属性设置 https://ones.x.cn/abc"
 
 ### MCP 服务器
 
-在 `~/.tx-cli/config.json` 的 `mcpServers` 段配置外部工具服务器，对话时模型即可调用其工具（工具名带 `mcp__<服务器名>__<工具名>` 前缀，与内置工具区分）。格式与 Claude Desktop 的配置兼容：
+在配置文件的 `mcpServers` 段配置外部工具服务器，对话时模型即可调用其工具（工具名带 `mcp__<服务器名>__<工具名>` 前缀，与内置工具区分）。全局 `~/.tx-cli/config.json` 与项目 `<cwd>/.tx-cli/config.json` 均可配置，两层按服务器名合并，同名服务器以项目配置为准（启动时告警提示）。格式与 Claude Desktop 的配置兼容：
 
 | 字段 | 说明 |
 |---|---|
@@ -225,15 +219,12 @@ tx-cli chat 当前目录 package.json 的 name 是什么
 # 普通问答
 tx-cli chat 怎么用 fs.rm 递归删除目录
 
-# 指定思考档位（默认 low，--think 按次覆盖）
+# 指定思考档位（优先级：--think > 配置文件 llm.thinkingLevel > low）
 tx-cli chat --think high "证明这道题"
 
-# 进入多轮对话（深度思考默认 low，会话内 /think 随时切换）
+# 进入多轮对话（深度思考兜底 low，会话内 /think 随时切换）
 tx-cli chat
 tx-cli chat --think low
-
-# 通过环境变量接入（以 DeepSeek 为例）
-TX_LLM_API_KEY=sk-xxx TX_LLM_BASE_URL=https://api.deepseek.com/v1 TX_LLM_MODEL=deepseek-chat tx-cli chat
 ```
 
 #### `agent [task...]`
@@ -257,7 +248,7 @@ TX_LLM_API_KEY=sk-xxx TX_LLM_BASE_URL=https://api.deepseek.com/v1 TX_LLM_MODEL=d
 | `--no-bash` | 本次任务禁用 bash 工具 |
 | `--sandbox-missing <action>` | 沙箱在当前环境不可用时的处置：`deny`（默认，失败关闭）\| `allow`（降级为无隔离执行，规则与审批仍生效） |
 
-沙箱档位与审批策略的优先级均为：命令行 > 环境变量（`TX_SANDBOX_LEVEL` / `TX_SANDBOX_APPROVAL`）> 配置文件 `sandbox` 段 > 内置默认，也可写入 `~/.tx-cli/config.json` 的 `sandbox` 段持久化（档位、审批、文件系统边界、权限规则等）。
+沙箱档位与审批策略的优先级均为：命令行 > 项目配置 `sandbox` 段 > 全局配置 `sandbox` 段 > 内置默认（标量字段项目覆盖全局，数组字段两层合并去重），也可写入 `~/.tx-cli/config.json` 或 `<cwd>/.tx-cli/config.json` 的 `sandbox` 段持久化（档位、审批、文件系统边界、权限规则等）。
 
 **沙箱网络白名单（allow-only）**：bash 命令的所有网络访问都经沙箱代理强制走域名白名单，未放行的域名会被代理以 `HTTP 403` 拒绝（空白名单 = 全禁网）。`workspace-write` 档若需 `npm install`、`curl`、`git push` 等联网操作，须显式放行域名（支持 `*.example.com` 通配，子域名不自动继承）：
 

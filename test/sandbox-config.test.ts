@@ -108,6 +108,64 @@ describe("loadSandboxConfig", () => {
     const { warnings } = loadSandboxConfig(path);
     expect(warnings[0]).toContain("解析失败");
   });
+
+  it("两级合并：标量项目覆盖全局，数组并集去重（全局在前、项目在后）", () => {
+    const globalPath = writeConfig({
+      sandbox: {
+        level: "read-only",
+        approval: "never",
+        trustDirectories: ["~/work"],
+        filesystem: { denyWrite: ["*.key"] },
+        network: { allowedDomains: ["npmjs.com"] },
+        bash: { timeoutMs: 30_000 },
+        rules: { allow: ["Bash(git status)"], deny: ["Bash(rm:*)"] },
+      },
+    });
+    const projectPath = join(dir, "project-config.json");
+    writeFileSync(
+      projectPath,
+      JSON.stringify({
+        sandbox: {
+          level: "workspace-write",
+          trustDirectories: ["~/work", "~/proj"],
+          filesystem: { denyWrite: ["*.pem"] },
+          network: { allowedDomains: ["github.com"] },
+          rules: { allow: ["Bash(npm test)"] },
+        },
+      }),
+    );
+    const { config, warnings } = loadSandboxConfig(globalPath, projectPath);
+    // 标量：项目覆盖全局（level），项目未配置时保留全局（approval、bash.timeoutMs）
+    expect(config.level).toBe("workspace-write");
+    expect(config.approval).toBe("never");
+    expect(config.bash.timeoutMs).toBe(30_000);
+    // 数组：并集去重，全局在前、项目在后
+    expect(config.trustDirectories).toEqual(["~/work", "~/proj"]);
+    expect(config.filesystem.denyWrite).toEqual(["*.key", "*.pem"]);
+    expect(config.network.allowedDomains).toEqual(["npmjs.com", "github.com"]);
+    expect(config.rules.allow).toEqual(["Bash(git status)", "Bash(npm test)"]);
+    expect(config.rules.deny).toEqual(["Bash(rm:*)"]);
+    expect(warnings.some((w) => w.includes("已加载项目配置"))).toBe(true);
+  });
+
+  it("项目配置文件缺失时跳过项目层且无项目加载告警", () => {
+    const globalPath = writeConfig({ sandbox: { level: "read-only" } });
+    const { config, warnings } = loadSandboxConfig(
+      globalPath,
+      join(dir, "missing.json"),
+    );
+    expect(config.level).toBe("read-only");
+    expect(warnings).toEqual([]);
+  });
+
+  it("项目文件存在但无 sandbox 段时保留全局配置且不告警", () => {
+    const globalPath = writeConfig({ sandbox: { level: "read-only" } });
+    const projectPath = join(dir, "project-config.json");
+    writeFileSync(projectPath, JSON.stringify({ llm: { model: "x" } }));
+    const { config, warnings } = loadSandboxConfig(globalPath, projectPath);
+    expect(config.level).toBe("read-only");
+    expect(warnings).toEqual([]);
+  });
 });
 
 describe("buildTierConfig", () => {

@@ -358,7 +358,11 @@ export async function runReplConversation(
   mcpEnabled = true,
   sandboxCli?: SandboxCliOptions,
 ): Promise<void> {
-  const currentLevel = resolveThinkingLevel(thinkingLevel, config);
+  const currentLevel = resolveThinkingLevel(
+    thinkingLevel,
+    config,
+    mode.defaultThinkingLevel,
+  );
   const style = resolveThinkingStyle(config);
   const runtime = await createConversationRuntime(mode.basePrompt, {
     mcpEnabled,

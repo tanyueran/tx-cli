@@ -1,7 +1,10 @@
 import { resolve } from "node:path";
 import type { ApprovalPolicy, SandboxLevel } from "./types";
 import { loadSandboxConfig } from "./config/load";
-import { readProjectGrants, resolveProjectConfigPath } from "./config/grants";
+import {
+  resolveProjectConfigPath,
+  resolveUserConfigPath,
+} from "../../shared/user-config";
 import type { SandboxFileConfig } from "./config/schema";
 import { buildTierConfig } from "./policy/tier";
 import { expandHome } from "./policy/path-match";
@@ -9,7 +12,7 @@ import { getProvider } from "./providers/registry";
 import { SandboxContext } from "./runtime/context";
 import { detectInteractive, interactiveApprover } from "./runtime/approver";
 
-/** conversation 命令传入的沙箱 CLI 选项（均可选，未指定时走 env/配置文件） */
+/** conversation 命令传入的沙箱 CLI 选项（均可选，未指定时走配置文件） */
 export interface SandboxCliOptions {
   /** --no-bash 显式关闭 bash 工具；undefined 表示未指定 */
   bashEnabled?: boolean;
@@ -23,75 +26,33 @@ export interface SandboxCliOptions {
 
 /** L1 装配的中间结果：合并优先级后的生效参数 */
 interface ResolvedOptions {
-  /** 生效档位（CLI > env > 文件） */
+  /** 生效档位（CLI > 项目配置 > 全局配置） */
   level: SandboxLevel;
-  /** 生效审批策略（CLI > env > 文件） */
+  /** 生效审批策略（CLI > 项目配置 > 全局配置） */
   approval: ApprovalPolicy;
-  /** 档位是否来自文件（非信任目录的文件级 full/never 需降级） */
+  /** 档位是否来自配置文件（非信任目录的文件级 full/never 需降级） */
   levelFromFile: boolean;
-  /** 审批策略是否来自文件 */
+  /** 审批策略是否来自配置文件 */
   approvalFromFile: boolean;
   /** 沙箱不可用时的处置 */
   missingAction: "allow" | "deny";
 }
 
 /**
- * 解析 env 覆盖值：非法值忽略并返回警告
- * @param {string | undefined} value - 环境变量原始值
- * @param {string} name - 变量名（警告文案用）
- * @param {readonly T[]} allowed - 合法值集合
- * @param {string[]} warnings - 警告收集器（就地追加）
- * @returns {T | undefined} 合法值或 undefined
- */
-function parseEnvOverride<T extends string>(
-  value: string | undefined,
-  name: string,
-  allowed: readonly T[],
-  warnings: string[],
-): T | undefined {
-  if (value === undefined) {
-    return undefined;
-  }
-  if (!allowed.includes(value as T)) {
-    warnings.push(
-      `环境变量 ${name}=${value} 非法（合法值：${allowed.join(" | ")}），已忽略`,
-    );
-    return undefined;
-  }
-  return value as T;
-}
-
-/**
- * 解析生效档位与审批策略：CLI > env(TX_SANDBOX_*) > 配置文件
+ * 解析生效档位与审批策略：CLI > 项目配置 > 全局配置（两文件合并已由 loadSandboxConfig 完成）
  * @param {SandboxCliOptions} cli - 命令行选项
- * @param {SandboxFileConfig} config - 文件配置
- * @param {string[]} warnings - 警告收集器（就地追加）
+ * @param {SandboxFileConfig} config - 配置文件（项目与全局合并后）
  * @returns {ResolvedOptions} 生效参数
  */
 function resolveOptions(
   cli: SandboxCliOptions,
   config: SandboxFileConfig,
-  warnings: string[],
 ): ResolvedOptions {
-  const envLevel = parseEnvOverride(
-    process.env.TX_SANDBOX_LEVEL,
-    "TX_SANDBOX_LEVEL",
-    ["read-only", "workspace-write", "danger-full-access"],
-    warnings,
-  );
-  const envApproval = parseEnvOverride(
-    process.env.TX_SANDBOX_APPROVAL,
-    "TX_SANDBOX_APPROVAL",
-    ["always-ask", "on-failure", "never"],
-    warnings,
-  );
-  const level = cli.level ?? envLevel ?? config.level;
-  const approval = cli.approval ?? envApproval ?? config.approval;
   return {
-    level,
-    approval,
-    levelFromFile: cli.level === undefined && envLevel === undefined,
-    approvalFromFile: cli.approval === undefined && envApproval === undefined,
+    level: cli.level ?? config.level,
+    approval: cli.approval ?? config.approval,
+    levelFromFile: cli.level === undefined,
+    approvalFromFile: cli.approval === undefined,
     missingAction: cli.missingAction ?? "deny",
   };
 }
@@ -122,8 +83,8 @@ export interface SandboxAssembly {
 
 /**
  * L1 装配：创建会话级沙箱上下文并解析 bash 装配开关
- * 装配链路：enabled 开关 → 优先级合并（CLI > env > 文件）→
- * 信任目录降级（仅文件来源的 danger-full-access / never）→ Provider 选择与初始化 →
+ * 装配链路：enabled 开关 → 优先级合并（CLI > 项目配置 > 全局配置，两文件合并由 loadSandboxConfig 完成）→
+ * 信任目录降级（仅配置文件来源的 danger-full-access / never）→ Provider 选择与初始化 →
  * 构建 SandboxContext；
  * bash 装配开关与沙箱上下文解耦：上下文承担只读工具的 fs 门卫，
  * --no-bash 只移除 bash 工具，不再连带关闭门卫
@@ -134,16 +95,20 @@ export async function createSandboxContext(
   cli: SandboxCliOptions = {},
 ): Promise<SandboxAssembly> {
   const warnings: string[] = [];
-  const { config } = loadSandboxConfig();
+  const cwd = process.cwd();
+  const { config, warnings: configWarnings } = loadSandboxConfig(
+    resolveUserConfigPath(),
+    resolveProjectConfigPath(cwd),
+  );
+  warnings.push(...configWarnings);
   const bashEnabled = cli.bashEnabled ?? config.bash.enabled;
   if (!config.enabled) {
     return { sandbox: undefined, bashEnabled: false };
   }
 
-  const resolved = resolveOptions(cli, config, warnings);
+  const resolved = resolveOptions(cli, config);
   let { level, approval } = resolved;
-  // 信任目录：文件来源的 full 档 / never 策略在非信任目录降级，防止误配置放大权限
-  const cwd = process.cwd();
+  // 信任目录：配置文件来源的 full 档 / never 策略在非信任目录降级，防止误配置放大权限
   if (!isTrusted(cwd, config.trustDirectories)) {
     if (resolved.levelFromFile && level === "danger-full-access") {
       level = "workspace-write";
@@ -207,14 +172,8 @@ export async function createSandboxContext(
     }
   }
 
-  // 项目空间授权（<cwd>/.tx-cli/config.json 的 sandbox.rules.allow）：
-  // 授权归属当前项目，不跨项目生效；加载时提示来源，保证用户知情
-  const projectAllow = readProjectGrants(cwd);
-  if (projectAllow.length > 0) {
-    warnings.push(
-      `已加载项目授权文件 ${resolveProjectConfigPath(cwd)} 中的 ${projectAllow.length} 条放行规则`,
-    );
-  }
+  // 项目空间配置（<cwd>/.tx-cli/config.json）已由 loadSandboxConfig 与全局配置合并装载，
+  // 授权归属当前项目，不跨项目生效；加载提示由 loadSandboxConfig 输出，保证用户知情
 
   for (const warning of warnings) {
     console.warn(warning);
@@ -228,7 +187,6 @@ export async function createSandboxContext(
       isInteractive: detectInteractive(),
       approver: interactiveApprover,
       cwd,
-      projectAllow,
     }),
     bashEnabled,
   };

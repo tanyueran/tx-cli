@@ -1,6 +1,10 @@
 import pico from "picocolors";
 import type { Tool } from "../tools/types";
 import { printWarnings } from "../../shared/warnings";
+import {
+  resolveProjectConfigPath,
+  resolveUserConfigPath,
+} from "../../shared/user-config";
 import { loadMcpServers } from "./config";
 import type { McpRoot } from "./manager";
 import { McpManager } from "./manager";
@@ -28,7 +32,10 @@ export async function connectMcpServers(
   if (!enabled) {
     return { manager: undefined, tools: [] };
   }
-  const { servers, warnings } = loadMcpServers();
+  const { servers, warnings } = loadMcpServers(
+    resolveUserConfigPath(),
+    resolveProjectConfigPath(process.cwd()),
+  );
   printWarnings(warnings);
   if (servers.size === 0) {
     return { manager: undefined, tools: [] };

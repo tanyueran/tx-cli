@@ -1,9 +1,11 @@
 import pico from "picocolors";
 import {
   readUserConfig,
+  resolveProjectConfigPath,
   resolveUserConfigPath,
   updateConfigSection,
 } from "../../shared/user-config";
+import { mergeRecords } from "../../shared/config-merge";
 import { runSetupWizard } from "./config-wizard";
 import { parseThinkingLevel, parseThinkingStyle } from "./thinking";
 import type { LlmConfig, ThinkingLevel, ThinkingStyle } from "./types";
@@ -14,11 +16,12 @@ interface LlmFileConfig {
 }
 
 /**
- * 读取配置文件的 llm 段：文件读取与 JSON 解析由共享模块完成，此处只做段收窄
+ * 读取指定配置文件的 llm 段：文件读取与 JSON 解析由共享模块完成，此处只做段收窄
+ * @param {string} configPath - 配置文件路径
  * @returns {LlmFileConfig} llm 段内容（文件不存在或损坏时为空对象）
  */
-function readConfigFile(): LlmFileConfig {
-  const { data, warnings } = readUserConfig();
+function readLlmSection(configPath: string): LlmFileConfig {
+  const { data, warnings } = readUserConfig(configPath);
   for (const warning of warnings) {
     console.warn(pico.yellow(warning));
   }
@@ -32,22 +35,43 @@ function readConfigFile(): LlmFileConfig {
 }
 
 /**
- * 按优先级解析 LLM 配置：环境变量 > 配置文件
- * 空字符串视为未配置（避免环境变量置空时覆盖掉文件配置）
+ * 判断字符串配置项是否有效：空字符串视为未配置
+ * @param {string | undefined} value - 配置原始值
+ * @returns {string | undefined} 有效值或 undefined
+ */
+function normalizeText(
+  value: string | undefined,
+): string | undefined {
+  return value ? value : undefined;
+}
+
+/**
+ * 按优先级合并两级配置文件的 llm 段：项目配置 > 全局配置
+ * 标量字段（apiKey/baseUrl/model/thinkingLevel/thinkingStyle）高层覆盖低层，
+ * thinkingEffortMap 对象按 key 合并（项目同名覆盖全局）
+ * @param {string} globalPath - 全局配置文件路径
+ * @param {string | undefined} projectPath - 项目配置文件路径（缺省跳过项目层）
  * @returns {Partial<LlmConfig>} 解析结果，任一项都可能为空
  */
-function resolveConfigFromSources(): Partial<LlmConfig> {
-  const file = readConfigFile();
+function resolveConfigFromSources(
+  globalPath: string,
+  projectPath?: string,
+): Partial<LlmConfig> {
+  const global = readLlmSection(globalPath).llm;
+  const project = projectPath ? readLlmSection(projectPath).llm : undefined;
   return {
-    apiKey: process.env.TX_LLM_API_KEY || file.llm?.apiKey,
-    baseUrl: process.env.TX_LLM_BASE_URL || file.llm?.baseUrl,
-    model: process.env.TX_LLM_MODEL || file.llm?.model,
-    // 思考档位/风格为可选配置：env 覆盖文件；合法性与格式校验统一在装载时进行
-    thinkingLevel: (process.env.TX_LLM_THINKING_LEVEL ||
-      file.llm?.thinkingLevel) as ThinkingLevel | undefined,
-    thinkingStyle: (process.env.TX_LLM_THINKING_STYLE ||
-      file.llm?.thinkingStyle) as ThinkingStyle | undefined,
-    thinkingEffortMap: file.llm?.thinkingEffortMap,
+    apiKey: normalizeText(project?.apiKey) ?? normalizeText(global?.apiKey),
+    baseUrl: normalizeText(project?.baseUrl) ?? normalizeText(global?.baseUrl),
+    model: normalizeText(project?.model) ?? normalizeText(global?.model),
+    // 思考档位/风格为可选配置：项目覆盖全局；合法性与格式校验统一在装载时进行
+    thinkingLevel: (project?.thinkingLevel ??
+      global?.thinkingLevel) as ThinkingLevel | undefined,
+    thinkingStyle: (project?.thinkingStyle ??
+      global?.thinkingStyle) as ThinkingStyle | undefined,
+    thinkingEffortMap:
+      project?.thinkingEffortMap || global?.thinkingEffortMap
+        ? mergeRecords(global?.thinkingEffortMap ?? {}, project?.thinkingEffortMap ?? {})
+        : undefined,
   };
 }
 
@@ -63,14 +87,19 @@ function saveConfigFile(config: LlmConfig): void {
 }
 
 /**
- * 加载 LLM 配置：环境变量优先于配置文件；必填三项（apiKey/baseUrl/model）任一缺失时进入引导流程
+ * 加载 LLM 配置：项目配置优先于全局配置（CLI 选项在命令层更优先）；必填三项（apiKey/baseUrl/model）任一缺失时进入引导流程
  * 可选思考配置（thinkingLevel/thinkingStyle/thinkingEffortMap）不参与引导，
  * 装载时统一校验并随完整配置返回，向导补全后原样保留以免落盘丢失
+ * @param {string} globalPath - 全局配置文件路径（缺省 ~/.tx-cli/config.json，测试可注入）
+ * @param {string} projectPath - 项目配置文件路径（缺省 <cwd>/.tx-cli/config.json，测试可注入）
  * @returns {Promise<LlmConfig>} 完整可用的 LLM 配置
  * @throws {CliError} 思考档位或风格配置非法时抛出
  */
-export async function loadLlmConfig(): Promise<LlmConfig> {
-  const partial = resolveConfigFromSources();
+export async function loadLlmConfig(
+  globalPath: string = resolveUserConfigPath(),
+  projectPath: string = resolveProjectConfigPath(process.cwd()),
+): Promise<LlmConfig> {
+  const partial = resolveConfigFromSources(globalPath, projectPath);
   // 思考配置装载即校验：非法值直接报错，避免静默失效
   const thinkingLevel = parseThinkingLevel(partial.thinkingLevel);
   const thinkingStyle = parseThinkingStyle(partial.thinkingStyle);

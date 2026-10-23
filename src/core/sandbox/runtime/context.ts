@@ -41,8 +41,6 @@ export interface SandboxContextOptions {
   tier?: TierConfig;
   /** 项目根目录（「始终允许」授权落盘到 <cwd>/.tx-cli/config.json；缺省 process.cwd()） */
   cwd?: string;
-  /** 项目空间授权（装配层经 readProjectGrants 读入的 sandbox.rules.allow，注入合并进 allow 规则集） */
-  projectAllow?: string[];
   /** 项目授权文件路径（缺省 <cwd>/.tx-cli/config.json，测试可注入） */
   projectConfigPath?: string;
   /** 审计日志路径（缺省 ~/.tx-cli/sandbox-audit.jsonl，测试可注入） */
@@ -119,13 +117,12 @@ export class SandboxContext {
     this.dangerRules = options.config.builtinDangerRules
       ? BUILTIN_DANGER_RULES
       : null;
-    // 项目空间授权（.tx-cli/config.json）与用户规则合并进 allow 规则集
+    // 规则副本：guard 运行期会把 ask 移入 allow、追加会话/持久授权，不污染构造入参
+    // 项目空间授权（<cwd>/.tx-cli/config.json）已由装配层合并进 config.rules.allow
     this.rules = {
-      ...options.config.rules,
-      allow: [
-        ...options.config.rules.allow,
-        ...(options.projectAllow ?? []),
-      ],
+      allow: [...options.config.rules.allow],
+      ask: [...options.config.rules.ask],
+      deny: [...options.config.rules.deny],
     };
   }
 

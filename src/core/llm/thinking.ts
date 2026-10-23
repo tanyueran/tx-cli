@@ -148,16 +148,18 @@ export function describeThinkingStyle(style: ThinkingStyle): string {
 export const DEFAULT_THINKING_LEVEL: ThinkingLevel = "medium";
 
 /**
- * 解析生效的思考档位：命令行 --think > 配置文件 llm.thinkingLevel > 内置默认值
+ * 解析生效的思考档位：命令行 --think > 配置文件（项目 > 全局）> 模式内置默认值
  * @param {ThinkingLevel | undefined} cliLevel - 命令行指定的档位，未指定时回退配置默认
  * @param {LlmConfig} config - LLM 接入配置
+ * @param {ThinkingLevel} fallback - 配置也未指定时的兜底档位（chat 为 low，其余为 medium）
  * @returns {ThinkingLevel} 生效的思考档位
  */
 export function resolveThinkingLevel(
   cliLevel: ThinkingLevel | undefined,
-  config: LlmConfig
+  config: LlmConfig,
+  fallback: ThinkingLevel = DEFAULT_THINKING_LEVEL
 ): ThinkingLevel {
-  return cliLevel ?? config.thinkingLevel ?? DEFAULT_THINKING_LEVEL;
+  return cliLevel ?? config.thinkingLevel ?? fallback;
 }
 
 /**

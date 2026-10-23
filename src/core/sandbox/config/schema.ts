@@ -80,6 +80,32 @@ export interface SandboxFileConfig {
   audit: boolean;
 }
 
+/** 单个配置文件 sandbox 段的部分解析结果：仅包含显式配置且合法的字段（两级文件合并用） */
+export interface PartialSandboxFileConfig {
+  /** 沙箱总开关 */
+  enabled?: boolean;
+  /** 档位 */
+  level?: SandboxLevel;
+  /** 审批策略 */
+  approval?: ApprovalPolicy;
+  /** Provider 名称 */
+  provider?: string;
+  /** 信任目录列表 */
+  trustDirectories?: string[];
+  /** 是否启用内置危险命令类目 */
+  builtinDangerRules?: boolean;
+  /** 文件系统扩展限制 */
+  filesystem?: Partial<SandboxFsConfig>;
+  /** 网络扩展限制 */
+  network?: Partial<SandboxNetworkConfig>;
+  /** bash 工具配置 */
+  bash?: Partial<SandboxBashConfig>;
+  /** 权限规则 */
+  rules?: Partial<SandboxRulesConfig>;
+  /** 是否写审计日志 */
+  audit?: boolean;
+}
+
 /** 配置加载结果：解析后的配置与警告 */
 export interface SandboxConfigResult {
   /** 解析后的沙箱配置（坏段跳过，余下照常生效） */
