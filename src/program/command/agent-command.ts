@@ -11,43 +11,48 @@ import {
   SANDBOX_LEVELS,
   type SandboxCliOptions,
 } from "../../core/sandbox";
-import type { ApprovalPolicy, SandboxLevel } from "../../core/sandbox/types";
+import type {
+  ApprovalPolicy,
+  SandboxLevel,
+  SandboxMissingAction,
+} from "../../core/sandbox/types";
 
-/** agent 命令执行体的选项入参 */
+/** agent 命令执行体的选项入参（枚举字段直接用联合类型，choices() 保证运行时合法，无需断言） */
 interface AgentOptions {
   /** 思考档位（--think），未指定时回退配置默认 */
   think?: string;
   /** 是否启用 MCP 服务器：--no-mcp 显式传入 false，缺省视为开启 */
   mcp?: boolean;
   /** 沙箱档位（--sandbox），未指定时回退配置默认（项目 > 全局） */
-  sandbox?: string;
+  sandbox?: SandboxLevel;
   /** 审批策略（--approval），未指定时回退配置默认（项目 > 全局） */
-  approval?: string;
+  approval?: ApprovalPolicy;
   /** 是否启用 bash 工具：--no-bash 显式传入 false，缺省视为开启 */
   bash?: boolean;
   /** 沙箱不可用时的处置（--sandbox-missing），缺省 deny（失败关闭） */
-  sandboxMissing?: string;
+  sandboxMissing?: SandboxMissingAction;
 }
 
 /**
- * 组装沙箱 CLI 选项：枚举合法性已由 commander 的 choices() 在 action 执行前拦截，此处只做映射
+ * 组装沙箱 CLI 选项：枚举合法性已由 commander 的 choices() 在 action 执行前拦截，
+ * 入参字段已声明为联合类型，此处只做可选字段到 SandboxCliOptions 的映射（导出以便单测直测映射逻辑）
  * @param {AgentOptions} opts - 命令行选项
  * @returns {SandboxCliOptions} 沙箱选项（未指定任何沙箱相关项时为空对象，走配置文件默认）
  */
-function buildSandboxOptions(opts: AgentOptions): SandboxCliOptions {
+export function buildSandboxOptions(opts: AgentOptions): SandboxCliOptions {
   const sandbox: SandboxCliOptions = {};
   if (opts.sandbox !== undefined) {
-    sandbox.level = opts.sandbox as SandboxLevel;
+    sandbox.level = opts.sandbox;
   }
   if (opts.approval !== undefined) {
-    sandbox.approval = opts.approval as ApprovalPolicy;
+    sandbox.approval = opts.approval;
   }
   // commander 的 --no-bash 取反约定：显式传入时 opts.bash 为 false，缺省为 true
   if (opts.bash === false) {
     sandbox.bashEnabled = false;
   }
   if (opts.sandboxMissing !== undefined) {
-    sandbox.missingAction = opts.sandboxMissing as "allow" | "deny";
+    sandbox.missingAction = opts.sandboxMissing;
   }
   return sandbox;
 }

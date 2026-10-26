@@ -1,5 +1,9 @@
 import { resolve } from "node:path";
-import type { ApprovalPolicy, SandboxLevel } from "./types";
+import type {
+  ApprovalPolicy,
+  SandboxLevel,
+  SandboxMissingAction,
+} from "./types";
 import { loadSandboxConfig } from "./config/load";
 import {
   resolveProjectConfigPath,
@@ -21,7 +25,7 @@ export interface SandboxCliOptions {
   /** --approval 指定的审批策略 */
   approval?: ApprovalPolicy;
   /** --sandbox-missing：沙箱不可用时的处置（allow 降级直通 / deny 失败关闭） */
-  missingAction?: "allow" | "deny";
+  missingAction?: SandboxMissingAction;
 }
 
 /** L1 装配的中间结果：合并优先级后的生效参数 */
@@ -35,7 +39,7 @@ interface ResolvedOptions {
   /** 审批策略是否来自配置文件 */
   approvalFromFile: boolean;
   /** 沙箱不可用时的处置 */
-  missingAction: "allow" | "deny";
+  missingAction: SandboxMissingAction;
 }
 
 /**

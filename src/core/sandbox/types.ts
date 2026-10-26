@@ -9,6 +9,9 @@ export type SandboxLevel = "read-only" | "workspace-write" | "danger-full-access
 /** 审批策略：ask 命中后与沙箱内失败后的处置方式 */
 export type ApprovalPolicy = "always-ask" | "on-failure" | "never";
 
+/** 沙箱不可用时的处置：allow 降级为无隔离执行（规则与审批仍生效）/ deny 失败关闭（默认） */
+export type SandboxMissingAction = "allow" | "deny";
+
 /** 权限规则的判定结果 */
 export type RuleDecision = "allow" | "deny" | "ask";
 

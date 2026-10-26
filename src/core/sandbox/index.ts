@@ -8,6 +8,7 @@ export type {
   Approver,
   RuleDecision,
   SandboxLevel,
+  SandboxMissingAction,
   SandboxProvider,
   SandboxViolationInfo,
   TierConfig,
