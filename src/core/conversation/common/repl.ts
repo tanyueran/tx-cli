@@ -62,33 +62,42 @@ export interface ReplOptions {
   maxIterations: number;
 }
 
+/** runReplTurn 入参对象 */
+interface ReplTurnOptions {
+  /** 会话上下文（配置、协议风格、提示词、工具列表） */
+  session: ReplSession;
+  /** 跨轮共享的对话历史（本函数向其追加内容） */
+  history: ResponseHistoryItem[];
+  /** 本轮用户输入 */
+  input: string;
+  /** 本轮思考档位（/think 切换后下一轮使用新档位） */
+  thinkingLevel: ThinkingLevel;
+}
+
 /**
  * 执行多轮对话的一轮：Responses API 无状态模式 + agentic loop，工具调用按会话装配的工具带开启
  * store=false：服务端不留存会话，历史由本地维护并每轮全量发送，跨轮经共享 history 数组衔接；
  * 深度思考内容以暗色流式输出（模型未返回时不输出），instructions 每轮重传
- * @param {ReplSession} session - 会话上下文（配置、协议风格、提示词、工具列表）
- * @param {ResponseHistoryItem[]} history - 跨轮共享的对话历史（本函数向其追加内容）
- * @param {string} input - 本轮用户输入
- * @param {ThinkingLevel} thinkingLevel - 本轮思考档位（/think 切换后下一轮使用新档位）
+ * @param {ReplTurnOptions} options - 入参对象（session/history/input/thinkingLevel 字段说明见接口定义）
  * @returns {Promise<void>}
  */
-async function runReplTurn(
-  session: ReplSession,
-  history: ResponseHistoryItem[],
-  input: string,
-  thinkingLevel: ThinkingLevel,
-): Promise<void> {
+async function runReplTurn({
+  session,
+  history,
+  input,
+  thinkingLevel,
+}: ReplTurnOptions): Promise<void> {
   const renderer = createStreamRenderer();
   const runTurn = createResponsesTurn({
     config: session.config,
     input,
     history,
     instructions: session.systemPrompt,
-    extraBody: resolveResponsesThinkingFields(
-      thinkingLevel,
-      session.style,
-      session.config.thinkingEffortMap,
-    ),
+    extraBody: resolveResponsesThinkingFields({
+      level: thinkingLevel,
+      style: session.style,
+      effortMap: session.config.thinkingEffortMap,
+    }),
     tools: session.tools,
     onDelta: renderer.onDelta,
     onReasoningDelta: renderer.onReasoningDelta,
@@ -393,7 +402,7 @@ export async function runConversationRepl(opts: ReplOptions): Promise<void> {
     // 记录本轮开始前历史长度：本轮被取消时回滚，避免残留未配对的用户输入或工具调用项
     const historyStart = history.length;
     try {
-      await runReplTurn(session, history, input, currentLevel);
+      await runReplTurn({ session, history, input, thinkingLevel: currentLevel });
     } catch (err) {
       // 审批等交互中按 Ctrl+C：只中断本轮并回滚本轮历史，会话继续
       if (err instanceof CancelError) {
@@ -413,28 +422,38 @@ export async function runConversationRepl(opts: ReplOptions): Promise<void> {
   }
 }
 
+/** runReplConversation 入参对象 */
+export interface ReplConversationOptions {
+  /** LLM 接入配置 */
+  config: LlmConfig;
+  /** 模式配置（人设、标签、bash 装配策略） */
+  mode: ConversationModeConfig;
+  /** 命令行指定的思考档位，未指定时回退配置默认 */
+  thinkingLevel?: ThinkingLevel;
+  /** 是否启用 MCP 服务器（--no-mcp 关闭），缺省开启 */
+  mcpEnabled?: boolean;
+  /** 沙箱 CLI 选项（agent 命令的 --sandbox 等），缺省按配置文件装配 */
+  sandboxCli?: SandboxCliOptions;
+}
+
 /**
  * 多轮对话入口（chat、agent 命令共用的 REPL 薄入口）：解析档位 → 装配会话运行时 → 进入 REPL 循环
  * 模式差异（人设、标签、bash 装配策略）由 mode 决定；运行时生命周期在本函数内管理
- * @param {LlmConfig} config - LLM 接入配置
- * @param {ConversationModeConfig} mode - 模式配置（人设、标签、bash 装配策略）
- * @param {ThinkingLevel | undefined} thinkingLevel - 命令行指定的思考档位，未指定时回退配置默认
- * @param {boolean} mcpEnabled - 是否启用 MCP 服务器（--no-mcp 关闭），缺省开启
- * @param {SandboxCliOptions} sandboxCli - 沙箱 CLI 选项（agent 命令的 --sandbox 等），缺省按配置文件装配
+ * @param {ReplConversationOptions} options - 入参对象（config/mode/thinkingLevel/mcpEnabled/sandboxCli 字段说明见接口定义）
  * @returns {Promise<void>}
  */
-export async function runReplConversation(
-  config: LlmConfig,
-  mode: ConversationModeConfig,
-  thinkingLevel?: ThinkingLevel,
+export async function runReplConversation({
+  config,
+  mode,
+  thinkingLevel,
   mcpEnabled = true,
-  sandboxCli?: SandboxCliOptions,
-): Promise<void> {
-  const currentLevel = resolveThinkingLevel(
-    thinkingLevel,
+  sandboxCli,
+}: ReplConversationOptions): Promise<void> {
+  const currentLevel = resolveThinkingLevel({
+    cliLevel: thinkingLevel,
     config,
-    mode.defaultThinkingLevel,
-  );
+    fallback: mode.defaultThinkingLevel,
+  });
   const style = resolveThinkingStyle(config);
   const runtime = await createConversationRuntime(mode.basePrompt, {
     mcpEnabled,

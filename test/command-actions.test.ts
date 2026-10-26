@@ -52,7 +52,11 @@ describe("runChatAction", () => {
     await runChatAction(["解释", "一下", "这段代码"], { think: "high" });
 
     expect(runOneShotChat).toHaveBeenCalledTimes(1);
-    expect(runOneShotChat).toHaveBeenCalledWith(config, "解释 一下 这段代码", "high");
+    expect(runOneShotChat).toHaveBeenCalledWith({
+      config,
+      question: "解释 一下 这段代码",
+      thinkingLevel: "high",
+    });
     expect(runReplChat).not.toHaveBeenCalled();
   });
 
@@ -79,11 +83,11 @@ describe("runChatAction", () => {
   it("未指定 --think 时档位为 undefined（由会话层按模式兜底）", async () => {
     await runChatAction(["问题"], {});
 
-    expect(runOneShotChat).toHaveBeenCalledWith(
-      await loadLlmConfig(),
-      "问题",
-      undefined,
-    );
+    expect(runOneShotChat).toHaveBeenCalledWith({
+      config: await loadLlmConfig(),
+      question: "问题",
+      thinkingLevel: undefined,
+    });
   });
 });
 
@@ -94,13 +98,13 @@ describe("runAgentAction", () => {
     await runAgentAction(["修复", "这个", "bug"], {});
 
     expect(runOneShotAgent).toHaveBeenCalledTimes(1);
-    expect(runOneShotAgent).toHaveBeenCalledWith(
+    expect(runOneShotAgent).toHaveBeenCalledWith({
       config,
-      "修复 这个 bug",
-      undefined,
-      true,
-      {},
-    );
+      task: "修复 这个 bug",
+      thinkingLevel: undefined,
+      mcpEnabled: true,
+      sandboxCli: {},
+    });
     expect(runReplAgent).not.toHaveBeenCalled();
   });
 
@@ -110,20 +114,25 @@ describe("runAgentAction", () => {
     await runAgentAction([], {});
 
     expect(runReplAgent).toHaveBeenCalledTimes(1);
-    expect(runReplAgent).toHaveBeenCalledWith(config, undefined, true, {});
+    expect(runReplAgent).toHaveBeenCalledWith({
+      config,
+      thinkingLevel: undefined,
+      mcpEnabled: true,
+      sandboxCli: {},
+    });
     expect(runOneShotAgent).not.toHaveBeenCalled();
   });
 
   it("--no-mcp 显式关闭 MCP 服务器", async () => {
     await runAgentAction(["任务"], { mcp: false });
 
-    expect(runOneShotAgent).toHaveBeenCalledWith(
-      await loadLlmConfig(),
-      "任务",
-      undefined,
-      false,
-      {},
-    );
+    expect(runOneShotAgent).toHaveBeenCalledWith({
+      config: await loadLlmConfig(),
+      task: "任务",
+      thinkingLevel: undefined,
+      mcpEnabled: false,
+      sandboxCli: {},
+    });
   });
 
   it("执行类选项完整映射到沙箱 CLI 选项并透传", async () => {
@@ -136,18 +145,18 @@ describe("runAgentAction", () => {
       sandboxMissing: "allow",
     });
 
-    expect(runOneShotAgent).toHaveBeenCalledWith(
-      await loadLlmConfig(),
-      "任务",
-      "low",
-      false,
-      {
+    expect(runOneShotAgent).toHaveBeenCalledWith({
+      config: await loadLlmConfig(),
+      task: "任务",
+      thinkingLevel: "low",
+      mcpEnabled: false,
+      sandboxCli: {
         level: "workspace-write",
         approval: "never",
         bashEnabled: false,
         missingAction: "allow",
       },
-    );
+    });
   });
 
   it("空白任务按未传参处理进入多轮任务模式", async () => {

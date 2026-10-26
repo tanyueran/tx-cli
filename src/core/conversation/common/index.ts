@@ -12,11 +12,16 @@ export {
   printToolCall,
 } from "./renderer";
 export { runConversationRepl, runReplConversation } from "./repl";
-export type { ReplOptions } from "./repl";
+export type { ReplOptions, ReplConversationOptions } from "./repl";
 export { runOneShotConversation } from "./one-shot";
+export type { OneShotConversationOptions } from "./one-shot";
 export type { ConversationModeConfig } from "./mode";
 export { setupSkillContext } from "./skill-context";
-export type { SkillContext, SkillAssemblyOptions } from "./skill-context";
+export type {
+  SkillContext,
+  SkillAssemblyOptions,
+  SetupSkillContextOptions,
+} from "./skill-context";
 export {
   createConversationRuntime,
   disposeConversationRuntime,

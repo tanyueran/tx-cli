@@ -79,10 +79,16 @@ export async function runAgentAction(
   const mcpEnabled = opts.mcp !== false;
   const taskText = task.join(" ").trim();
   if (taskText) {
-    await runOneShotAgent(config, taskText, thinkingLevel, mcpEnabled, sandboxCli);
+    await runOneShotAgent({
+      config,
+      task: taskText,
+      thinkingLevel,
+      mcpEnabled,
+      sandboxCli,
+    });
     return;
   }
-  await runReplAgent(config, thinkingLevel, mcpEnabled, sandboxCli);
+  await runReplAgent({ config, thinkingLevel, mcpEnabled, sandboxCli });
 }
 
 /**

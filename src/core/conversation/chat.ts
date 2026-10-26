@@ -18,28 +18,36 @@ export const CHAT_MODE: ConversationModeConfig = {
   defaultThinkingLevel: "low",
 };
 
+/** runOneShotChat 入参对象 */
+interface OneShotChatOptions {
+  /** LLM 接入配置 */
+  config: LlmConfig;
+  /** 用户问题 */
+  question: string;
+  /** 命令行指定的思考档位，未指定时回退配置默认 */
+  thinkingLevel?: ThinkingLevel;
+}
+
 /**
  * 单次问答（chat 命令的 Chat 模式入口）：只读问答，轻量工具带——固定不装配 bash 与 MCP，
  * 沙箱上下文仍创建（只读工具继续受 fs 边界管控），技能照常装配；
  * 思考档位链路：--think > 配置文件（项目 > 全局）> low（轻量兜底，由会话层解析）；
  * 具体流程复用 common 的 runOneShotConversation
- * @param {LlmConfig} config - LLM 接入配置
- * @param {string} question - 用户问题
- * @param {ThinkingLevel | undefined} thinkingLevel - 命令行指定的思考档位，未指定时回退配置默认
+ * @param {OneShotChatOptions} options - 入参对象（config/question/thinkingLevel 字段说明见接口定义）
  * @returns {Promise<void>}
  */
-export async function runOneShotChat(
-  config: LlmConfig,
-  question: string,
-  thinkingLevel?: ThinkingLevel,
-): Promise<void> {
-  await runOneShotConversation(
+export async function runOneShotChat({
+  config,
+  question,
+  thinkingLevel,
+}: OneShotChatOptions): Promise<void> {
+  await runOneShotConversation({
     config,
-    CHAT_MODE,
-    question,
+    mode: CHAT_MODE,
+    input: question,
     thinkingLevel,
-    false,
-  );
+    mcpEnabled: false,
+  });
 }
 
 /**
@@ -55,5 +63,10 @@ export async function runReplChat(
   config: LlmConfig,
   thinkingLevel?: ThinkingLevel,
 ): Promise<void> {
-  await runReplConversation(config, CHAT_MODE, thinkingLevel, false);
+  await runReplConversation({
+    config,
+    mode: CHAT_MODE,
+    thinkingLevel,
+    mcpEnabled: false,
+  });
 }

@@ -62,9 +62,14 @@ export async function createConversationRuntime(
       buildMcpRoots(sandbox?.level, sandbox?.rootDir ?? process.cwd()),
     );
     manager = mcp.manager;
-    const skill = setupSkillContext(basePrompt, mcp.tools, sandbox, {
-      bash: opts.bashEnabled ?? bashEnabled,
-      todos: opts.todosEnabled,
+    const skill = setupSkillContext({
+      basePrompt,
+      extraTools: mcp.tools,
+      sandbox,
+      assembly: {
+        bash: opts.bashEnabled ?? bashEnabled,
+        todos: opts.todosEnabled,
+      },
     });
     return {
       manager,

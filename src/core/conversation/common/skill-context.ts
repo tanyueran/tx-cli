@@ -46,24 +46,33 @@ export interface SkillAssemblyOptions {
   todos?: boolean;
 }
 
+/** setupSkillContext 入参对象 */
+export interface SetupSkillContextOptions {
+  /** 场景基础提示词（chat、agent 等命令各自定义人设） */
+  basePrompt: string;
+  /** 追加并入的外部工具（如 MCP 工具，缺省为空） */
+  extraTools?: Tool[];
+  /** 会话级沙箱上下文（可选；存在时启用权限门卫） */
+  sandbox?: SandboxContext;
+  /** 装配选项（bash 开关、write_todos 开关等，缺省全部关闭/跟随沙箱） */
+  assembly?: SkillAssemblyOptions;
+}
+
 /**
  * 发现技能并装配对话所需的提示词与工具列表
  * 工具来源固定拼接：内置工具（随版本发布）+ load_skill（仅存在技能时）+ write_todos（agent 模式）+ bash（沙箱启用且 bash 开关未关闭时）+ 外部工具（如 MCP），
  * 不再支持运行时动态注册工具；
  * 仅当存在可用技能时才装配 load_skill，避免空技能场景多下发一个无用工具定义；
  * 传入沙箱上下文时对声明了 permission 的工具做权限门卫包装（chat 模式只读工具继续受 fs 边界管控）
- * @param {string} basePrompt - 场景基础提示词（chat、agent 等命令各自定义人设）
- * @param {Tool[]} extraTools - 追加并入的外部工具（如 MCP 工具，缺省为空）
- * @param {SandboxContext} sandbox - 会话级沙箱上下文（可选；存在时启用权限门卫）
- * @param {SkillAssemblyOptions} opts - 装配选项（bash 开关、write_todos 开关等，缺省全部关闭/跟随沙箱）
+ * @param {SetupSkillContextOptions} options - 入参对象（basePrompt/extraTools/sandbox/assembly 字段说明见接口定义）
  * @returns {SkillContext} 装配结果
  */
-export function setupSkillContext(
-  basePrompt: string,
-  extraTools: Tool[] = [],
-  sandbox?: SandboxContext,
-  opts?: SkillAssemblyOptions,
-): SkillContext {
+export function setupSkillContext({
+  basePrompt,
+  extraTools = [],
+  sandbox,
+  assembly,
+}: SetupSkillContextOptions): SkillContext {
   const { skills, warnings } = discoverSkills();
   const catalog = new SkillCatalog(skills);
   let todoHandle: TodoToolHandle | undefined;
@@ -72,12 +81,12 @@ export function setupSkillContext(
     tools.push(createLoadSkillTool(catalog));
   }
   // 任务清单工具（write_todos）：agent 模式装配，工具实例闭包持有会话级清单状态（/todos 读取）
-  if (opts?.todos) {
+  if (assembly?.todos) {
     todoHandle = createTodoTool();
     tools.push(todoHandle.tool);
   }
   // bash 依赖沙箱执行：无沙箱或显式关闭（chat 模式 / --no-bash）时不装配
-  if (sandbox && (opts?.bash ?? true)) {
+  if (sandbox && (assembly?.bash ?? true)) {
     tools.push(createBashTool(sandbox));
   }
   tools.push(...extraTools);
