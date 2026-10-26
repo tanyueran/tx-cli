@@ -1,6 +1,6 @@
 import pico from "picocolors";
-import { ask } from "../../shared/prompt";
-import type { LlmConfig } from "../../types/llm";
+import { ask } from "../../shared/interactive-prompt";
+import type { LlmConfig } from "./types";
 
 /** 必填文本的统一校验：空白输入不允许通过 */
 function required(input: string): true | string {
@@ -17,11 +17,6 @@ export async function runSetupWizard(
 ): Promise<LlmConfig> {
   console.log(
     pico.yellow("首次使用需要配置大模型服务（支持任何 OpenAI 兼容接口）")
-  );
-  console.log(
-    pico.yellow(
-      "也可以通过环境变量 TX_LLM_API_KEY / TX_LLM_BASE_URL / TX_LLM_MODEL 配置"
-    )
   );
 
   const answers = await ask([

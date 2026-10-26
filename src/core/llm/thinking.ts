@@ -1,8 +1,9 @@
+import pico from "picocolors";
 import { CliError } from "../../shared/errors";
-import type { LlmConfig, ThinkingLevel, ThinkingStyle } from "../../types/llm";
+import type { LlmConfig, ThinkingLevel, ThinkingStyle } from "./types";
 
-/** 全部合法的思考档位 */
-const THINKING_LEVELS: readonly ThinkingLevel[] = [
+/** 全部合法的思考档位（帮助文案与校验共用，避免多处硬编码漂移） */
+export const THINKING_LEVELS: readonly ThinkingLevel[] = [
   "off",
   "low",
   "medium",
@@ -91,31 +92,27 @@ export function resolveThinkingStyle(config: LlmConfig): ThinkingStyle {
   return hit?.style ?? "reasoning_effort";
 }
 
-/** reasoning 扩展字段的构造器：两套接口的字段形状不同，由调用方提供 */
-type ReasoningFieldBuilder = (effort: string) => Record<string, unknown>;
-
 /**
- * 按档位与风格生成思考扩展字段：两套接口仅 reasoning 字段形状不同，其余分支共用
+ * 按档位与风格生成 Responses API 的附加请求字段
  * off 在 reasoning_effort/none 风格下不发任何字段，最大化兼容不支持思考扩展的服务；
  * thinking/enable_thinking 为开关式风格，low/medium/high 均折算为开启
  * @param {ThinkingLevel} level - 思考档位
  * @param {ThinkingStyle} style - 思考协议风格
  * @param {Partial<Record<ThinkingLevel, string>>} [effortMap] - 高级映射，优先于内置映射
- * @param {ReasoningFieldBuilder} buildReasoningField - 生成 reasoning 字段（仅 reasoning_effort 风格使用）
  * @returns {Record<string, unknown>} 附加请求字段，空对象表示不下发
  */
-function resolveThinkingFields(
+export function resolveResponsesThinkingFields(
   level: ThinkingLevel,
   style: ThinkingStyle,
-  effortMap: Partial<Record<ThinkingLevel, string>> | undefined,
-  buildReasoningField: ReasoningFieldBuilder,
+  effortMap?: Partial<Record<ThinkingLevel, string>>,
 ): Record<string, unknown> {
   switch (style) {
     case "reasoning_effort": {
       if (level === "off") {
         return {};
       }
-      return buildReasoningField(effortMap?.[level] ?? level);
+      // reasoning_effort 风格映射为嵌套的 reasoning.effort 字段
+      return { reasoning: { effort: effortMap?.[level] ?? level } };
     }
     case "thinking": {
       const type =
@@ -127,42 +124,6 @@ function resolveThinkingFields(
     case "none":
       return {};
   }
-}
-
-/**
- * 按档位与风格生成 Chat Completions 接口的附加请求字段
- * reasoning_effort 风格映射为顶层 reasoning_effort 字段
- * @param {ThinkingLevel} level - 思考档位
- * @param {ThinkingStyle} style - 思考协议风格
- * @param {Partial<Record<ThinkingLevel, string>>} [effortMap] - 高级映射，优先于内置映射
- * @returns {Record<string, unknown>} 附加请求字段，空对象表示不下发
- */
-export function resolveChatThinkingFields(
-  level: ThinkingLevel,
-  style: ThinkingStyle,
-  effortMap?: Partial<Record<ThinkingLevel, string>>,
-): Record<string, unknown> {
-  return resolveThinkingFields(level, style, effortMap, (effort) => ({
-    reasoning_effort: effort,
-  }));
-}
-
-/**
- * 按档位与风格生成 Responses API 的附加请求字段
- * reasoning_effort 风格映射为嵌套的 reasoning.effort 字段
- * @param {ThinkingLevel} level - 思考档位
- * @param {ThinkingStyle} style - 思考协议风格
- * @param {Partial<Record<ThinkingLevel, string>>} [effortMap] - 高级映射，优先于内置映射
- * @returns {Record<string, unknown>} 附加请求字段，空对象表示不下发
- */
-export function resolveResponsesThinkingFields(
-  level: ThinkingLevel,
-  style: ThinkingStyle,
-  effortMap?: Partial<Record<ThinkingLevel, string>>,
-): Record<string, unknown> {
-  return resolveThinkingFields(level, style, effortMap, (effort) => ({
-    reasoning: { effort },
-  }));
 }
 
 /**
@@ -181,4 +142,44 @@ export function isToggleOnlyStyle(style: ThinkingStyle): boolean {
  */
 export function describeThinkingStyle(style: ThinkingStyle): string {
   return STYLE_DESCRIPTIONS[style];
+}
+
+/** 思考档位缺省值：配置与命令行均未指定时使用（chat、agent 等命令共用） */
+export const DEFAULT_THINKING_LEVEL: ThinkingLevel = "medium";
+
+/**
+ * 解析生效的思考档位：命令行 --think > 配置文件（项目 > 全局）> 模式内置默认值
+ * @param {ThinkingLevel | undefined} cliLevel - 命令行指定的档位，未指定时回退配置默认
+ * @param {LlmConfig} config - LLM 接入配置
+ * @param {ThinkingLevel} fallback - 配置也未指定时的兜底档位（chat 为 low，其余为 medium）
+ * @returns {ThinkingLevel} 生效的思考档位
+ */
+export function resolveThinkingLevel(
+  cliLevel: ThinkingLevel | undefined,
+  config: LlmConfig,
+  fallback: ThinkingLevel = DEFAULT_THINKING_LEVEL
+): ThinkingLevel {
+  return cliLevel ?? config.thinkingLevel ?? fallback;
+}
+
+/**
+ * 打印思考档位的服务能力折算警告：服务完全支持分档思考时静默
+ * none 风格说明思考字段不会下发；开关式风格仅在非 off 档位时提示折算（off 本就对应关闭，无需提示）
+ * @param {ThinkingLevel} level - 生效的思考档位
+ * @param {ThinkingStyle} style - 思考协议风格
+ * @returns {void}
+ */
+export function warnThinkingFallback(
+  level: ThinkingLevel,
+  style: ThinkingStyle
+): void {
+  if (style === "none") {
+    console.log(
+      pico.yellow(`思考档位为 ${level}，但${describeThinkingStyle(style)}`)
+    );
+    return;
+  }
+  if (isToggleOnlyStyle(style) && level !== "off") {
+    console.log(pico.yellow(`注意：当前服务${describeThinkingStyle(style)}`));
+  }
 }

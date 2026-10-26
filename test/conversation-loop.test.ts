@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
-import { runAgentLoop } from "../src/core/conversation/loop";
-import type { RunTurn, TurnOutcome } from "../src/core/conversation/loop";
+import { runAgentLoop } from "../src/core/conversation/common/loop";
+import type { RunTurn, TurnOutcome } from "../src/core/conversation/common/loop";
 import type { Tool } from "../src/core/tools";
-import type { ToolCall } from "../src/types/llm";
+import type { ToolCall } from "../src/core/llm/types";
 
 /**
  * 构造一个用于测试的假工具，execute 直接返回预设输出
@@ -67,7 +67,8 @@ describe("runAgentLoop", () => {
     });
 
     expect(result).toBe("答案是 42");
-    expect(onToolCall).toHaveBeenCalledWith(makeCall("read_file"));
+    // onToolCall 附带工具实例（供调用提示自定义渲染）
+    expect(onToolCall).toHaveBeenCalledWith(makeCall("read_file"), tool);
   });
 
   it("模型请求未注册的工具时转为失败结果回传", async () => {
@@ -123,5 +124,44 @@ describe("runAgentLoop", () => {
     await expect(
       runAgentLoop({ runTurn, tools: [makeTool("read_file")], maxIterations: 0 })
     ).rejects.toThrow("工具调用轮数已达上限");
+  });
+
+  it("首次进入软收敛轮时触发 onSoftConverge 恰好一次", async () => {
+    const onSoftConverge = vi.fn();
+    let call = 0;
+    const runTurn: RunTurn = async (_toolResults, disableTools) => {
+      call += 1;
+      if (call <= 2) {
+        return { type: "tool_calls", toolCalls: [makeCall("read_file")] };
+      }
+      expect(disableTools).toBe(true);
+      return { type: "reply", reply: "收敛作答" };
+    };
+
+    const result = await runAgentLoop({
+      runTurn,
+      tools: [makeTool("read_file")],
+      maxIterations: 2,
+      onSoftConverge,
+    });
+
+    expect(result).toBe("收敛作答");
+    expect(onSoftConverge).toHaveBeenCalledTimes(1);
+  });
+
+  it("未达到轮数上限时不会触发 onSoftConverge", async () => {
+    const onSoftConverge = vi.fn();
+    const runTurn: RunTurn = async (): Promise<TurnOutcome> => ({
+      type: "reply",
+      reply: "直接作答",
+    });
+
+    await runAgentLoop({
+      runTurn,
+      tools: [makeTool("read_file")],
+      onSoftConverge,
+    });
+
+    expect(onSoftConverge).not.toHaveBeenCalled();
   });
 });

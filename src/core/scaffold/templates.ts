@@ -3,7 +3,7 @@ import { join, relative } from "node:path";
 import { resolveTemplatePath } from "../../shared/paths";
 import { CliError } from "../../shared/errors";
 import { TEMPLATE_MANIFEST } from "./render";
-import type { TemplateKind, TemplateMeta } from "../../types/template";
+import type { TemplateKind, TemplateMeta } from "./types";
 
 /**
  * 递归收集指定目录下所有含 template.json 的模板目录

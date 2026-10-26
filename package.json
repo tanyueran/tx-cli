@@ -1,6 +1,6 @@
 {
   "name": "@tanyueran/cli",
-  "version": "0.7.1",
+  "version": "0.8.0",
   "description": "一个cli工具，支持创建项目，添加模版，与大模型对话",
   "main": "./dist/cli.js",
   "bin": {
@@ -38,6 +38,8 @@
   "license": "ISC",
   "packageManager": "pnpm@10.5.2",
   "dependencies": {
+    "@anthropic-ai/sandbox-runtime": "^0.0.80",
+    "@modelcontextprotocol/sdk": "^1.32.1",
     "commander": "12.1.0",
     "connect": "^3.7.0",
     "fs-extra": "11.1.1",

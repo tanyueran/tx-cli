@@ -19,3 +19,4 @@ pnpm-debug.log*
 *.sw?
 
 .npmrc
+.tx-cli/

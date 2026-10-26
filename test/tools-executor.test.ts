@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { executeToolCall } from "../src/core/tools/executor";
 import type { Tool, ToolOutput } from "../src/core/tools";
-import type { ToolCall } from "../src/types/llm";
+import type { ToolCall } from "../src/core/llm/types";
 
 /** 工具输出回传前的截断上限（字符数），与 executor 内部常量保持一致 */
 const MAX_OUTPUT_CHARS = 8 * 1024;

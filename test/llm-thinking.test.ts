@@ -4,11 +4,10 @@ import {
   isToggleOnlyStyle,
   parseThinkingLevel,
   parseThinkingStyle,
-  resolveChatThinkingFields,
   resolveResponsesThinkingFields,
   resolveThinkingStyle,
 } from "../src/core/llm/thinking";
-import type { LlmConfig } from "../src/types/llm";
+import type { LlmConfig } from "../src/core/llm/types";
 
 /**
  * 构造一份最小可用的 LLM 配置，用于测试思考风格推断
@@ -101,48 +100,6 @@ describe("resolveThinkingStyle", () => {
   });
 });
 
-describe("resolveChatThinkingFields", () => {
-  it("reasoning_effort 风格下档位直接下发", () => {
-    expect(resolveChatThinkingFields("low", "reasoning_effort")).toEqual({
-      reasoning_effort: "low",
-    });
-  });
-
-  it("reasoning_effort 风格下 off 不下发任何字段", () => {
-    expect(resolveChatThinkingFields("off", "reasoning_effort")).toEqual({});
-  });
-
-  it("effortMap 优先于内置映射", () => {
-    expect(
-      resolveChatThinkingFields("medium", "reasoning_effort", {
-        medium: "high",
-      })
-    ).toEqual({ reasoning_effort: "high" });
-  });
-
-  it("thinking 风格折算为开关，off 为 disabled", () => {
-    expect(resolveChatThinkingFields("off", "thinking")).toEqual({
-      thinking: { type: "disabled" },
-    });
-    expect(resolveChatThinkingFields("high", "thinking")).toEqual({
-      thinking: { type: "enabled" },
-    });
-  });
-
-  it("enable_thinking 风格折算为布尔开关", () => {
-    expect(resolveChatThinkingFields("low", "enable_thinking")).toEqual({
-      enable_thinking: true,
-    });
-    expect(resolveChatThinkingFields("off", "enable_thinking")).toEqual({
-      enable_thinking: false,
-    });
-  });
-
-  it("none 风格永远不下发思考字段", () => {
-    expect(resolveChatThinkingFields("high", "none")).toEqual({});
-  });
-});
-
 describe("resolveResponsesThinkingFields", () => {
   it("reasoning_effort 风格映射为 reasoning.effort", () => {
     expect(resolveResponsesThinkingFields("high", "reasoning_effort")).toEqual({
@@ -164,13 +121,25 @@ describe("resolveResponsesThinkingFields", () => {
     ).toEqual({ reasoning: { effort: "high" } });
   });
 
-  it("thinking / enable_thinking / none 分支与 Chat Completions 一致", () => {
+  it("thinking 风格折算为开关，off 为 disabled", () => {
     expect(resolveResponsesThinkingFields("high", "thinking")).toEqual({
       thinking: { type: "enabled" },
+    });
+    expect(resolveResponsesThinkingFields("off", "thinking")).toEqual({
+      thinking: { type: "disabled" },
+    });
+  });
+
+  it("enable_thinking 风格折算为布尔开关", () => {
+    expect(resolveResponsesThinkingFields("low", "enable_thinking")).toEqual({
+      enable_thinking: true,
     });
     expect(resolveResponsesThinkingFields("off", "enable_thinking")).toEqual({
       enable_thinking: false,
     });
+  });
+
+  it("none 风格永远不下发思考字段", () => {
     expect(resolveResponsesThinkingFields("high", "none")).toEqual({});
   });
 });

@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import { getVersion } from "../shared/paths";
 import { registerAddCommand } from "./command/add-command";
+import { registerAgentCommand } from "./command/agent-command";
 import { registerChatCommand } from "./command/chat-command";
 import { registerCreateCommand } from "./command/create-command";
 import { registerServerCommand } from "./command/server-command";
@@ -17,6 +18,7 @@ const registrars = [
   registerGitRenameCommand,
   registerCommitFixCommand,
   registerChatCommand,
+  registerAgentCommand,
 ];
 
 /**

@@ -1,47 +1,11 @@
 import OpenAI from "openai";
 import { CliError } from "../../shared/errors";
 import type {
-  ChatMessage,
   LlmConfig,
-  ResponseToolResult,
+  ResponseHistoryItem,
   ToolCall,
   ToolDefinition,
-} from "../../types/llm";
-
-/** 流式对话参数（Chat Completions 接口） */
-interface StreamChatParams {
-  /** LLM 接入配置 */
-  config: LlmConfig;
-  /** 完整对话历史（含 system 提示词与工具调用轮次） */
-  messages: ChatMessage[];
-  /** 可供模型调用的工具列表；传入后模型可能以工具调用代替直接回答 */
-  tools?: ToolDefinition[];
-  /** 协议扩展字段（思考参数等）：由 thinking 适配层生成，原样附加到请求体，空对象表示不下发 */
-  extraBody?: Record<string, unknown>;
-  /** 每收到一段增量回答文本时的回调，用于实时渲染 */
-  onDelta: (text: string) => void;
-  /**
-   * 每收到一段增量深度思考文本时的回调（可选）
-   * 模型不支持深度思考（无 reasoning_content）时不会被触发
-   */
-  onReasoningDelta?: (text: string) => void;
-}
-
-/** Chat Completions 流式对话结果 */
-export interface StreamChatResult {
-  /** 助手的完整回答文本（不含深度思考内容；模型请求工具时可能为空） */
-  reply: string;
-  /** 模型请求的工具调用列表；为空表示模型直接给出了回答 */
-  toolCalls: ToolCall[];
-}
-
-/**
- * DeepSeek、Kimi 等服务在流式 delta 中扩展的深度思考字段
- * 说明：该字段为国内厂商对 OpenAI 协议的常见扩展，官方 SDK 类型未收录，需本地补齐
- */
-interface ReasoningDelta {
-  reasoning_content?: string | null;
-}
+} from "./types";
 
 /**
  * 把 openai SDK / 网络层抛出的原始错误转换为带友好提示的 CliError
@@ -72,150 +36,17 @@ function toCliError(err: unknown): CliError {
   );
 }
 
-/**
- * 把内部 ChatMessage 转换为 Chat Completions 接口的消息格式
- * 重点是两个工具相关的形态：带 tool_calls 的 assistant 消息与 role 为 tool 的结果消息
- * @param {ChatMessage[]} messages - 内部对话历史
- * @returns {object[]} OpenAI Chat Completions 格式的消息数组
- */
-function toOpenAiMessages(
-  messages: ChatMessage[],
-): OpenAI.Chat.Completions.ChatCompletionMessageParam[] {
-  return messages.map((msg) => {
-    if (msg.role === "assistant" && msg.toolCalls?.length) {
-      return {
-        role: "assistant" as const,
-        // 带 tool_calls 的 assistant 消息正文为空，接口要求传 null
-        content: msg.content || null,
-        tool_calls: msg.toolCalls.map((tc) => ({
-          id: tc.id,
-          type: "function" as const,
-          function: { name: tc.name, arguments: tc.arguments },
-        })),
-      };
-    }
-    if (msg.role === "tool") {
-      return {
-        role: "tool" as const,
-        content: msg.content,
-        tool_call_id: msg.toolCallId ?? "",
-      };
-    }
-    return { role: msg.role, content: msg.content };
-  });
-}
-
-/**
- * 发起一次流式对话（Chat Completions 接口）：逐段回调增量文本用于实时输出
- * 思考参数等协议扩展经 extraBody 原样下发（由 thinking 适配层按档位与风格生成）
- * 深度思考不计入返回值，也不应写入对话历史
- * 传入 tools 后模型可能以工具调用代替直接回答，调用方执行后需将结果以
- * assistant(toolCalls) + tool(toolCallId) 消息追加进历史再次调用本函数
- * @param {StreamChatParams} params - 对话参数（配置、历史消息、工具列表、扩展字段、增量回调）
- * @returns {Promise<StreamChatResult>} 回答文本与模型请求的工具调用列表
- * @throws {CliError} 接口请求或网络失败时抛出
- */
-export async function streamChat(
-  params: StreamChatParams,
-): Promise<StreamChatResult> {
-  const client = new OpenAI({
-    apiKey: params.config.apiKey,
-    baseURL: params.config.baseUrl,
-  });
-
-  try {
-    // thinking 等协议扩展字段由适配层生成：以交叉类型断言附加，规避官方 SDK 类型不含这些字段
-    const stream = await client.chat.completions.create({
-      model: params.config.model,
-      messages: toOpenAiMessages(params.messages),
-      // 工具定义转换为 Chat Completions 的嵌套格式（function.name/description/parameters）
-      ...(params.tools
-        ? {
-            tools: params.tools.map((tool) => ({
-              type: "function" as const,
-              function: {
-                name: tool.name,
-                description: tool.description,
-                parameters: tool.parameters,
-              },
-            })),
-          }
-        : {}),
-      stream: true,
-      ...params.extraBody,
-    } as OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming);
-
-    let full = "";
-    // 工具调用增量按 index 聚合：id/name 仅首段携带，arguments 分多段追加
-    const pendingToolCalls = new Map<
-      number,
-      { id: string; name: string; args: string }
-    >();
-    for await (const chunk of stream) {
-      const delta = chunk.choices[0]?.delta;
-
-      // 深度思考增量：先于回答输出，模型未返回时为空串
-      const reasoning =
-        (delta as ReasoningDelta | undefined)?.reasoning_content ?? "";
-      if (reasoning && params.onReasoningDelta) {
-        params.onReasoningDelta(reasoning);
-      }
-
-      for (const tc of delta?.tool_calls ?? []) {
-        const acc = pendingToolCalls.get(tc.index) ?? {
-          id: "",
-          name: "",
-          args: "",
-        };
-        if (tc.id) {
-          acc.id = tc.id;
-        }
-        if (tc.function?.name) {
-          acc.name = tc.function.name;
-        }
-        if (tc.function?.arguments) {
-          acc.args += tc.function.arguments;
-        }
-        pendingToolCalls.set(tc.index, acc);
-      }
-
-      const content = delta?.content ?? "";
-      if (content) {
-        full += content;
-        params.onDelta(content);
-      }
-    }
-
-    const toolCalls: ToolCall[] = [...pendingToolCalls.entries()]
-      .sort((a, b) => a[0] - b[0])
-      .map(([, acc]) => ({
-        id: acc.id,
-        name: acc.name,
-        arguments: acc.args,
-      }));
-    return { reply: full, toolCalls };
-  } catch (err) {
-    throw toCliError(err);
-  }
-}
-
-/** 响应式流式对话参数（Responses API，store 会话模式） */
+/** 响应式流式对话参数（Responses API，无状态模式） */
 interface StreamResponseParams {
   /** LLM 接入配置 */
   config: LlmConfig;
   /**
-   * 本轮输入：store 模式下每轮只发送新内容，历史上下文由服务端维护
-   * 用户文本直接传字符串；回传工具执行结果时传结果列表，
-   * 服务端会依据 previous_response_id 找到对应的 function_call 配对
+   * 完整对话历史（无状态模式：服务端不留存会话，每轮全量发送）
+   * 含用户/assistant 消息与 function_call / function_call_output 工具轮次
    */
-  input: string | ResponseToolResult[];
-  /**
-   * system 提示词
-   * 说明：previous_response_id 不会延续 instructions，多轮场景每轮都需传入
-   */
+  input: ResponseHistoryItem[];
+  /** system 提示词：服务端不留存会话，每轮请求都需传入 */
   instructions?: string;
-  /** 上一轮响应 ID：传入后服务端自动衔接历史对话，无需重发历史消息 */
-  previousResponseId?: string;
   /** 协议扩展字段（思考参数等）：由 thinking 适配层生成，原样附加到请求体，空对象表示不下发 */
   extraBody?: Record<string, unknown>;
   /** 每收到一段增量回答文本时的回调，用于实时渲染 */
@@ -233,20 +64,47 @@ interface StreamResponseParams {
 export interface StreamResponseResult {
   /** 助手的完整回答文本（不含深度思考内容；模型请求工具时可能为空） */
   reply: string;
-  /** 本次响应 ID：多轮对话时作为下一轮的 previousResponseId 传入 */
-  responseId: string;
   /** 模型请求的工具调用列表；为空表示模型直接给出了回答 */
   toolCalls: ToolCall[];
 }
 
 /**
- * 发起一次响应式流式对话（Responses API，store 会话模式）
+ * 把内部历史项转换为 Responses API 的 input 输入项
+ * 重点是工具相关的两种形态：function_call 调用项与 function_call_output 结果项
+ * @param {ResponseHistoryItem[]} items - 内部对话历史
+ * @returns {object[]} Responses API 格式的输入项数组
+ */
+function toResponsesInput(
+  items: ResponseHistoryItem[],
+): OpenAI.Responses.ResponseInputItem[] {
+  return items.map((item) => {
+    if (item.type === "function_call") {
+      return {
+        type: "function_call" as const,
+        call_id: item.callId,
+        name: item.name,
+        arguments: item.arguments,
+      };
+    }
+    if (item.type === "function_call_output") {
+      return {
+        type: "function_call_output" as const,
+        call_id: item.callId,
+        output: item.output,
+      };
+    }
+    return { role: item.role, content: item.content };
+  });
+}
+
+/**
+ * 发起一次响应式流式对话（Responses API，无状态模式）
  * 思考参数等协议扩展经 extraBody 原样下发（由 thinking 适配层按档位与风格生成）
- * 通过 store + previous_response_id 让服务端维护多轮上下文，每轮只发送增量输入
+ * store 置 false：服务端不留存会话，历史由调用方本地维护并每轮全量发送
  * 传入 tools 后模型可能以工具调用代替直接回答，调用方执行后需将结果以
- * ResponseToolResult 列表作为 input、携带本次 responseId 再次调用本函数
- * @param {StreamResponseParams} params - 对话参数（配置、本轮输入、响应 ID 衔接、扩展字段、增量回调、工具列表）
- * @returns {Promise<StreamResponseResult>} 回答文本、本次响应 ID 与模型请求的工具调用列表
+ * function_call_output 历史项追加、连同完整历史再次调用本函数
+ * @param {StreamResponseParams} params - 对话参数（配置、完整历史、扩展字段、增量回调、工具列表）
+ * @returns {Promise<StreamResponseResult>} 回答文本与模型请求的工具调用列表
  * @throws {CliError} 接口请求或网络失败时抛出
  */
 export async function streamResponse(
@@ -260,19 +118,10 @@ export async function streamResponse(
   try {
     const stream = await client.responses.create({
       model: params.config.model,
-      // 工具结果回传：转换为 function_call_output 输入项，靠 call_id 与历史调用配对
-      input: Array.isArray(params.input)
-        ? params.input.map((result) => ({
-            type: "function_call_output" as const,
-            call_id: result.callId,
-            output: result.output,
-          }))
-        : params.input,
+      input: toResponsesInput(params.input),
       instructions: params.instructions || undefined,
-      // 空串等同未传，避免把非法的 previous_response_id 发给接口
-      previous_response_id: params.previousResponseId || undefined,
-      // store：开启服务端会话存储，配合 previous_response_id 实现增量多轮对话
-      store: true,
+      // store：关闭服务端会话存储，避免对话数据留在服务端；历史由调用方每轮全量发送
+      store: false,
       // strict 置 false：自定义 JSON Schema 不保证满足严格模式的全量约束
       tools: params.tools?.map((tool) => ({
         type: "function" as const,
@@ -287,13 +136,9 @@ export async function streamResponse(
     });
 
     let reply = "";
-    let responseId = "";
     const toolCalls: ToolCall[] = [];
     for await (const event of stream) {
       switch (event.type) {
-        case "response.created":
-          responseId = event.response.id;
-          break;
         // 思考内容：openai 开源系模型走 reasoning_text，官方模型走 reasoning_summary_text
         case "response.reasoning_text.delta":
         case "response.reasoning_summary_text.delta":
@@ -319,7 +164,7 @@ export async function streamResponse(
           break;
       }
     }
-    return { reply, responseId, toolCalls };
+    return { reply, toolCalls };
   } catch (err) {
     throw toCliError(err);
   }

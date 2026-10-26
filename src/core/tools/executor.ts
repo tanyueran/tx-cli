@@ -1,4 +1,6 @@
-import type { ToolCall } from "../../types/llm";
+import { CancelError } from "../../shared/errors";
+import { withTimeout } from "../../shared/timeout";
+import type { ToolCall } from "../llm/types";
 import type { Tool, ToolOutput, ToolResult } from "./types";
 
 /** 单个工具执行的超时时间（毫秒） */
@@ -20,32 +22,14 @@ function truncateOutput(output: string): string {
 }
 
 /**
- * 带超时执行：超时以错误拒绝，由调用方统一转为失败结果
- * @param {Promise<ToolOutput>} promise - 工具执行的 Promise
- * @returns {Promise<ToolOutput>} 工具输出
- */
-function withTimeout(promise: Promise<ToolOutput>): Promise<ToolOutput> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => {
-      reject(new Error(`工具执行超时（${TOOL_TIMEOUT_MS / 1000}s）`));
-    }, TOOL_TIMEOUT_MS);
-  });
-  return (async () => {
-    try {
-      return await Promise.race([promise, timeout]);
-    } finally {
-      clearTimeout(timer);
-    }
-  })();
-}
-
-/**
  * 执行单次工具调用：解析参数、超时兜底、异常转结果、输出截断
- * 任何失败都不抛出，而是转为 ok:false 的结果回传模型，由模型自行调整重试，不中断会话
+ * 执行失败不抛出，而是转为 ok:false 的结果回传模型，由模型自行调整重试，不中断会话；
+ * 唯一的例外是用户取消（CancelError，如审批问询中按 Ctrl+C）：原样上抛走取消流程，
+ * 避免被包装成失败结果回传后模型继续推进会话，违背用户的中断意图
  * @param {Tool} tool - 目标工具
  * @param {ToolCall} call - 模型发起的调用请求
  * @returns {Promise<ToolResult>} 配好 callId 的执行结果
+ * @throws {CancelError} 用户在工具执行期间的交互中主动取消时抛出
  */
 export async function executeToolCall(
   tool: Tool,
@@ -64,8 +48,18 @@ export async function executeToolCall(
 
   let output: ToolOutput;
   try {
-    output = await withTimeout(tool.execute(args));
+    // 超时时长优先取工具自带的 timeoutMs（如 MCP 工具放宽到 60s），缺省用全局值
+    const timeoutMs = tool.timeoutMs ?? TOOL_TIMEOUT_MS;
+    output = await withTimeout(
+      tool.execute(args),
+      timeoutMs,
+      `工具执行超时（${timeoutMs / 1000}s）`,
+    );
   } catch (err) {
+    // 用户主动取消不是工具失败：上抛给对话层按取消流程处理（REPL 中断本轮，单次问答退出）
+    if (err instanceof CancelError) {
+      throw err;
+    }
     output = {
       ok: false,
       output: `工具执行失败: ${(err as Error)?.message ?? String(err)}`,

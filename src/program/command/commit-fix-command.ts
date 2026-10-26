@@ -1,9 +1,9 @@
 import type { Command } from "commander";
 import pico from "picocolors";
 import simpleGit from "simple-git";
-import { disposeOnesInfo } from "../../core/ones-message";
+import { disposeOnesInfo } from "../../core/commit-fix";
 import { CliError } from "../../shared/errors";
-import { askSelect } from "../../shared/prompt";
+import { askSelect } from "../../shared/interactive-prompt";
 
 /**
  * 注册 commit-fix 命令：把 ones 上复制的信息转换为规范的 commit message 并提交

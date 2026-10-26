@@ -48,10 +48,10 @@ export interface ToolDefinition {
 }
 
 /**
- * 模型发起的工具调用请求：两套接口（Chat Completions / Responses）的统一表示
+ * 模型发起的工具调用请求（Responses API 的内部统一表示）
  */
 export interface ToolCall {
-  /** 调用 ID：结果回传时用于配对（Chat Completions 为 tool_call_id，Responses 为 call_id） */
+  /** 调用 ID：结果回传时用于配对（对应 Responses API 的 call_id） */
   id: string;
   /** 工具名称 */
   name: string;
@@ -60,30 +60,18 @@ export interface ToolCall {
 }
 
 /**
- * 对话消息：覆盖 chat 场景用到的角色与文本内容（两套接口的统一内部表示）
+ * Responses API 无状态模式（store=false）的对话历史输入项
+ * 服务端不留存会话，调用方本地维护完整历史并每轮全量发送
  */
-export interface ChatMessage {
-  role: "system" | "user" | "assistant" | "tool";
-  content: string;
-  /** role 为 assistant 且模型请求了工具时携带的调用列表 */
-  toolCalls?: ToolCall[];
-  /** role 为 tool 时对应的调用 ID */
-  toolCallId?: string;
-}
-
-/**
- * 深度思考开关：豆包、GLM 等服务对 Chat Completions 协议的常见扩展（thinking 字段）
- * disabled 不使用深度思考能力；enabled 使用；auto 由模型自行判断
- * 注意：不感知该字段的服务可能忽略或直接报错
- */
-export type ThinkingType = "disabled" | "enabled" | "auto";
-
-/**
- * 工具执行结果回传项（对应 Responses API 的 function_call_output 输入项）
- */
-export interface ResponseToolResult {
-  /** 对应的工具调用 ID（ToolCall.id） */
-  callId: string;
-  /** 工具输出：序列化后的文本，模型据此继续生成 */
-  output: string;
-}
+export type ResponseHistoryItem =
+  /** 用户/助手消息 */
+  | { type: "message"; role: "user" | "assistant"; content: string }
+  /** 模型发起的工具调用（与结果项靠 callId 配对） */
+  | {
+      type: "function_call";
+      callId: string;
+      name: string;
+      arguments: string;
+    }
+  /** 工具执行结果 */
+  | { type: "function_call_output"; callId: string; output: string };
