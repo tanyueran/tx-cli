@@ -102,45 +102,59 @@ describe("resolveThinkingStyle", () => {
 
 describe("resolveResponsesThinkingFields", () => {
   it("reasoning_effort 风格映射为 reasoning.effort", () => {
-    expect(resolveResponsesThinkingFields("high", "reasoning_effort")).toEqual({
+    expect(
+      resolveResponsesThinkingFields({ level: "high", style: "reasoning_effort" })
+    ).toEqual({
       reasoning: { effort: "high" },
     });
   });
 
   it("reasoning_effort 风格下 off 不下发任何字段", () => {
-    expect(resolveResponsesThinkingFields("off", "reasoning_effort")).toEqual(
-      {}
-    );
+    expect(
+      resolveResponsesThinkingFields({ level: "off", style: "reasoning_effort" })
+    ).toEqual({});
   });
 
   it("effortMap 对 reasoning.effort 同样生效", () => {
     expect(
-      resolveResponsesThinkingFields("low", "reasoning_effort", {
-        low: "high",
+      resolveResponsesThinkingFields({
+        level: "low",
+        style: "reasoning_effort",
+        effortMap: { low: "high" },
       })
     ).toEqual({ reasoning: { effort: "high" } });
   });
 
   it("thinking 风格折算为开关，off 为 disabled", () => {
-    expect(resolveResponsesThinkingFields("high", "thinking")).toEqual({
+    expect(
+      resolveResponsesThinkingFields({ level: "high", style: "thinking" })
+    ).toEqual({
       thinking: { type: "enabled" },
     });
-    expect(resolveResponsesThinkingFields("off", "thinking")).toEqual({
+    expect(
+      resolveResponsesThinkingFields({ level: "off", style: "thinking" })
+    ).toEqual({
       thinking: { type: "disabled" },
     });
   });
 
   it("enable_thinking 风格折算为布尔开关", () => {
-    expect(resolveResponsesThinkingFields("low", "enable_thinking")).toEqual({
+    expect(
+      resolveResponsesThinkingFields({ level: "low", style: "enable_thinking" })
+    ).toEqual({
       enable_thinking: true,
     });
-    expect(resolveResponsesThinkingFields("off", "enable_thinking")).toEqual({
+    expect(
+      resolveResponsesThinkingFields({ level: "off", style: "enable_thinking" })
+    ).toEqual({
       enable_thinking: false,
     });
   });
 
   it("none 风格永远不下发思考字段", () => {
-    expect(resolveResponsesThinkingFields("high", "none")).toEqual({});
+    expect(
+      resolveResponsesThinkingFields({ level: "high", style: "none" })
+    ).toEqual({});
   });
 });
 

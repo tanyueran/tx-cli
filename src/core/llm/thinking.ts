@@ -92,20 +92,28 @@ export function resolveThinkingStyle(config: LlmConfig): ThinkingStyle {
   return hit?.style ?? "reasoning_effort";
 }
 
+/** resolveResponsesThinkingFields 入参对象 */
+export interface ResolveResponsesThinkingFieldsOptions {
+  /** 思考档位 */
+  level: ThinkingLevel;
+  /** 思考协议风格 */
+  style: ThinkingStyle;
+  /** 高级映射，优先于内置映射 */
+  effortMap?: Partial<Record<ThinkingLevel, string>>;
+}
+
 /**
  * 按档位与风格生成 Responses API 的附加请求字段
  * off 在 reasoning_effort/none 风格下不发任何字段，最大化兼容不支持思考扩展的服务；
  * thinking/enable_thinking 为开关式风格，low/medium/high 均折算为开启
- * @param {ThinkingLevel} level - 思考档位
- * @param {ThinkingStyle} style - 思考协议风格
- * @param {Partial<Record<ThinkingLevel, string>>} [effortMap] - 高级映射，优先于内置映射
+ * @param {ResolveResponsesThinkingFieldsOptions} options - 入参对象（level/style/effortMap 字段说明见接口定义）
  * @returns {Record<string, unknown>} 附加请求字段，空对象表示不下发
  */
-export function resolveResponsesThinkingFields(
-  level: ThinkingLevel,
-  style: ThinkingStyle,
-  effortMap?: Partial<Record<ThinkingLevel, string>>,
-): Record<string, unknown> {
+export function resolveResponsesThinkingFields({
+  level,
+  style,
+  effortMap,
+}: ResolveResponsesThinkingFieldsOptions): Record<string, unknown> {
   switch (style) {
     case "reasoning_effort": {
       if (level === "off") {
@@ -147,18 +155,26 @@ export function describeThinkingStyle(style: ThinkingStyle): string {
 /** 思考档位缺省值：配置与命令行均未指定时使用（chat、agent 等命令共用） */
 export const DEFAULT_THINKING_LEVEL: ThinkingLevel = "medium";
 
+/** resolveThinkingLevel 入参对象 */
+export interface ResolveThinkingLevelOptions {
+  /** 命令行指定的档位，未指定时回退配置默认 */
+  cliLevel?: ThinkingLevel;
+  /** LLM 接入配置 */
+  config: LlmConfig;
+  /** 配置也未指定时的兜底档位（chat 为 low，其余为 medium） */
+  fallback?: ThinkingLevel;
+}
+
 /**
  * 解析生效的思考档位：命令行 --think > 配置文件（项目 > 全局）> 模式内置默认值
- * @param {ThinkingLevel | undefined} cliLevel - 命令行指定的档位，未指定时回退配置默认
- * @param {LlmConfig} config - LLM 接入配置
- * @param {ThinkingLevel} fallback - 配置也未指定时的兜底档位（chat 为 low，其余为 medium）
+ * @param {ResolveThinkingLevelOptions} options - 入参对象（cliLevel/config/fallback 字段说明见接口定义）
  * @returns {ThinkingLevel} 生效的思考档位
  */
-export function resolveThinkingLevel(
-  cliLevel: ThinkingLevel | undefined,
-  config: LlmConfig,
-  fallback: ThinkingLevel = DEFAULT_THINKING_LEVEL
-): ThinkingLevel {
+export function resolveThinkingLevel({
+  cliLevel,
+  config,
+  fallback = DEFAULT_THINKING_LEVEL,
+}: ResolveThinkingLevelOptions): ThinkingLevel {
   return cliLevel ?? config.thinkingLevel ?? fallback;
 }
 

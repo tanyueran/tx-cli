@@ -20,6 +20,22 @@ import type {
   ThinkingLevel,
 } from "../../llm/types";
 
+/** runOneShotConversation 入参对象 */
+export interface OneShotConversationOptions {
+  /** LLM 接入配置 */
+  config: LlmConfig;
+  /** 模式配置（人设、标签、bash 装配策略） */
+  mode: ConversationModeConfig;
+  /** 用户问题或任务 */
+  input: string;
+  /** 命令行指定的思考档位，未指定时回退配置默认 */
+  thinkingLevel?: ThinkingLevel;
+  /** 是否启用 MCP 服务器（--no-mcp 关闭），缺省开启 */
+  mcpEnabled?: boolean;
+  /** 沙箱 CLI 选项（agent 命令的 --sandbox 等），缺省按配置文件装配 */
+  sandboxCli?: SandboxCliOptions;
+}
+
 /**
  * 单次会话（chat、agent 命令共用的单次入口）：走 Responses API（无状态模式）+ agentic loop
  * store=false：服务端不留存会话，历史由本地维护，会话结束即丢弃；
@@ -27,27 +43,22 @@ import type {
  * 经 thinking 适配层翻译为协议扩展字段下发；
  * 服务不支持分档思考时先打印折算警告，避免用户误以为 high 等档位真实生效；
  * 深度思考内容以暗色流式输出（模型未返回时不输出）
- * @param {LlmConfig} config - LLM 接入配置
- * @param {ConversationModeConfig} mode - 模式配置（人设、标签、bash 装配策略）
- * @param {string} input - 用户问题或任务
- * @param {ThinkingLevel | undefined} thinkingLevel - 命令行指定的思考档位，未指定时回退配置默认
- * @param {boolean} mcpEnabled - 是否启用 MCP 服务器（--no-mcp 关闭），缺省开启
- * @param {SandboxCliOptions} sandboxCli - 沙箱 CLI 选项（agent 命令的 --sandbox 等），缺省按配置文件装配
+ * @param {OneShotConversationOptions} options - 入参对象（config/mode/input/thinkingLevel/mcpEnabled/sandboxCli 字段说明见接口定义）
  * @returns {Promise<void>}
  */
-export async function runOneShotConversation(
-  config: LlmConfig,
-  mode: ConversationModeConfig,
-  input: string,
-  thinkingLevel?: ThinkingLevel,
+export async function runOneShotConversation({
+  config,
+  mode,
+  input,
+  thinkingLevel,
   mcpEnabled = true,
-  sandboxCli?: SandboxCliOptions,
-): Promise<void> {
-  const level = resolveThinkingLevel(
-    thinkingLevel,
+  sandboxCli,
+}: OneShotConversationOptions): Promise<void> {
+  const level = resolveThinkingLevel({
+    cliLevel: thinkingLevel,
     config,
-    mode.defaultThinkingLevel,
-  );
+    fallback: mode.defaultThinkingLevel,
+  });
   const style = resolveThinkingStyle(config);
   warnThinkingFallback(level, style);
   const renderer = createStreamRenderer();
@@ -69,11 +80,11 @@ export async function runOneShotConversation(
       history,
       instructions: systemPrompt,
       tools,
-      extraBody: resolveResponsesThinkingFields(
+      extraBody: resolveResponsesThinkingFields({
         level,
         style,
-        config.thinkingEffortMap,
-      ),
+        effortMap: config.thinkingEffortMap,
+      }),
       onDelta: renderer.onDelta,
       onReasoningDelta: renderer.onReasoningDelta,
     });

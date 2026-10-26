@@ -1,16 +1,13 @@
 import { Option } from "commander";
 import type { Command } from "commander";
-import {
-  loadLlmConfig,
-  parseThinkingLevel,
-  THINKING_LEVELS,
-} from "../../core/llm";
+import { loadLlmConfig, THINKING_LEVELS } from "../../core/llm";
+import type { ThinkingLevel } from "../../core/llm/types";
 import { runOneShotChat, runReplChat } from "../../core/conversation/chat";
 
 /** chat 命令执行体的选项入参 */
 interface ChatOptions {
-  /** 思考档位（--think），未指定时回退配置默认（项目 > 全局） */
-  think?: string;
+  /** 思考档位（--think），choices() 保证运行时合法，未指定时回退配置默认（项目 > 全局） */
+  think?: ThinkingLevel;
 }
 
 /**
@@ -27,16 +24,20 @@ export async function runChatAction(
   opts: ChatOptions,
 ): Promise<void> {
   // CLI 选项处理全部前置：loadLlmConfig 在配置缺失时会进入交互向导并写盘，
-  // 必须先完成所有命令行选项的解析（枚举合法性已由 commander choices() 拦截）
-  // 思考档位链路：--think > 配置文件（项目 > 全局）> low，兜底值由会话层按模式解析
-  const thinkingLevel = parseThinkingLevel(opts.think);
+  // 必须先完成所有命令行选项的解析
+  // 思考档位链路：--think > 配置文件（项目 > 全局）> low，兜底值由会话层按模式解析；
+  // 枚举合法性已由 commander choices() 拦截，opts.think 直接下传即可
   const config = await loadLlmConfig();
   const questionText = question.join(" ").trim();
   if (questionText) {
-    await runOneShotChat(config, questionText, thinkingLevel);
+    await runOneShotChat({
+      config,
+      question: questionText,
+      thinkingLevel: opts.think,
+    });
     return;
   }
-  await runReplChat(config, thinkingLevel);
+  await runReplChat(config, opts.think);
 }
 
 /**
