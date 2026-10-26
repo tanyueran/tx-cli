@@ -185,6 +185,7 @@ function scanSkillDir(
 /**
  * 发现全部可用技能：先项目级后用户级，同名时项目级胜出、用户级忽略并告警
  * 单个技能非法只跳过并告警，不影响其他技能与整个会话（失败隔离）
+ * 项目级与用户级目录为同一路径时（如 cwd 恰为用户主目录）只扫描一次，避免重复告警
  * @param {string} cwd - 项目根目录（缺省为当前工作目录）
  * @param {string} userDir - 用户级技能目录（缺省 ~/.tx-cli/skills，测试可注入）
  * @returns {SkillDiscoveryResult} 技能列表与扫描警告
@@ -195,12 +196,13 @@ export function discoverSkills(
 ): SkillDiscoveryResult {
   const warnings: string[] = [];
   const seen = new Map<string, SkillMeta>();
-  for (const meta of scanSkillDir(
-    resolveProjectSkillsDir(cwd),
-    "project",
-    warnings,
-  )) {
+  const projectDir = resolveProjectSkillsDir(cwd);
+  const sameDir = projectDir === userDir;
+  for (const meta of scanSkillDir(projectDir, "project", warnings)) {
     seen.set(meta.name, meta);
+  }
+  if (sameDir) {
+    return { skills: [...seen.values()], warnings };
   }
   for (const meta of scanSkillDir(userDir, "user", warnings)) {
     if (seen.has(meta.name)) {
