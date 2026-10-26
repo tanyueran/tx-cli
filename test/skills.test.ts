@@ -127,6 +127,21 @@ describe("discoverSkills", () => {
     expect(warnings).toEqual([]);
     expect(skills[0].description).toBe("带引号的描述");
   });
+
+  it("项目级与用户级为同一目录时只扫描一次，不产生重名或重复告警", () => {
+    // 模拟 cwd 恰为用户主目录：项目级与用户级目录解析为同一路径
+    const shared = projectRoot();
+    writeSkill(shared, "shared", skillContent("shared", "共享技能", "正文"));
+    writeSkill(shared, "broken", "没有 frontmatter 的内容");
+
+    const { skills, warnings } = discoverSkills(cwd, shared);
+
+    expect(skills).toHaveLength(1);
+    expect(skills[0]).toMatchObject({ name: "shared", source: "project" });
+    expect(warnings).toEqual([
+      "技能 broken 的 SKILL.md 缺少 frontmatter，已跳过",
+    ]);
+  });
 });
 
 describe("SkillCatalog", () => {
