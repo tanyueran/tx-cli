@@ -1,3 +1,8 @@
+## [0.8.1](https://github.com/tanyueran/tx-cli/compare/v0.8.0...v0.8.1) (2026-10-26)
+
+### Bug Fixes
+
+* bash超时改用进程组整杀,修复CI超时用例挂死 ([cc0c4eb](https://github.com/tanyueran/tx-cli/commit/cc0c4eb989e2f3caad94d9492b947ec57645d29e))
 ## [0.8.0](https://github.com/tanyueran/tx-cli/compare/v0.7.1...v0.8.0) (2026-10-26)
 
 ### Features
