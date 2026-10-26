@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
 import type { SandboxContext } from "../../sandbox/runtime/context";
 import type { Tool, ToolOutput } from "../types";
 
@@ -25,17 +25,45 @@ interface SpawnResult {
 }
 
 /**
+ * 强杀子进程及其整棵进程树
+ * shell:true 时 shell 可能 fork 出孙进程（如 sh -c "sleep 30"），
+ * 只 kill 直接子进程会留下持有 stdio 管道的孙进程，导致 close 事件迟迟不触发
+ * @param {ChildProcess} child - 待终止的子进程
+ * @returns {void}
+ */
+function killTree(child: ChildProcess): void {
+  if (child.pid === undefined) {
+    return;
+  }
+  try {
+    if (process.platform === "win32") {
+      spawn(`taskkill /PID ${child.pid} /T /F`, {
+        shell: true,
+        windowsHide: true,
+      });
+      return;
+    }
+    // detached 模式下子进程是进程组长，负数 pid 表示杀死整个进程组
+    process.kill(-child.pid, "SIGKILL");
+  } catch {
+    // 进程已退出（进程组不存在）时兜底补一刀，错误可安全忽略
+    child.kill("SIGKILL");
+  }
+}
+
+/**
  * 在 shell 中执行命令并收集输出（带超时强杀）
  * @param {string} command - 待执行的命令文本（含 shell 包装时为包装后的形态）
  * @param {number} timeoutMs - 超时毫秒数，超时后 SIGKILL
  * @returns {Promise<SpawnResult>} 执行结果
  */
-function spawnShell(
-  command: string,
-  timeoutMs: number,
-): Promise<SpawnResult> {
+function spawnShell(command: string, timeoutMs: number): Promise<SpawnResult> {
   return new Promise((resolve) => {
-    const child = spawn(command, { shell: true });
+    // detached：子进程成为独立进程组长，超时可整组强杀（含 shell 派生的孙进程）
+    const child = spawn(command, {
+      shell: true,
+      detached: process.platform !== "win32",
+    });
     let stdout = "";
     let stderr = "";
     let timedOut = false;
@@ -50,7 +78,7 @@ function spawnShell(
     };
     const timer = setTimeout(() => {
       timedOut = true;
-      child.kill("SIGKILL");
+      killTree(child);
     }, timeoutMs);
     child.stdout?.on("data", (chunk: Buffer) => {
       stdout += chunk.toString();
@@ -61,6 +89,11 @@ function spawnShell(
     child.on("error", (err) => {
       stderr += `${err.message}\n`;
       finish(-1);
+    });
+    // exit + close 双保险：close 需等 stdio 流关闭，孙进程残留管道时会延迟；
+    // exit 只等进程退出，保证 Promise 一定 settle
+    child.on("exit", (code) => {
+      finish(code ?? -1);
     });
     child.on("close", (code) => {
       finish(code ?? -1);
