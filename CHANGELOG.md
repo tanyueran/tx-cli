@@ -1,3 +1,39 @@
+## [0.8.0](https://github.com/tanyueran/tx-cli/compare/v0.7.1...v0.8.0) (2026-10-26)
+
+### Features
+
+* 把MCP工具支持服务器级授权与只读默认放行,沙箱模块按config/policy/runtime分层 ([bcb8640](https://github.com/tanyueran/tx-cli/commit/bcb86402ccc1199c291fd4c90a6d9b321b180a14))
+* 支持MCP的配置 ([410f842](https://github.com/tanyueran/tx-cli/commit/410f842cc9ba54f0ed996f4da1506f04ba2e00ac))
+* 支持skill的引入 ([62adb2c](https://github.com/tanyueran/tx-cli/commit/62adb2c87a79233ee11c4a519f0d31ccb4ee3ac1))
+* 新增agent命令 ([691539c](https://github.com/tanyueran/tx-cli/commit/691539c648f8d3d10e1931cbecac2576c60c15da))
+* 新增MCP安全加固,工具默认审批并支持通配规则 ([9db2eb1](https://github.com/tanyueran/tx-cli/commit/9db2eb118684f36d532d6be28fb374333e62e1dc))
+* 新增write_file,edit_file工具 ([f9fabb8](https://github.com/tanyueran/tx-cli/commit/f9fabb8f9031c9bc1f9c45c579ca6d6928867a82))
+* 新增write_todos工具 ([3635ba3](https://github.com/tanyueran/tx-cli/commit/3635ba3ebbb82e21aa9dc80357a9afe0b999031e))
+* 新增搜索工具 ([e441037](https://github.com/tanyueran/tx-cli/commit/e441037f6835051165b8a14550d667aff60b3ab4))
+* 新增沙箱功能,完善权限验证逻辑 ([e3e262d](https://github.com/tanyueran/tx-cli/commit/e3e262daeb816171cd94ae85c863f9e467d0a499))
+* 新增项目级配置(<cwd>/.tx-cli/config.json),移除env配置层 ([fbf54b8](https://github.com/tanyueran/tx-cli/commit/fbf54b85e7a79618229f67b451df381a8325e4ee))
+* 沙箱授权项目化,新增MCP roots联动与read-only禁网语义 ([dfbac94](https://github.com/tanyueran/tx-cli/commit/dfbac947ede47384fa248623d39ba5aa9c065261))
+
+### Bug Fixes
+
+* 优化chat,agent 启动时的日志输出 ([b9f3158](https://github.com/tanyueran/tx-cli/commit/b9f31581dbd7a07814a27535052859d493b4ae47))
+* 优化MCP的rule的配置逻辑 ([8e990c2](https://github.com/tanyueran/tx-cli/commit/8e990c2a27b8b53e52d349f8b4098649f1c00fa9))
+* 移除外部动态tool的功能,仅支持内部工具 ([60eee38](https://github.com/tanyueran/tx-cli/commit/60eee38c5e7ba7f6b5453836d1ab111601918cac))
+* 简化chat命令,其不支持MCP,默认思考等级改为low ([b228340](https://github.com/tanyueran/tx-cli/commit/b228340a58a048a705a1546c51f64d44ddcce45a))
+
+### Code Refactoring
+
+* 代码优化 ([bf06fcc](https://github.com/tanyueran/tx-cli/commit/bf06fcca31b0cea6858e8d2c65e96b6562b85b5a))
+* 单轮多轮对话统一采用responses api的方式和大模型交互 ([af09c14](https://github.com/tanyueran/tx-cli/commit/af09c1410f9e9a0a513884ee610c4477fd13a80d))
+* 目录结构调整 ([c2da634](https://github.com/tanyueran/tx-cli/commit/c2da63404d057a297b7afa642f92c5e012a5e09d))
+
+### Documentation
+
+* 添加agent的相关TODO ([eaea1d4](https://github.com/tanyueran/tx-cli/commit/eaea1d4d0e54cec71e251d64bd4b6b47b302ed82))
+
+### Tests
+
+* 补齐chat/agent命令执行体单测,agent沙箱选项改用联合类型消除断言 ([9d71981](https://github.com/tanyueran/tx-cli/commit/9d71981538f290a02e3f5326093522a4de8e7cdb))
 ## [0.7.1](https://github.com/tanyueran/tx-cli/compare/v0.7.0...v0.7.1) (2026-10-13)
 
 ### Miscellaneous Chores
