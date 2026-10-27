@@ -12,20 +12,15 @@ import {
 } from "./runtime";
 import type { ConversationRuntime } from "./runtime";
 import type { ConversationModeConfig } from "./mode";
-import type { SandboxContext } from "../../sandbox/runtime/context";
 import type { SandboxCliOptions } from "../../sandbox";
-import { formatTodoList } from "../../tools";
 import type { TodoToolHandle, Tool } from "../../tools";
 import { CancelError, CliError } from "../../../shared/errors";
-import { askText } from "../../../shared/interactive-prompt";
 import { printWarnings } from "../../../shared/warnings";
 import {
-  parseThinkingLevel,
+  warnThinkingFallback,
   resolveResponsesThinkingFields,
   resolveThinkingLevel,
   resolveThinkingStyle,
-  THINKING_LEVELS,
-  warnThinkingFallback,
 } from "../../llm";
 import type {
   LlmConfig,
@@ -33,6 +28,15 @@ import type {
   ThinkingLevel,
   ThinkingStyle,
 } from "../../llm/types";
+import { displayWidth } from "../../../shared/string";
+import { askReplLine } from "./repl-input";
+import {
+  buildSlashCommands,
+  buildSkillSuggestions,
+  filterSuggestions,
+  matchSlashCommand,
+} from "./slash-commands";
+import type { SlashCommand } from "./slash-commands";
 
 /** REPL 会话上下文：会话期间不变的依赖打包，避免逐参数透传 */
 interface ReplSession {
@@ -116,116 +120,10 @@ async function runReplTurn({
   process.stdout.write("\n\n");
 }
 
-/**
- * 打印思考档位切换/设置结果与服务能力折算提示
- * @param {ThinkingLevel} thinkingLevel - 目标档位
- * @param {ThinkingStyle} thinkingStyle - 思考协议风格
- * @returns {void}
- */
-function printThinkingNotice(
-  thinkingLevel: ThinkingLevel,
-  thinkingStyle: ThinkingStyle,
-): void {
-  // none 风格的警告已含档位信息，不重复打印档位行
-  if (thinkingStyle !== "none") {
-    console.log(pico.cyan(`思考档位：${thinkingLevel}`));
-  }
-  warnThinkingFallback(thinkingLevel, thinkingStyle);
-}
-
-/**
- * 打印规则列表段（/permissions 展示用）：空段显示占位说明
- * @param {string} title - 段标题（如「允许」「询问」「拒绝」）
- * @param {string[]} rules - 规则原文列表
- * @returns {void}
- */
-function printRuleSection(title: string, rules: string[]): void {
-  if (rules.length === 0) {
-    console.log(pico.gray(`  ${title}：（空）`));
-    return;
-  }
-  console.log(pico.cyan(`  ${title}：`));
-  for (const rule of rules) {
-    console.log(`    ${rule}`);
-  }
-}
-
-/**
- * 打印当前会话的沙箱与权限状态（/permissions 内联命令）
- * 展示：档位、审批策略、Provider、fs 边界、三段规则（allow 含会话与持久授权合并）
- * @param {SandboxContext | undefined} sandbox - 会话级沙箱上下文
- * @returns {void}
- */
-function printPermissions(sandbox: SandboxContext | undefined): void {
-  if (!sandbox) {
-    console.log(pico.yellow("本会话未启用沙箱（bash 与权限门卫均未装配）"));
-    return;
-  }
-  const providerName = sandbox.provider
-    ? `${sandbox.provider.name}${sandbox.provider.name === "noop" ? "（直通无隔离）" : ""}`
-    : "无（bash 以失败关闭模式运行）";
-  console.log(pico.cyan(`沙箱档位：${sandbox.level}`));
-  console.log(pico.cyan(`审批策略：${sandbox.approval}`));
-  console.log(pico.cyan(`沙箱 Provider：${providerName}`));
-  console.log(pico.cyan("文件系统边界："));
-  console.log(
-    pico.gray(`  禁读：${sandbox.tier.denyRead.join("、") || "（无）"}`),
-  );
-  if (sandbox.level === "read-only") {
-    console.log(pico.gray("  可写：（无，禁止一切写入）"));
-  } else {
-    console.log(
-      pico.gray(`  可写：${sandbox.tier.allowWrite.join("、") || "（无）"}`),
-    );
-    console.log(
-      pico.gray(`  禁写：${sandbox.tier.denyWrite.join("、") || "（无）"}`),
-    );
-  }
-  const rules = sandbox.listRules();
-  console.log(
-    pico.cyan("权限规则（allow 含会话授权与「始终允许」的持久授权）："),
-  );
-  printRuleSection("允许", rules.allow);
-  printRuleSection("询问", rules.ask);
-  printRuleSection("拒绝", rules.deny);
-}
-
-/**
- * 打印当前任务清单（/todos 内联命令）：复用 write_todos 的清单视图符号
- * @param {TodoToolHandle | undefined} todoHandle - 任务清单工具句柄（未装配时为 undefined）
- * @returns {void}
- */
-function printTodos(todoHandle: TodoToolHandle | undefined): void {
-  if (!todoHandle) {
-    console.log(pico.yellow("本次会话未启用任务清单工具（仅 Agent 模式装配）"));
-    return;
-  }
-  const todos = todoHandle.getTodos();
-  if (todos.length === 0) {
-    console.log(pico.gray("任务清单为空"));
-    return;
-  }
-  console.log(pico.cyan(`任务清单（${todos.length} 项）`));
-  console.log(formatTodoList(todos));
-}
-
 /** 面板标签列的目标显示宽度（列数）：全角字符按 2 列计，当前标签最宽为「模型」等 4 列 */
 const PANEL_LABEL_WIDTH = 4;
 /** 标签列与内容列之间的间隙（空格数） */
 const PANEL_LABEL_GAP = 3;
-
-/**
- * 计算字符串的终端显示宽度：全角（CJK 等）字符按 2 列、其余按 1 列计
- * @param {string} text - 待测宽度的字符串
- * @returns {number} 显示宽度（列数）
- */
-function displayWidth(text: string): number {
-  let width = 0;
-  for (const char of text) {
-    width += char.charCodeAt(0) > 0xff ? 2 : 1;
-  }
-  return width;
-}
 
 /**
  * 补齐面板标签到统一宽度并拼接列间隙，保证各行内容纵向对齐
@@ -253,16 +151,22 @@ function formatElapsed(ms: number): string {
 
 /**
  * 打印 REPL 启动就绪面板：信息分组行（模型/技能/MCP）与命令提示行，
+ * 命令提示行由斜杠命令注册表按 available 过滤生成，与补全面板、/help 单一事实来源；
  * 装配阶段警告（技能扫描、沙箱装载、MCP 连接）统一缩进展示在面板下方，
  * 替代原先分散的连接日志与长句欢迎语，默认状态只保留面板主体
  * @param {ReplOptions} options - 启动参数（配置、会话运行时）
  * @param {ThinkingLevel} thinkingLevel - 初始思考档位
+ * @param {SlashCommand[]} commands - 斜杠命令注册表
  * @returns {void}
  */
-function printReadyPanel(options: ReplOptions, thinkingLevel: ThinkingLevel): void {
+function printReadyPanel(
+  options: ReplOptions,
+  thinkingLevel: ThinkingLevel,
+  commands: SlashCommand[],
+): void {
   const { llmConfig, runtime } = options;
-  const { sandbox, mcpSummary, bootWarnings } = runtime;
-  const { catalog, scanWarnings, todoHandle } = runtime.skill;
+  const { mcpSummary, bootWarnings } = runtime;
+  const { catalog, scanWarnings } = runtime.skill;
 
   const rows: Array<[string, string]> = [
     ["模型", `${llmConfig.model} · 思考 ${thinkingLevel}`],
@@ -281,16 +185,9 @@ function printReadyPanel(options: ReplOptions, thinkingLevel: ThinkingLevel): vo
   }
 
   console.log("");
-  const hints = [`/think <${THINKING_LEVELS.join("|")}>`];
-  if (catalog.size > 0) {
-    hints.push("/skills");
-  }
-  if (sandbox) {
-    hints.push("/permissions");
-  }
-  if (todoHandle) {
-    hints.push("/todos");
-  }
+  const hints = commands
+    .filter((command) => command.available)
+    .map((command) => command.name);
   hints.push("exit 或 Ctrl+C 退出");
   console.log(
     `  ${pico.gray(padPanelLabel("提示"))}${pico.cyan(hints.join(" · "))}`,
@@ -307,7 +204,8 @@ function printReadyPanel(options: ReplOptions, thinkingLevel: ThinkingLevel): vo
  * 多轮对话 REPL 主循环（chat、agent 命令共用）：循环提问，直到用户输入 exit/quit 或按 Ctrl+C 退出
  * 基于 Responses API（无状态模式）+ agentic loop：历史由本地维护、每轮全量发送，
  * 模型可在任意一轮发起工具调用，工具带与沙箱由调用方经会话运行时按模式装配
- * 支持内联命令 /think（查看/切换思考档位）、/skills（列出技能）、/todos（查看任务清单）、/permissions（查看沙箱与权限状态）
+ * 输入行由自研组件 askReplLine 采集：输入 "/" 弹出斜杠命令/技能补全面板（≤10 条、↑↓ 选择、Tab 补全），
+ * 分发经命令注册表查表执行（/think、/skill、/skills、/todos、/permissions、/help）
  * 单轮请求失败（网络抖动、限流等可预期错误）只提示不终止会话，避免丢失整个对话上下文
  * @param {ReplOptions} options - 启动参数（配置、会话运行时、思考风格与初始档位、模式标签）
  * @returns {Promise<void>}
@@ -318,8 +216,21 @@ export async function runConversationRepl(options: ReplOptions): Promise<void> {
   let currentLevel = options.initialThinkingLevel;
   const { systemPrompt, tools, catalog, todoHandle } = runtime.skill;
   const { sandbox } = runtime;
+  // 斜杠命令注册表：补全面板、/help、就绪面板与分发共用；档位读写经闭包桥接本函数的 currentLevel
+  const commands = buildSlashCommands({
+    sandbox,
+    catalog,
+    todoHandle,
+    thinkingStyle,
+    getThinkingLevel: () => currentLevel,
+    setThinkingLevel: (level) => {
+      currentLevel = level;
+    },
+  });
+  // 技能建议列表（/skill 二级补全）：技能清单会话内不变，构建一次
+  const skillSuggestions = buildSkillSuggestions(catalog);
   // 就绪面板：标题、模型/技能/MCP 信息行与命令提示，装配阶段警告统一缩进展示在其下
-  printReadyPanel(options, currentLevel);
+  printReadyPanel(options, currentLevel, commands);
   // 服务能力折算警告：off 档位本就对应关闭，此时不提示
   warnThinkingFallback(currentLevel, thinkingStyle);
   const session: ReplSession = {
@@ -332,12 +243,19 @@ export async function runConversationRepl(options: ReplOptions): Promise<void> {
   };
   // 本地维护的对话历史：store=false 模式下每轮全量发送给服务端，跨轮累积
   const history: ResponseHistoryItem[] = [];
+  // 输入历史（面板关闭时 ↑/↓ 回溯）：仅会话内内存记录，上限 200 条
+  const inputHistory: string[] = [];
 
   for (;;) {
     let userInput: string;
     try {
-      // askText 已保证返回值去除首尾空格且非空，命令匹配无需再 trim
-      userInput = await askText(pico.green("你 > "));
+      // askReplLine 已保证返回值去除首尾空格且非空，命令匹配无需再 trim
+      userInput = await askReplLine({
+        message: pico.green("你 > "),
+        suggest: (input) =>
+          filterSuggestions(input, commands, skillSuggestions),
+        history: inputHistory,
+      });
     } catch (err) {
       // 用户按 Ctrl+C 取消输入：视为正常退出对话，不沿用顶层"未做任何修改"的取消文案
       if (err instanceof CancelError) {
@@ -346,6 +264,11 @@ export async function runConversationRepl(options: ReplOptions): Promise<void> {
       }
       throw err;
     }
+    // 记录到输入历史（含斜杠命令行，↑ 可回溯重用），超上限丢弃最旧一条
+    inputHistory.push(userInput);
+    if (inputHistory.length > 200) {
+      inputHistory.shift();
+    }
 
     const lowerInput = userInput.toLowerCase();
     if (lowerInput === "exit" || lowerInput === "quit") {
@@ -353,59 +276,17 @@ export async function runConversationRepl(options: ReplOptions): Promise<void> {
       return;
     }
 
-    // 内联命令 /permissions：查看当前会话的沙箱与权限状态（只读展示）
-    if (lowerInput === "/permissions") {
-      printPermissions(sandbox);
-      continue;
-    }
-
-    // 内联命令 /todos：查看当前任务清单（write_todos 工具的会话状态，只读展示）
-    if (lowerInput === "/todos") {
-      printTodos(todoHandle);
-      continue;
-    }
-
-    // 内联命令 /skills：列出可用技能及来源，便于确认模型可加载的手册清单
-    if (lowerInput === "/skills") {
-      if (catalog.size === 0) {
-        console.log(
-          pico.yellow(
-            "未发现可用技能（扫描目录：~/.tx-cli/skills、./.tx-cli/skills）",
-          ),
-        );
+    // 斜杠命令查表分发：注册表按「精确命令名或命令名+空格前缀」匹配，
+    // /thinking 等相似前缀不会误吞，未命中时按普通问题发给模型
+    const command = matchSlashCommand(userInput, commands);
+    if (command) {
+      const result = await command.execute(userInput);
+      if (result.kind === "send") {
+        // /skill <name> [任务...]：技能手册已注入任务文本，按普通回合发送给模型
+        userInput = result.task;
       } else {
-        for (const skill of catalog.list()) {
-          const skillSource = skill.source === "project" ? "项目级" : "用户级";
-          console.log(
-            `${pico.cyan(skill.name)}（${skillSource}）${skill.description}`,
-          );
-        }
-      }
-      continue;
-    }
-
-    // 内联命令 /think：查看或切换思考档位，非法值提示后保留原档位，不退出会话
-    // 精确匹配 /think 或 /think <档位>：/thinking 等前缀相似的输入应当作普通问题发给模型
-    if (lowerInput === "/think" || lowerInput.startsWith("/think ")) {
-      const thinkLevelArg = userInput.slice("/think".length).trim();
-      if (!thinkLevelArg) {
-        printThinkingNotice(currentLevel, thinkingStyle);
         continue;
       }
-      try {
-        // thinkLevelArg 已确认非空：parseThinkingLevel 只会返回档位或抛 CliError，不会返回 undefined
-        const nextLevel = parseThinkingLevel(thinkLevelArg);
-        if (nextLevel) {
-          currentLevel = nextLevel;
-        }
-        printThinkingNotice(currentLevel, thinkingStyle);
-      } catch (err) {
-        if (!(err instanceof CliError)) {
-          throw err;
-        }
-        console.error(pico.red(err.message));
-      }
-      continue;
     }
 
     // 记录本轮开始前历史长度：本轮被取消时回滚，避免残留未配对的用户输入或工具调用项
