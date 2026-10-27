@@ -22,11 +22,11 @@ export interface McpServersResult {
 /**
  * 展开字符串中的 ${VAR} 环境变量引用
  * 未定义的变量展开为空串（与常见 shell 行为一致），不报错
- * @param {string} value - 待展开的字符串
+ * @param {string} rawValue - 待展开的字符串
  * @returns {string} 展开后的字符串
  */
-function expandVars(value: string): string {
-  return value.replace(ENV_VAR_RE, (_, name) => process.env[name] ?? "");
+function expandVars(rawValue: string): string {
+  return rawValue.replace(ENV_VAR_RE, (_, name) => process.env[name] ?? "");
 }
 
 /**
@@ -35,11 +35,11 @@ function expandVars(value: string): string {
  * @returns {Record<string, string>} 展开后的新记录
  */
 function expandRecord(record: Record<string, string>): Record<string, string> {
-  const result: Record<string, string> = {};
+  const expanded: Record<string, string> = {};
   for (const [key, value] of Object.entries(record)) {
-    result[key] = expandVars(value);
+    expanded[key] = expandVars(value);
   }
-  return result;
+  return expanded;
 }
 
 /**
@@ -51,7 +51,9 @@ function isStringRecord(value: unknown): value is Record<string, string> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     return false;
   }
-  return Object.values(value).every((v) => typeof v === "string");
+  return Object.values(value).every(
+    (fieldValue) => typeof fieldValue === "string",
+  );
 }
 
 /**
@@ -95,7 +97,7 @@ function parseStdioServer(
   }
   if (
     args !== undefined &&
-    (!Array.isArray(args) || args.some((a) => typeof a !== "string"))
+    (!Array.isArray(args) || args.some((arg) => typeof arg !== "string"))
   ) {
     warnings.push(`MCP 服务器 ${name} 的 args 必须是字符串数组，已跳过`);
     return undefined;
@@ -147,20 +149,24 @@ function parseHttpServer(
 /**
  * 解析单个 MCP 服务器配置：识别传输类型后分派到对应的解析函数
  * @param {string} name - 服务器名
- * @param {unknown} raw - 原始配置值
+ * @param {unknown} rawConfig - 原始配置值
  * @param {string[]} warnings - 警告收集器（就地追加）
  * @returns {McpServerConfig | undefined} 合法时返回配置，否则为 undefined
  */
 function parseServer(
   name: string,
-  raw: unknown,
+  rawConfig: unknown,
   warnings: string[],
 ): McpServerConfig | undefined {
-  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+  if (
+    typeof rawConfig !== "object" ||
+    rawConfig === null ||
+    Array.isArray(rawConfig)
+  ) {
     warnings.push(`MCP 服务器 ${name} 的配置必须是对象，已跳过`);
     return undefined;
   }
-  const record = raw as Record<string, unknown>;
+  const record = rawConfig as Record<string, unknown>;
   const type = inferType(record);
   if (!type) {
     warnings.push(
@@ -186,9 +192,9 @@ function loadServersFromFile(
   warnings: string[],
 ): Map<string, McpServerConfig> {
   const servers = new Map<string, McpServerConfig>();
-  const { data, warnings: readWarnings } = readUserConfig(configPath);
+  const { configData, warnings: readWarnings } = readUserConfig(configPath);
   warnings.push(...readWarnings);
-  const { mcpServers } = data;
+  const { mcpServers } = configData;
   if (mcpServers === undefined) {
     return servers;
   }
@@ -202,14 +208,14 @@ function loadServersFromFile(
     );
     return servers;
   }
-  for (const [name, raw] of Object.entries(mcpServers)) {
+  for (const [name, rawServerConfig] of Object.entries(mcpServers)) {
     if (!name.trim()) {
       warnings.push("MCP 服务器名不能为空，已跳过");
       continue;
     }
-    const config = parseServer(name, raw, warnings);
-    if (config) {
-      servers.set(name, config);
+    const serverConfig = parseServer(name, rawServerConfig, warnings);
+    if (serverConfig) {
+      servers.set(name, serverConfig);
     }
   }
   return servers;

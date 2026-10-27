@@ -22,7 +22,7 @@ export function expandHome(path: string): string {
  * @returns {RegExp} 锚定首尾的正则
  */
 function compilePathGlob(pattern: string): RegExp {
-  const regex = pattern
+  const regexSource = pattern
     .split("**")
     .map((segment) =>
       segment
@@ -31,7 +31,7 @@ function compilePathGlob(pattern: string): RegExp {
         .join("[^/]*"),
     )
     .join(".*");
-  return new RegExp(`^${regex}$`);
+  return new RegExp(`^${regexSource}$`);
 }
 
 /**

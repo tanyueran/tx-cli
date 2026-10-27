@@ -44,20 +44,20 @@ interface ResolvedOptions {
 
 /**
  * 解析生效档位与审批策略：CLI > 项目配置 > 全局配置（两文件合并已由 loadSandboxConfig 完成）
- * @param {SandboxCliOptions} cli - 命令行选项
- * @param {SandboxFileConfig} config - 配置文件（项目与全局合并后）
+ * @param {SandboxCliOptions} cliOptions - 命令行选项
+ * @param {SandboxFileConfig} sandboxConfig - 配置文件（项目与全局合并后）
  * @returns {ResolvedOptions} 生效参数
  */
 function resolveOptions(
-  cli: SandboxCliOptions,
-  config: SandboxFileConfig,
+  cliOptions: SandboxCliOptions,
+  sandboxConfig: SandboxFileConfig,
 ): ResolvedOptions {
   return {
-    level: cli.level ?? config.level,
-    approval: cli.approval ?? config.approval,
-    levelFromFile: cli.level === undefined,
-    approvalFromFile: cli.approval === undefined,
-    missingAction: cli.missingAction ?? "deny",
+    level: cliOptions.level ?? sandboxConfig.level,
+    approval: cliOptions.approval ?? sandboxConfig.approval,
+    levelFromFile: cliOptions.level === undefined,
+    approvalFromFile: cliOptions.approval === undefined,
+    missingAction: cliOptions.missingAction ?? "deny",
   };
 }
 
@@ -72,8 +72,8 @@ function isTrusted(cwd: string, trustDirectories: string[]): boolean {
     return false;
   }
   return trustDirectories.some((dir) => {
-    const expanded = resolve(expandHome(dir));
-    return cwd === expanded || cwd.startsWith(`${expanded}/`);
+    const expandedDir = resolve(expandHome(dir));
+    return cwd === expandedDir || cwd.startsWith(`${expandedDir}/`);
   });
 }
 
@@ -94,35 +94,35 @@ export interface SandboxAssembly {
  * 构建 SandboxContext；
  * bash 装配开关与沙箱上下文解耦：上下文承担只读工具的 fs 门卫，
  * --no-bash 只移除 bash 工具，不再连带关闭门卫
- * @param {SandboxCliOptions} cli - 命令行选项
+ * @param {SandboxCliOptions} cliOptions - 命令行选项
  * @returns {Promise<SandboxAssembly>} 沙箱上下文与 bash 装配开关
  */
 export async function createSandboxContext(
-  cli: SandboxCliOptions = {},
+  cliOptions: SandboxCliOptions = {},
 ): Promise<SandboxAssembly> {
   const warnings: string[] = [];
   const cwd = process.cwd();
-  const { config, warnings: configWarnings } = loadSandboxConfig(
+  const { config: sandboxConfig, warnings: configWarnings } = loadSandboxConfig(
     resolveUserConfigPath(),
     resolveProjectConfigPath(cwd),
   );
   warnings.push(...configWarnings);
-  const bashEnabled = cli.bashEnabled ?? config.bash.enabled;
-  if (!config.enabled) {
+  const bashEnabled = cliOptions.bashEnabled ?? sandboxConfig.bash.enabled;
+  if (!sandboxConfig.enabled) {
     return { sandbox: undefined, bashEnabled: false, warnings };
   }
 
-  const resolved = resolveOptions(cli, config);
-  let { level, approval } = resolved;
+  const resolvedOptions = resolveOptions(cliOptions, sandboxConfig);
+  let { level, approval } = resolvedOptions;
   // 信任目录：配置文件来源的 full 档 / never 策略在非信任目录降级，防止误配置放大权限
-  if (!isTrusted(cwd, config.trustDirectories)) {
-    if (resolved.levelFromFile && level === "danger-full-access") {
+  if (!isTrusted(cwd, sandboxConfig.trustDirectories)) {
+    if (resolvedOptions.levelFromFile && level === "danger-full-access") {
       level = "workspace-write";
       warnings.push(
         "当前目录不在 sandbox.trustDirectories 内，danger-full-access 已降级为 workspace-write",
       );
     }
-    if (resolved.approvalFromFile && approval === "never") {
+    if (resolvedOptions.approvalFromFile && approval === "never") {
       approval = "on-failure";
       warnings.push(
         "当前目录不在 sandbox.trustDirectories 内，approval: never 已降级为 on-failure",
@@ -132,7 +132,7 @@ export async function createSandboxContext(
 
   // 网络白名单提示：workspace-write 档空白名单意味着 bash 内所有联网命令（npm install、curl 等）
   // 都会被沙箱代理以 403 拒绝（allow-only 语义），提前告知配置入口而非让用户在报错里猜
-  if (level === "workspace-write" && config.network.allowedDomains.length === 0) {
+  if (level === "workspace-write" && sandboxConfig.network.allowedDomains.length === 0) {
     warnings.push(
       "sandbox.network.allowedDomains 为空：bash 命令的所有网络访问将被沙箱代理拒绝（HTTP 403），" +
         "如需 npm install / curl 等联网操作，请在 ~/.tx-cli/config.json 的 sandbox.network.allowedDomains 中放行域名",
@@ -143,28 +143,28 @@ export async function createSandboxContext(
   let provider =
     level === "danger-full-access"
       ? getProvider("noop")
-      : getProvider(config.provider);
+      : getProvider(sandboxConfig.provider);
   if (!provider && level !== "danger-full-access") {
     warnings.push(
-      `未找到名为 ${config.provider} 的沙箱 Provider，bash 将以失败关闭模式运行`,
+      `未找到名为 ${sandboxConfig.provider} 的沙箱 Provider，bash 将以失败关闭模式运行`,
     );
   }
   // 初始化失败或环境不可用：按 missingAction 处置（默认 fail-closed）
   if (provider && level !== "danger-full-access") {
-    let available = false;
+    let isProviderAvailable = false;
     try {
-      available = await provider.isAvailable();
-      if (available) {
-        await provider.initialize(buildTierConfig(level, config, cwd));
+      isProviderAvailable = await provider.isAvailable();
+      if (isProviderAvailable) {
+        await provider.initialize(buildTierConfig(level, sandboxConfig, cwd));
       }
     } catch (err) {
-      // isAvailable/initialize 抛错时 available 保持 false，走不可用分支
+      // isAvailable/initialize 抛错时 isProviderAvailable 保持 false，走不可用分支
       warnings.push(
         `沙箱 Provider ${provider.name} 初始化失败：${(err as Error).message}`,
       );
     }
-    if (!available) {
-      if (resolved.missingAction === "allow") {
+    if (!isProviderAvailable) {
+      if (resolvedOptions.missingAction === "allow") {
         warnings.push(
           `沙箱 Provider ${provider.name} 在当前环境不可用，已按 --sandbox-missing allow 降级为无隔离执行（规则与审批仍生效）`,
         );
@@ -183,7 +183,7 @@ export async function createSandboxContext(
 
   return {
     sandbox: new SandboxContext({
-      config,
+      config: sandboxConfig,
       level,
       approval,
       provider,

@@ -16,7 +16,7 @@ export interface SkillContext {
   /** 技能目录（/skills 内联命令展示用） */
   catalog: SkillCatalog;
   /** 扫描警告（启动时黄字提示） */
-  warnings: string[];
+  scanWarnings: string[];
   /** 任务清单工具句柄（write_todos 装配时存在，/todos 内联命令读取清单状态） */
   todoHandle?: TodoToolHandle;
 }
@@ -29,21 +29,21 @@ export interface SkillContext {
  * @throws {CliError} 工具名重复时抛出
  */
 function ensureUniqueToolNames(tools: Tool[]): void {
-  const seen = new Set<string>();
+  const seenToolNames = new Set<string>();
   for (const tool of tools) {
-    if (seen.has(tool.name)) {
+    if (seenToolNames.has(tool.name)) {
       throw new CliError(`工具 ${tool.name} 名称重复`);
     }
-    seen.add(tool.name);
+    seenToolNames.add(tool.name);
   }
 }
 
 /** 技能装配选项：按模式裁剪工具带 */
 export interface SkillAssemblyOptions {
   /** bash 工具是否装配；缺省 true（跟随沙箱存在性），chat 模式固定传 false */
-  bash?: boolean;
+  bashEnabled?: boolean;
   /** 任务清单工具（write_todos）是否装配；缺省 false，agent 模式传 true */
-  todos?: boolean;
+  todosEnabled?: boolean;
 }
 
 /** setupSkillContext 入参对象 */
@@ -73,7 +73,7 @@ export function setupSkillContext({
   sandbox,
   assembly,
 }: SetupSkillContextOptions): SkillContext {
-  const { skills, warnings } = discoverSkills();
+  const { skills, warnings: skillWarnings } = discoverSkills();
   const catalog = new SkillCatalog(skills);
   let todoHandle: TodoToolHandle | undefined;
   const tools: Tool[] = [...builtinTools];
@@ -81,25 +81,25 @@ export function setupSkillContext({
     tools.push(createLoadSkillTool(catalog));
   }
   // 任务清单工具（write_todos）：agent 模式装配，工具实例闭包持有会话级清单状态（/todos 读取）
-  if (assembly?.todos) {
+  if (assembly?.todosEnabled) {
     todoHandle = createTodoTool();
     tools.push(todoHandle.tool);
   }
   // bash 依赖沙箱执行：无沙箱或显式关闭（chat 模式 / --no-bash）时不装配
-  if (sandbox && (assembly?.bash ?? true)) {
+  if (sandbox && (assembly?.bashEnabled ?? true)) {
     tools.push(createBashTool(sandbox));
   }
   tools.push(...extraTools);
   ensureUniqueToolNames(tools);
   // 声明了 permission 的工具（如 bash）经 L2 规则判定 + L3 审批门卫包装
-  const gated = sandbox
+  const gatedTools = sandbox
     ? tools.map((tool) => wrapToolWithPermission(tool, sandbox))
     : tools;
   return {
     systemPrompt: buildSystemPrompt(basePrompt, skills),
-    tools: gated,
+    tools: gatedTools,
     catalog,
-    warnings,
+    scanWarnings: skillWarnings,
     todoHandle,
   };
 }

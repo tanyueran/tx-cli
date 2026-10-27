@@ -14,7 +14,7 @@ import type { LlmConfig } from "../src/core/llm/types";
  * @param {Partial<LlmConfig>} overrides - 需要覆盖的字段
  * @returns {LlmConfig} 完整的 LLM 配置
  */
-function makeConfig(overrides: Partial<LlmConfig> = {}): LlmConfig {
+function makeLlmConfig(overrides: Partial<LlmConfig> = {}): LlmConfig {
   return {
     apiKey: "sk-test",
     baseUrl: "https://api.deepseek.com/v1",
@@ -67,28 +67,30 @@ describe("parseThinkingStyle", () => {
 
 describe("resolveThinkingStyle", () => {
   it("显式配置优先于 baseUrl 推断", () => {
-    const config = makeConfig({
+    const llmConfig = makeLlmConfig({
       baseUrl: "https://ark.cn-beijing.volces.com/api/v3",
       thinkingStyle: "none",
     });
-    expect(resolveThinkingStyle(config)).toBe("none");
+    expect(resolveThinkingStyle(llmConfig)).toBe("none");
   });
 
   it("火山方舟/豆包/智谱按 thinking 风格推断", () => {
     expect(
       resolveThinkingStyle(
-        makeConfig({ baseUrl: "https://ark.cn-beijing.volces.com/api/v3" })
+        makeLlmConfig({ baseUrl: "https://ark.cn-beijing.volces.com/api/v3" })
       )
     ).toBe("thinking");
     expect(
-      resolveThinkingStyle(makeConfig({ baseUrl: "https://api.bigmodel.cn/v1" }))
+      resolveThinkingStyle(
+        makeLlmConfig({ baseUrl: "https://api.bigmodel.cn/v1" })
+      )
     ).toBe("thinking");
   });
 
   it("阿里 DashScope 按 enable_thinking 风格推断", () => {
     expect(
       resolveThinkingStyle(
-        makeConfig({
+        makeLlmConfig({
           baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
         })
       )
@@ -96,14 +98,14 @@ describe("resolveThinkingStyle", () => {
   });
 
   it("其余服务默认 reasoning_effort", () => {
-    expect(resolveThinkingStyle(makeConfig())).toBe("reasoning_effort");
+    expect(resolveThinkingStyle(makeLlmConfig())).toBe("reasoning_effort");
   });
 });
 
 describe("resolveResponsesThinkingFields", () => {
   it("reasoning_effort 风格映射为 reasoning.effort", () => {
     expect(
-      resolveResponsesThinkingFields({ level: "high", style: "reasoning_effort" })
+      resolveResponsesThinkingFields({ thinkingLevel: "high", thinkingStyle: "reasoning_effort" })
     ).toEqual({
       reasoning: { effort: "high" },
     });
@@ -111,28 +113,28 @@ describe("resolveResponsesThinkingFields", () => {
 
   it("reasoning_effort 风格下 off 不下发任何字段", () => {
     expect(
-      resolveResponsesThinkingFields({ level: "off", style: "reasoning_effort" })
+      resolveResponsesThinkingFields({ thinkingLevel: "off", thinkingStyle: "reasoning_effort" })
     ).toEqual({});
   });
 
-  it("effortMap 对 reasoning.effort 同样生效", () => {
+  it("thinkingEffortMap 对 reasoning.effort 同样生效", () => {
     expect(
       resolveResponsesThinkingFields({
-        level: "low",
-        style: "reasoning_effort",
-        effortMap: { low: "high" },
+        thinkingLevel: "low",
+        thinkingStyle: "reasoning_effort",
+        thinkingEffortMap: { low: "high" },
       })
     ).toEqual({ reasoning: { effort: "high" } });
   });
 
   it("thinking 风格折算为开关，off 为 disabled", () => {
     expect(
-      resolveResponsesThinkingFields({ level: "high", style: "thinking" })
+      resolveResponsesThinkingFields({ thinkingLevel: "high", thinkingStyle: "thinking" })
     ).toEqual({
       thinking: { type: "enabled" },
     });
     expect(
-      resolveResponsesThinkingFields({ level: "off", style: "thinking" })
+      resolveResponsesThinkingFields({ thinkingLevel: "off", thinkingStyle: "thinking" })
     ).toEqual({
       thinking: { type: "disabled" },
     });
@@ -140,12 +142,12 @@ describe("resolveResponsesThinkingFields", () => {
 
   it("enable_thinking 风格折算为布尔开关", () => {
     expect(
-      resolveResponsesThinkingFields({ level: "low", style: "enable_thinking" })
+      resolveResponsesThinkingFields({ thinkingLevel: "low", thinkingStyle: "enable_thinking" })
     ).toEqual({
       enable_thinking: true,
     });
     expect(
-      resolveResponsesThinkingFields({ level: "off", style: "enable_thinking" })
+      resolveResponsesThinkingFields({ thinkingLevel: "off", thinkingStyle: "enable_thinking" })
     ).toEqual({
       enable_thinking: false,
     });
@@ -153,7 +155,7 @@ describe("resolveResponsesThinkingFields", () => {
 
   it("none 风格永远不下发思考字段", () => {
     expect(
-      resolveResponsesThinkingFields({ level: "high", style: "none" })
+      resolveResponsesThinkingFields({ thinkingLevel: "high", thinkingStyle: "none" })
     ).toEqual({});
   });
 });

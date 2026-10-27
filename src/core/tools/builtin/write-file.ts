@@ -10,8 +10,8 @@ import type { Tool, ToolOutput } from "../types";
  * @returns {string} 解析后的绝对路径
  */
 function parseWritePath(args: Record<string, unknown>): string {
-  const raw = typeof args.path === "string" ? args.path.trim() : "";
-  return resolveFromCwd(raw);
+  const rawPath = typeof args.path === "string" ? args.path.trim() : "";
+  return resolveFromCwd(rawPath);
 }
 
 /**
@@ -58,7 +58,7 @@ export const writeFileTool: Tool = {
     paths(args: Record<string, unknown>): string[] {
       return [parseWritePath(args)];
     },
-    serial: true,
+    isSerial: true,
   },
   /**
    * 调用提示渲染：只展示目标与规模，不回显文件内容（避免长内容刷屏）
@@ -78,14 +78,14 @@ export const writeFileTool: Tool = {
    * @returns {Promise<ToolOutput>} 写入结果摘要或失败说明
    */
   async execute(args: Record<string, unknown>): Promise<ToolOutput> {
-    const raw = typeof args.path === "string" ? args.path.trim() : "";
-    if (!raw) {
+    const rawPath = typeof args.path === "string" ? args.path.trim() : "";
+    if (!rawPath) {
       return { ok: false, output: "缺少必填参数 path（文件路径）" };
     }
     if (typeof args.content !== "string") {
       return { ok: false, output: "缺少必填参数 content（文件完整内容）" };
     }
-    const absolute = resolveFromCwd(raw);
+    const absolute = resolveFromCwd(rawPath);
     try {
       const existed = existsSync(absolute);
       // 父目录不存在时递归创建：免去先 mkdir 的额外一轮调用

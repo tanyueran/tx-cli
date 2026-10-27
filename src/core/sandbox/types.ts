@@ -37,7 +37,7 @@ export interface TierConfig {
 /** 沙箱执行违规信息：Provider 对命令的标注与原始事件 */
 export interface SandboxViolationInfo {
   /** 标注到 stderr 的完整说明（含违规行） */
-  annotated: string;
+  annotatedStderr: string;
   /** 违规事件原文（审计用） */
   events: string[];
 }
@@ -57,21 +57,21 @@ export interface SandboxProvider {
   isAvailable(): Promise<boolean>;
   /**
    * 初始化沙箱会话（按档位配置建立隔离边界）
-   * @param {TierConfig} config - 档位配置
+   * @param {TierConfig} tierConfig - 档位配置
    * @returns {Promise<void>}
    */
-  initialize(config: TierConfig): Promise<void>;
+  initialize(tierConfig: TierConfig): Promise<void>;
   /**
    * 包装命令：把原命令改写为在沙箱内执行的形式
    * @param {string} command - 原始命令文本
-   * @param {object} opts - 调用选项
-   * @param {string} opts.commandId - 本次执行的唯一关联 ID（违规归因用）
-   * @param {string} opts.commandText - 用户可见的命令文本（展示与审计用）
+   * @param {{ commandId: string; commandText: string }} wrapOptions - 调用选项
+   * @param {string} wrapOptions.commandId - 本次执行的唯一关联 ID（违规归因用）
+   * @param {string} wrapOptions.commandText - 用户可见的命令文本（展示与审计用）
    * @returns {Promise<string>} 包装后的可执行命令
    */
   wrapCommand(
     command: string,
-    opts: { commandId: string; commandText: string },
+    wrapOptions: { commandId: string; commandText: string },
   ): Promise<string>;
   /**
    * 标注 stderr：把沙箱违规信息追加到原始 stderr 末尾，回传模型自纠
@@ -97,7 +97,7 @@ export interface SandboxProvider {
  */
 export interface McpToolMeta {
   /** MCP 服务器名（配置中的原始键名，审批提示展示用） */
-  server: string;
+  serverName: string;
   /** 规则键中的服务器段（净化后，与 mcp__ 工具名保持同一口径，授权规则用） */
   serverKey: string;
   /** 是否为只读工具（readOnlyHint 为 true 且 destructiveHint 非 true） */

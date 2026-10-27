@@ -11,21 +11,25 @@ const UNSAFE_NAME_RE = /[^a-zA-Z0-9_-]/g;
 /**
  * 净化名称中的非法字符：非字母数字下划线连字符一律替换为下划线；
  * 净化后为空串（原名称全为非法字符）时兜底为 unnamed，避免生成空段工具名
- * @param {string} name - 原始名称（服务器名或远端工具名）
+ * @param {string} rawName - 原始名称（服务器名或远端工具名）
  * @returns {string} 净化后的名称
  */
-function sanitizeName(name: string): string {
-  const sanitized = name.replace(UNSAFE_NAME_RE, "_");
+function sanitizeName(rawName: string): string {
+  const sanitized = rawName.replace(UNSAFE_NAME_RE, "_");
   return sanitized || "unnamed";
 }
 
 /**
  * 判断值是否为普通对象（作为 inputSchema 的最低形状要求）
- * @param {unknown} value - 待判断的值
+ * @param {unknown} inputSchema - 待判断的值
  * @returns {boolean} 是非 null、非数组的对象时为 true
  */
-function isJsonObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+function isJsonObject(inputSchema: unknown): inputSchema is Record<string, unknown> {
+  return (
+    typeof inputSchema === "object" &&
+    inputSchema !== null &&
+    !Array.isArray(inputSchema)
+  );
 }
 
 /**
@@ -45,14 +49,14 @@ export function createMcpTool(
   client: Client,
   mcpTool: McpTool,
 ): Tool {
-  const name = `mcp__${sanitizeName(serverName)}__${sanitizeName(mcpTool.name)}`;
+  const toolName = `mcp__${sanitizeName(serverName)}__${sanitizeName(mcpTool.name)}`;
   // 只读标记来自 MCP 协议 annotations：readOnlyHint 为 true 且未声明 destructiveHint
   // 时才视为只读；未标注按保守口径（非只读）处理
   const readOnly =
     mcpTool.annotations?.readOnlyHint === true &&
     mcpTool.annotations?.destructiveHint !== true;
   return {
-    name,
+    name: toolName,
     description: `[MCP:${serverName}] ${mcpTool.description ?? ""}`.trim(),
     parameters: isJsonObject(mcpTool.inputSchema)
       ? mcpTool.inputSchema
@@ -63,25 +67,30 @@ export function createMcpTool(
       capabilities: readOnly ? ["net"] : ["net", "exec"],
       // 涉及外部副作用且默认走审批：判定+审批+执行进会话串行队列，
       // 避免同轮多调用并发弹审批窗交互错乱（与 bash 工具对齐）
-      serial: true,
+      isSerial: true,
       // 服务器名与只读标记下传沙箱：只读工具默认放行，授权可按整个服务器粒度复用；
-      // server 为展示名，serverKey 为净化后的规则键段（与 mcp__ 工具名同口径）
-      mcp: { server: serverName, serverKey: sanitizeName(serverName), readOnly },
+      // serverName 为展示名，serverKey 为净化后的规则键段（与 mcp__ 工具名同口径）
+      mcp: { serverName, serverKey: sanitizeName(serverName), readOnly },
       /**
        * 生成规则键：整工具级（远端参数结构不可知，不做细粒度拆分）
        * @returns {string} 形如 mcp__server__tool 的规则键
        */
       ruleKey(): string {
-        return name;
+        return toolName;
       },
     },
+    /**
+     * 执行远端 MCP 工具：转发调用请求并提取文本块输出
+     * @param {Record<string, unknown>} args - 模型给出的参数
+     * @returns {Promise<ToolOutput>} 工具输出文本；远端报错时 ok 为 false
+     */
     async execute(args) {
-      const result = await client.callTool({
+      const callToolResult = await client.callTool({
         name: mcpTool.name,
         arguments: args,
       });
       // content 类型在 SDK 中为 unknown，按结构收窄后提取文本块
-      const blocks = (result.content ?? []) as Array<{
+      const blocks = (callToolResult.content ?? []) as Array<{
         type: string;
         text?: string;
       }>;
@@ -92,7 +101,7 @@ export function createMcpTool(
             : `（收到不支持的 ${block.type} 类型输出）`,
         )
         .join("\n");
-      if (result.isError) {
+      if (callToolResult.isError) {
         return { ok: false, output: output || "MCP 工具执行失败（无输出说明）" };
       }
       return { ok: true, output: output || "（无文本输出）" };

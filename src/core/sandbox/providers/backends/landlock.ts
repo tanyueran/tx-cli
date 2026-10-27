@@ -40,9 +40,9 @@ async function isExecutable(path: string): Promise<boolean> {
  * @returns {Promise<string | null>} helper 绝对路径；未找到时为 null
  */
 async function resolveHelperPath(): Promise<string | null> {
-  const explicit = process.env[HELPER_ENV];
-  if (explicit) {
-    return (await isExecutable(explicit)) ? explicit : null;
+  const explicitHelperPath = process.env[HELPER_ENV];
+  if (explicitHelperPath) {
+    return (await isExecutable(explicitHelperPath)) ? explicitHelperPath : null;
   }
   if (process.platform !== "linux") {
     return null;
@@ -61,11 +61,11 @@ async function resolveHelperPath(): Promise<string | null> {
 
 /**
  * 引号包裹路径参数（shell 安全）：已含引号的路径用单引号包裹并转义内部单引号
- * @param {string} value - 原始路径
+ * @param {string} path - 原始路径
  * @returns {string} shell 安全的带引号形态
  */
-function shellQuote(value: string): string {
-  return `'${value.replace(/'/g, `'\\''`)}'`;
+function shellQuote(path: string): string {
+  return `'${path.replace(/'/g, `'\\''`)}'`;
 }
 
 /**
@@ -90,11 +90,11 @@ export const landlockProvider: SandboxProvider = {
 
   /**
    * 初始化：保存档位配置（Landlock 边界在每次 exec 时由 helper 参数建立，无会话级资源）
-   * @param {TierConfig} config - 档位配置
+   * @param {TierConfig} tierConfig - 档位配置
    * @returns {Promise<void>}
    */
-  async initialize(config: TierConfig): Promise<void> {
-    tier = config;
+  async initialize(tierConfig: TierConfig): Promise<void> {
+    tier = tierConfig;
   },
 
   /**
@@ -102,14 +102,14 @@ export const landlockProvider: SandboxProvider = {
    * `landlock-exec --ro-paths <逗号分隔> --rw-paths <逗号分隔> -- <command>`；
    * read-only 档只读根为 cwd，workspace-write 档只读根为全盘（/）+ 可写根 allowWrite
    * @param {string} command - 原始命令文本
-   * @param {object} opts - 调用选项（Landlock helper 不消费，签名对齐接口）
+   * @param {object} wrapOptions - 调用选项（Landlock helper 不消费，签名对齐接口）
    * @returns {Promise<string>} 包装后的可执行命令
    */
   async wrapCommand(
     command: string,
-    opts: { commandId: string; commandText: string },
+    wrapOptions: { commandId: string; commandText: string },
   ): Promise<string> {
-    void opts;
+    void wrapOptions;
     const helper = (await resolveHelperPath()) ?? HELPER_BIN;
     if (tier?.level === "read-only") {
       // read-only：只放行 cwd 读取，不传 --rw-paths（denyRead 的细粒度排除由应用层兜底）
@@ -131,7 +131,7 @@ export const landlockProvider: SandboxProvider = {
     stderr: string,
   ): Promise<SandboxViolationInfo> {
     void commandId;
-    return { annotated: stderr, events: [] };
+    return { annotatedStderr: stderr, events: [] };
   },
 
   /**

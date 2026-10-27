@@ -128,7 +128,7 @@ const failingViolatingProvider: SandboxProvider = {
     stderr: string,
   ): Promise<SandboxViolationInfo> {
     return {
-      annotated: `${stderr}\nwrite /etc/hosts: Operation not permitted`,
+      annotatedStderr: `${stderr}\nwrite /etc/hosts: Operation not permitted`,
       events: ["write /etc/hosts: Operation not permitted"],
     };
   },

@@ -6,7 +6,7 @@ export interface ConversationModeConfig {
   basePrompt: string;
   /** 模式标签（REPL 欢迎语展示，如「对话模式」「Agent 模式」） */
   modeLabel: string;
-  /** bash 工具是否装配；未指定时跟随 sandboxCli/配置默认（agent 模式），chat 模式固定传 false */
+  /** bash 工具是否装配；未指定时跟随 cliSandboxOptions/配置默认（agent 模式），chat 模式固定传 false */
   bashEnabled?: boolean;
   /** 任务清单工具（write_todos）是否装配；agent 模式开启，chat 只读问答不装配 */
   todosEnabled?: boolean;

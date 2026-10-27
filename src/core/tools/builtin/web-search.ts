@@ -14,16 +14,18 @@ const MAX_NUM_RESULTS = 10;
 
 /**
  * 解析 JSON-RPC 响应：响应可能是纯 JSON，也可能是 SSE（event: message / data: {...} 行）
- * @param {string} text - 响应原始文本
+ * @param {string} responseText - 响应原始文本
  * @returns {any} 解析出的 JSON-RPC 响应对象
  * @throws {Error} 文本无法解析出含 result/error 的 JSON-RPC 响应时抛出
  */
-function parseRpcResponse(text: string): any {
-  if (!text.startsWith("event:")) {
-    return JSON.parse(text);
+function parseRpcResponse(responseText: string): any {
+  if (!responseText.startsWith("event:")) {
+    return JSON.parse(responseText);
   }
   // SSE 响应：逐行取 data: 载荷，命中首个含 result/error 的 JSON-RPC 响应即返回
-  const dataLines = text.split("\n").filter((line) => line.startsWith("data:"));
+  const dataLines = responseText
+    .split("\n")
+    .filter((line) => line.startsWith("data:"));
   for (const line of dataLines) {
     const json = JSON.parse(line.slice(5));
     if (
@@ -39,11 +41,11 @@ function parseRpcResponse(text: string): any {
 
 /**
  * 从 JSON-RPC 响应中提取文本结果：result.content 为文本块数组（"标题+URL+高亮"）
- * @param {any} json - JSON-RPC 响应对象
+ * @param {any} rpcResponse - JSON-RPC 响应对象
  * @returns {string} 拼接后的文本结果，无有效内容时为空串
  */
-function extractContentText(json: any): string {
-  const content = json?.result?.content;
+function extractContentText(rpcResponse: any): string {
+  const content = rpcResponse?.result?.content;
   if (!Array.isArray(content)) {
     return "";
   }
@@ -112,7 +114,7 @@ export const webSearchTool: Tool = {
     }
 
     try {
-      const res = await fetch(EXA_MCP_ENDPOINT, {
+      const response = await fetch(EXA_MCP_ENDPOINT, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -135,23 +137,23 @@ export const webSearchTool: Tool = {
         }),
       });
 
-      const text = await res.text();
-      if (!res.ok) {
+      const responseText = await response.text();
+      if (!response.ok) {
         return {
           ok: false,
-          output: `搜索服务返回 HTTP ${res.status}: ${text.slice(0, 200)}`,
+          output: `搜索服务返回 HTTP ${response.status}: ${responseText.slice(0, 200)}`,
         };
       }
 
-      const json = parseRpcResponse(text);
-      if (json.error) {
+      const rpcResponse = parseRpcResponse(responseText);
+      if (rpcResponse.error) {
         return {
           ok: false,
-          output: `搜索服务报错: ${json.error.message ?? JSON.stringify(json.error)}`,
+          output: `搜索服务报错: ${rpcResponse.error.message ?? JSON.stringify(rpcResponse.error)}`,
         };
       }
 
-      const output = extractContentText(json);
+      const output = extractContentText(rpcResponse);
       if (!output) {
         return { ok: true, output: `未搜索到相关结果（关键词：${query}）` };
       }

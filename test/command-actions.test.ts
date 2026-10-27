@@ -31,7 +31,7 @@ vi.mock("../src/core/conversation/agent", () => ({
  * @param {Partial<LlmConfig>} overrides - 需要覆盖的字段
  * @returns {LlmConfig} 完整的 LLM 配置
  */
-function makeConfig(overrides: Partial<LlmConfig> = {}): LlmConfig {
+function makeLlmConfig(overrides: Partial<LlmConfig> = {}): LlmConfig {
   return {
     apiKey: "sk-test",
     baseUrl: "https://api.example.com/v1",
@@ -42,18 +42,18 @@ function makeConfig(overrides: Partial<LlmConfig> = {}): LlmConfig {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(loadLlmConfig).mockResolvedValue(makeConfig());
+  vi.mocked(loadLlmConfig).mockResolvedValue(makeLlmConfig());
 });
 
 describe("runChatAction", () => {
   it("传入问题走单次问答：多个词以空格合并，思考档位透传", async () => {
-    const config = await loadLlmConfig();
+    const llmConfig = await loadLlmConfig();
 
     await runChatAction(["解释", "一下", "这段代码"], { think: "high" });
 
     expect(runOneShotChat).toHaveBeenCalledTimes(1);
     expect(runOneShotChat).toHaveBeenCalledWith({
-      config,
+      llmConfig,
       question: "解释 一下 这段代码",
       thinkingLevel: "high",
     });
@@ -61,12 +61,12 @@ describe("runChatAction", () => {
   });
 
   it("未传参进入多轮对话模式", async () => {
-    const config = await loadLlmConfig();
+    const llmConfig = await loadLlmConfig();
 
     await runChatAction([], {});
 
     expect(runReplChat).toHaveBeenCalledTimes(1);
-    expect(runReplChat).toHaveBeenCalledWith(config, undefined);
+    expect(runReplChat).toHaveBeenCalledWith(llmConfig, undefined);
     expect(runOneShotChat).not.toHaveBeenCalled();
   });
 
@@ -84,7 +84,7 @@ describe("runChatAction", () => {
     await runChatAction(["问题"], {});
 
     expect(runOneShotChat).toHaveBeenCalledWith({
-      config: await loadLlmConfig(),
+      llmConfig: await loadLlmConfig(),
       question: "问题",
       thinkingLevel: undefined,
     });
@@ -93,32 +93,32 @@ describe("runChatAction", () => {
 
 describe("runAgentAction", () => {
   it("传入任务走单次执行：MCP 缺省开启，沙箱选项为空对象走配置默认", async () => {
-    const config = await loadLlmConfig();
+    const llmConfig = await loadLlmConfig();
 
     await runAgentAction(["修复", "这个", "bug"], {});
 
     expect(runOneShotAgent).toHaveBeenCalledTimes(1);
     expect(runOneShotAgent).toHaveBeenCalledWith({
-      config,
+      llmConfig,
       task: "修复 这个 bug",
       thinkingLevel: undefined,
       mcpEnabled: true,
-      sandboxCli: {},
+      cliSandboxOptions: {},
     });
     expect(runReplAgent).not.toHaveBeenCalled();
   });
 
   it("未传参进入多轮任务模式", async () => {
-    const config = await loadLlmConfig();
+    const llmConfig = await loadLlmConfig();
 
     await runAgentAction([], {});
 
     expect(runReplAgent).toHaveBeenCalledTimes(1);
     expect(runReplAgent).toHaveBeenCalledWith({
-      config,
+      llmConfig,
       thinkingLevel: undefined,
       mcpEnabled: true,
-      sandboxCli: {},
+      cliSandboxOptions: {},
     });
     expect(runOneShotAgent).not.toHaveBeenCalled();
   });
@@ -127,11 +127,11 @@ describe("runAgentAction", () => {
     await runAgentAction(["任务"], { mcp: false });
 
     expect(runOneShotAgent).toHaveBeenCalledWith({
-      config: await loadLlmConfig(),
+      llmConfig: await loadLlmConfig(),
       task: "任务",
       thinkingLevel: undefined,
       mcpEnabled: false,
-      sandboxCli: {},
+      cliSandboxOptions: {},
     });
   });
 
@@ -146,11 +146,11 @@ describe("runAgentAction", () => {
     });
 
     expect(runOneShotAgent).toHaveBeenCalledWith({
-      config: await loadLlmConfig(),
+      llmConfig: await loadLlmConfig(),
       task: "任务",
       thinkingLevel: "low",
       mcpEnabled: false,
-      sandboxCli: {
+      cliSandboxOptions: {
         level: "workspace-write",
         approval: "never",
         bashEnabled: false,

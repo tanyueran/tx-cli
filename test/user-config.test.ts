@@ -20,9 +20,9 @@ afterEach(() => {
 
 describe("readUserConfig", () => {
   it("文件不存在时返回空对象且不产生警告", () => {
-    const { data, warnings } = readUserConfig(join(dir, "none.json"));
+    const { configData, warnings } = readUserConfig(join(dir, "none.json"));
 
-    expect(data).toEqual({});
+    expect(configData).toEqual({});
     expect(warnings).toEqual([]);
   });
 
@@ -34,8 +34,8 @@ describe("readUserConfig", () => {
     writeFileSync(path, JSON.stringify({ mcpServers: { b: 2 } }));
     const second = readUserConfig(path);
 
-    expect(first.data).toEqual({ mcpServers: { a: 1 } });
-    expect(second.data).toEqual({ mcpServers: { a: 1 } });
+    expect(first.configData).toEqual({ mcpServers: { a: 1 } });
+    expect(second.configData).toEqual({ mcpServers: { a: 1 } });
   });
 
   it("JSON 损坏时返回空对象并告警，重复读取不再告警", () => {
@@ -44,19 +44,19 @@ describe("readUserConfig", () => {
     const first = readUserConfig(path);
     const second = readUserConfig(path);
 
-    expect(first.data).toEqual({});
+    expect(first.configData).toEqual({});
     expect(first.warnings).toHaveLength(1);
     expect(first.warnings[0]).toContain("解析失败");
-    expect(second.data).toEqual({});
+    expect(second.configData).toEqual({});
     expect(second.warnings).toEqual([]);
   });
 
   it("顶层不是对象时按空配置处理且不告警", () => {
     const path = join(dir, "array.json");
     writeFileSync(path, JSON.stringify(["a", "b"]));
-    const { data, warnings } = readUserConfig(path);
+    const { configData, warnings } = readUserConfig(path);
 
-    expect(data).toEqual({});
+    expect(configData).toEqual({});
     expect(warnings).toEqual([]);
   });
 });
@@ -82,9 +82,9 @@ describe("updateConfigSection", () => {
     readUserConfig(path);
 
     updateConfigSection("llm", { apiKey: "sk" }, path);
-    const { data } = readUserConfig(path);
+    const { configData } = readUserConfig(path);
 
-    expect(data).toEqual({
+    expect(configData).toEqual({
       mcpServers: { a: 1 },
       llm: { apiKey: "sk" },
     });
@@ -94,8 +94,8 @@ describe("updateConfigSection", () => {
     const path = join(dir, "fresh.json");
 
     updateConfigSection("llm", { apiKey: "sk" }, path);
-    const { data } = readUserConfig(path);
+    const { configData } = readUserConfig(path);
 
-    expect(data).toEqual({ llm: { apiKey: "sk" } });
+    expect(configData).toEqual({ llm: { apiKey: "sk" } });
   });
 });

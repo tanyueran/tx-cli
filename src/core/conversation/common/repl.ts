@@ -1,6 +1,10 @@
 import pico from "picocolors";
 import { createResponsesTurn } from "./responses-turn";
-import { createStreamRenderer, createToolCallLogger, createSoftConvergeNotice } from "./renderer";
+import {
+  createStreamRenderer,
+  createToolCallLogger,
+  createSoftConvergeNotice,
+} from "./renderer";
 import { runAgentLoop, DEFAULT_MAX_ITERATIONS } from "./loop";
 import {
   createConversationRuntime,
@@ -33,9 +37,9 @@ import type {
 /** REPL 会话上下文：会话期间不变的依赖打包，避免逐参数透传 */
 interface ReplSession {
   /** LLM 接入配置 */
-  config: LlmConfig;
+  llmConfig: LlmConfig;
   /** 思考协议风格（会话内不变，启动时解析一次） */
-  style: ThinkingStyle;
+  thinkingStyle: ThinkingStyle;
   /** 组装后的 system 提示词（含技能元数据清单） */
   systemPrompt: string;
   /** 本会话可用的工具列表（按模式装配：内置 + load_skill + write_todos + bash + MCP） */
@@ -49,13 +53,13 @@ interface ReplSession {
 /** REPL 启动参数：会话运行时与模式差异项（欢迎语标签） */
 export interface ReplOptions {
   /** LLM 接入配置 */
-  config: LlmConfig;
+  llmConfig: LlmConfig;
   /** 会话运行时（MCP、沙箱、技能装配结果），生命周期由调用方管理 */
   runtime: ConversationRuntime;
   /** 思考协议风格（启动时解析一次） */
-  style: ThinkingStyle;
+  thinkingStyle: ThinkingStyle;
   /** 初始思考档位（/think 切换后下一轮使用新档位） */
-  initialLevel: ThinkingLevel;
+  initialThinkingLevel: ThinkingLevel;
   /** 模式标签（欢迎语展示，如「对话模式」「Agent 模式」） */
   modeLabel: string;
   /** 工具调用轮数上限（来自模式配置，如 chat 8 轮、agent 20 轮） */
@@ -69,7 +73,7 @@ interface ReplTurnOptions {
   /** 跨轮共享的对话历史（本函数向其追加内容） */
   history: ResponseHistoryItem[];
   /** 本轮用户输入 */
-  input: string;
+  userInput: string;
   /** 本轮思考档位（/think 切换后下一轮使用新档位） */
   thinkingLevel: ThinkingLevel;
 }
@@ -78,25 +82,25 @@ interface ReplTurnOptions {
  * 执行多轮对话的一轮：Responses API 无状态模式 + agentic loop，工具调用按会话装配的工具带开启
  * store=false：服务端不留存会话，历史由本地维护并每轮全量发送，跨轮经共享 history 数组衔接；
  * 深度思考内容以暗色流式输出（模型未返回时不输出），instructions 每轮重传
- * @param {ReplTurnOptions} options - 入参对象（session/history/input/thinkingLevel 字段说明见接口定义）
+ * @param {ReplTurnOptions} options - 入参对象（session/history/userInput/thinkingLevel 字段说明见接口定义）
  * @returns {Promise<void>}
  */
 async function runReplTurn({
   session,
   history,
-  input,
+  userInput,
   thinkingLevel,
 }: ReplTurnOptions): Promise<void> {
   const renderer = createStreamRenderer();
   const runTurn = createResponsesTurn({
-    config: session.config,
-    input,
+    llmConfig: session.llmConfig,
+    userInput,
     history,
     instructions: session.systemPrompt,
     extraBody: resolveResponsesThinkingFields({
-      level: thinkingLevel,
-      style: session.style,
-      effortMap: session.config.thinkingEffortMap,
+      thinkingLevel,
+      thinkingStyle: session.thinkingStyle,
+      thinkingEffortMap: session.llmConfig.thinkingEffortMap,
     }),
     tools: session.tools,
     onDelta: renderer.onDelta,
@@ -114,16 +118,19 @@ async function runReplTurn({
 
 /**
  * 打印思考档位切换/设置结果与服务能力折算提示
- * @param {ThinkingLevel} level - 目标档位
- * @param {ThinkingStyle} style - 思考协议风格
+ * @param {ThinkingLevel} thinkingLevel - 目标档位
+ * @param {ThinkingStyle} thinkingStyle - 思考协议风格
  * @returns {void}
  */
-function printThinkingNotice(level: ThinkingLevel, style: ThinkingStyle): void {
+function printThinkingNotice(
+  thinkingLevel: ThinkingLevel,
+  thinkingStyle: ThinkingStyle,
+): void {
   // none 风格的警告已含档位信息，不重复打印档位行
-  if (style !== "none") {
-    console.log(pico.cyan(`思考档位：${level}`));
+  if (thinkingStyle !== "none") {
+    console.log(pico.cyan(`思考档位：${thinkingLevel}`));
   }
-  warnThinkingFallback(level, style);
+  warnThinkingFallback(thinkingLevel, thinkingStyle);
 }
 
 /**
@@ -226,7 +233,9 @@ function displayWidth(text: string): number {
  * @returns {string} 补齐后的标签前缀（标签 + 填充空格 + 列间隙）
  */
 function padPanelLabel(label: string): string {
-  const padding = " ".repeat(Math.max(0, PANEL_LABEL_WIDTH - displayWidth(label)));
+  const padding = " ".repeat(
+    Math.max(0, PANEL_LABEL_WIDTH - displayWidth(label)),
+  );
   return `${label}${padding}${" ".repeat(PANEL_LABEL_GAP)}`;
 }
 
@@ -246,17 +255,17 @@ function formatElapsed(ms: number): string {
  * 打印 REPL 启动就绪面板：信息分组行（模型/技能/MCP）与命令提示行，
  * 装配阶段警告（技能扫描、沙箱装载、MCP 连接）统一缩进展示在面板下方，
  * 替代原先分散的连接日志与长句欢迎语，默认状态只保留面板主体
- * @param {ReplOptions} opts - 启动参数（配置、会话运行时）
- * @param {ThinkingLevel} level - 初始思考档位
+ * @param {ReplOptions} options - 启动参数（配置、会话运行时）
+ * @param {ThinkingLevel} thinkingLevel - 初始思考档位
  * @returns {void}
  */
-function printReadyPanel(opts: ReplOptions, level: ThinkingLevel): void {
-  const { config, runtime } = opts;
+function printReadyPanel(options: ReplOptions, thinkingLevel: ThinkingLevel): void {
+  const { llmConfig, runtime } = options;
   const { sandbox, mcpSummary, bootWarnings } = runtime;
-  const { catalog, warnings, todoHandle } = runtime.skill;
+  const { catalog, scanWarnings, todoHandle } = runtime.skill;
 
   const rows: Array<[string, string]> = [
-    ["模型", `${config.model} · 思考 ${level}`],
+    ["模型", `${llmConfig.model} · 思考 ${thinkingLevel}`],
   ];
   if (catalog.size > 0) {
     rows.push(["技能", `${catalog.size} 个`]);
@@ -267,8 +276,8 @@ function printReadyPanel(opts: ReplOptions, level: ThinkingLevel): void {
       `${mcpSummary.okCount}/${mcpSummary.totalCount} 已连接 · ${mcpSummary.toolCount} 个工具 · ${formatElapsed(mcpSummary.elapsedMs)}`,
     ]);
   }
-  for (const [label, value] of rows) {
-    console.log(`  ${pico.gray(padPanelLabel(label))}${value}`);
+  for (const [label, rowContent] of rows) {
+    console.log(`  ${pico.gray(padPanelLabel(label))}${rowContent}`);
   }
 
   console.log("");
@@ -287,7 +296,7 @@ function printReadyPanel(opts: ReplOptions, level: ThinkingLevel): void {
     `  ${pico.gray(padPanelLabel("提示"))}${pico.cyan(hints.join(" · "))}`,
   );
 
-  const allWarnings = [...warnings, ...bootWarnings];
+  const allWarnings = [...scanWarnings, ...bootWarnings];
   if (allWarnings.length > 0) {
     console.log("");
     printWarnings(allWarnings, "  ");
@@ -300,35 +309,35 @@ function printReadyPanel(opts: ReplOptions, level: ThinkingLevel): void {
  * 模型可在任意一轮发起工具调用，工具带与沙箱由调用方经会话运行时按模式装配
  * 支持内联命令 /think（查看/切换思考档位）、/skills（列出技能）、/todos（查看任务清单）、/permissions（查看沙箱与权限状态）
  * 单轮请求失败（网络抖动、限流等可预期错误）只提示不终止会话，避免丢失整个对话上下文
- * @param {ReplOptions} opts - 启动参数（配置、会话运行时、思考风格与初始档位、模式标签）
+ * @param {ReplOptions} options - 启动参数（配置、会话运行时、思考风格与初始档位、模式标签）
  * @returns {Promise<void>}
  */
-export async function runConversationRepl(opts: ReplOptions): Promise<void> {
-  const { config, runtime, style } = opts;
+export async function runConversationRepl(options: ReplOptions): Promise<void> {
+  const { llmConfig, runtime, thinkingStyle } = options;
   // 档位由 /think 在会话内切换，仅本函数持有可变状态
-  let currentLevel = opts.initialLevel;
+  let currentLevel = options.initialThinkingLevel;
   const { systemPrompt, tools, catalog, todoHandle } = runtime.skill;
   const { sandbox } = runtime;
   // 就绪面板：标题、模型/技能/MCP 信息行与命令提示，装配阶段警告统一缩进展示在其下
-  printReadyPanel(opts, currentLevel);
+  printReadyPanel(options, currentLevel);
   // 服务能力折算警告：off 档位本就对应关闭，此时不提示
-  warnThinkingFallback(currentLevel, style);
+  warnThinkingFallback(currentLevel, thinkingStyle);
   const session: ReplSession = {
-    config,
-    style,
+    llmConfig,
+    thinkingStyle,
     systemPrompt,
     tools,
     todoHandle,
-    maxIterations: opts.maxIterations,
+    maxIterations: options.maxIterations,
   };
   // 本地维护的对话历史：store=false 模式下每轮全量发送给服务端，跨轮累积
   const history: ResponseHistoryItem[] = [];
 
   for (;;) {
-    let input: string;
+    let userInput: string;
     try {
       // askText 已保证返回值去除首尾空格且非空，命令匹配无需再 trim
-      input = await askText(pico.green("你 > "));
+      userInput = await askText(pico.green("你 > "));
     } catch (err) {
       // 用户按 Ctrl+C 取消输入：视为正常退出对话，不沿用顶层"未做任何修改"的取消文案
       if (err instanceof CancelError) {
@@ -338,26 +347,26 @@ export async function runConversationRepl(opts: ReplOptions): Promise<void> {
       throw err;
     }
 
-    const lower = input.toLowerCase();
-    if (lower === "exit" || lower === "quit") {
+    const lowerInput = userInput.toLowerCase();
+    if (lowerInput === "exit" || lowerInput === "quit") {
       console.log(pico.yellow("已退出对话"));
       return;
     }
 
     // 内联命令 /permissions：查看当前会话的沙箱与权限状态（只读展示）
-    if (lower === "/permissions") {
+    if (lowerInput === "/permissions") {
       printPermissions(sandbox);
       continue;
     }
 
     // 内联命令 /todos：查看当前任务清单（write_todos 工具的会话状态，只读展示）
-    if (lower === "/todos") {
+    if (lowerInput === "/todos") {
       printTodos(todoHandle);
       continue;
     }
 
     // 内联命令 /skills：列出可用技能及来源，便于确认模型可加载的手册清单
-    if (lower === "/skills") {
+    if (lowerInput === "/skills") {
       if (catalog.size === 0) {
         console.log(
           pico.yellow(
@@ -366,9 +375,9 @@ export async function runConversationRepl(opts: ReplOptions): Promise<void> {
         );
       } else {
         for (const skill of catalog.list()) {
-          const source = skill.source === "project" ? "项目级" : "用户级";
+          const skillSource = skill.source === "project" ? "项目级" : "用户级";
           console.log(
-            `${pico.cyan(skill.name)}（${source}）${skill.description}`,
+            `${pico.cyan(skill.name)}（${skillSource}）${skill.description}`,
           );
         }
       }
@@ -377,19 +386,19 @@ export async function runConversationRepl(opts: ReplOptions): Promise<void> {
 
     // 内联命令 /think：查看或切换思考档位，非法值提示后保留原档位，不退出会话
     // 精确匹配 /think 或 /think <档位>：/thinking 等前缀相似的输入应当作普通问题发给模型
-    if (lower === "/think" || lower.startsWith("/think ")) {
-      const arg = input.slice("/think".length).trim();
-      if (!arg) {
-        printThinkingNotice(currentLevel, style);
+    if (lowerInput === "/think" || lowerInput.startsWith("/think ")) {
+      const thinkLevelArg = userInput.slice("/think".length).trim();
+      if (!thinkLevelArg) {
+        printThinkingNotice(currentLevel, thinkingStyle);
         continue;
       }
       try {
-        // arg 已确认非空：parseThinkingLevel 只会返回档位或抛 CliError，不会返回 undefined
-        const nextLevel = parseThinkingLevel(arg);
+        // thinkLevelArg 已确认非空：parseThinkingLevel 只会返回档位或抛 CliError，不会返回 undefined
+        const nextLevel = parseThinkingLevel(thinkLevelArg);
         if (nextLevel) {
           currentLevel = nextLevel;
         }
-        printThinkingNotice(currentLevel, style);
+        printThinkingNotice(currentLevel, thinkingStyle);
       } catch (err) {
         if (!(err instanceof CliError)) {
           throw err;
@@ -402,7 +411,12 @@ export async function runConversationRepl(opts: ReplOptions): Promise<void> {
     // 记录本轮开始前历史长度：本轮被取消时回滚，避免残留未配对的用户输入或工具调用项
     const historyStart = history.length;
     try {
-      await runReplTurn({ session, history, input, thinkingLevel: currentLevel });
+      await runReplTurn({
+        session,
+        history,
+        userInput,
+        thinkingLevel: currentLevel,
+      });
     } catch (err) {
       // 审批等交互中按 Ctrl+C：只中断本轮并回滚本轮历史，会话继续
       if (err instanceof CancelError) {
@@ -425,50 +439,50 @@ export async function runConversationRepl(opts: ReplOptions): Promise<void> {
 /** runReplConversation 入参对象 */
 export interface ReplConversationOptions {
   /** LLM 接入配置 */
-  config: LlmConfig;
+  llmConfig: LlmConfig;
   /** 模式配置（人设、标签、bash 装配策略） */
-  mode: ConversationModeConfig;
+  modeConfig: ConversationModeConfig;
   /** 命令行指定的思考档位，未指定时回退配置默认 */
   thinkingLevel?: ThinkingLevel;
   /** 是否启用 MCP 服务器（--no-mcp 关闭），缺省开启 */
   mcpEnabled?: boolean;
-  /** 沙箱 CLI 选项（agent 命令的 --sandbox 等），缺省按配置文件装配 */
-  sandboxCli?: SandboxCliOptions;
+  /** CLI 传入的沙箱选项（agent 命令的 --sandbox 等），缺省按配置文件装配 */
+  cliSandboxOptions?: SandboxCliOptions;
 }
 
 /**
  * 多轮对话入口（chat、agent 命令共用的 REPL 薄入口）：解析档位 → 装配会话运行时 → 进入 REPL 循环
- * 模式差异（人设、标签、bash 装配策略）由 mode 决定；运行时生命周期在本函数内管理
- * @param {ReplConversationOptions} options - 入参对象（config/mode/thinkingLevel/mcpEnabled/sandboxCli 字段说明见接口定义）
+ * 模式差异（人设、标签、bash 装配策略）由 modeConfig 决定；运行时生命周期在本函数内管理
+ * @param {ReplConversationOptions} options - 入参对象（llmConfig/modeConfig/thinkingLevel/mcpEnabled/cliSandboxOptions 字段说明见接口定义）
  * @returns {Promise<void>}
  */
 export async function runReplConversation({
-  config,
-  mode,
+  llmConfig,
+  modeConfig,
   thinkingLevel,
   mcpEnabled = true,
-  sandboxCli,
+  cliSandboxOptions,
 }: ReplConversationOptions): Promise<void> {
   const currentLevel = resolveThinkingLevel({
     cliLevel: thinkingLevel,
-    config,
-    fallback: mode.defaultThinkingLevel,
+    llmConfig: llmConfig,
+    fallback: modeConfig.defaultThinkingLevel,
   });
-  const style = resolveThinkingStyle(config);
-  const runtime = await createConversationRuntime(mode.basePrompt, {
+  const thinkingStyle = resolveThinkingStyle(llmConfig);
+  const runtime = await createConversationRuntime(modeConfig.basePrompt, {
     mcpEnabled,
-    bashEnabled: mode.bashEnabled,
-    todosEnabled: mode.todosEnabled,
-    sandboxCli,
+    bashEnabled: modeConfig.bashEnabled,
+    todosEnabled: modeConfig.todosEnabled,
+    cliSandboxOptions,
   });
   try {
     await runConversationRepl({
-      config,
+      llmConfig,
       runtime,
-      style,
-      initialLevel: currentLevel,
-      modeLabel: mode.modeLabel,
-      maxIterations: mode.maxIterations ?? DEFAULT_MAX_ITERATIONS,
+      thinkingStyle,
+      initialThinkingLevel: currentLevel,
+      modeLabel: modeConfig.modeLabel,
+      maxIterations: modeConfig.maxIterations ?? DEFAULT_MAX_ITERATIONS,
     });
   } finally {
     await disposeConversationRuntime(runtime);

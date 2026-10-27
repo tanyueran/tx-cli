@@ -38,8 +38,8 @@ export const globTool: Tool = {
      * @returns {string} 形如 glob(/abs/root) 的规则键
      */
     ruleKey(args: Record<string, unknown>): string {
-      const raw = typeof args.path === "string" ? args.path : "";
-      return `glob(${resolveFromCwd(raw)})`;
+      const rawPath = typeof args.path === "string" ? args.path : "";
+      return `glob(${resolveFromCwd(rawPath)})`;
     },
     /**
      * 声明本次遍历涉及的根目录（门卫按档位禁读边界校验）
@@ -47,8 +47,8 @@ export const globTool: Tool = {
      * @returns {string[]} 绝对路径列表
      */
     paths(args: Record<string, unknown>): string[] {
-      const raw = typeof args.path === "string" ? args.path : "";
-      return [resolveFromCwd(raw)];
+      const rawPath = typeof args.path === "string" ? args.path : "";
+      return [resolveFromCwd(rawPath)];
     },
   },
   /**
@@ -67,23 +67,26 @@ export const globTool: Tool = {
     const normalized = pattern.replace(/\\/g, "/").replace(/^\.\//, "");
     const regex = globToRegExp(normalized);
     try {
-      const info = await stat(root);
-      if (!info.isDirectory()) {
+      const stats = await stat(root);
+      if (!stats.isDirectory()) {
         return { ok: false, output: `不是目录: ${root}` };
       }
       const matches = (await walkDir(root))
-        .filter((entry) => !entry.isDirectory && regex.test(entry.relativePath))
-        .map((entry) => entry.relativePath)
+        .filter(
+          (fileEntry) =>
+            !fileEntry.isDirectory && regex.test(fileEntry.relativePath),
+        )
+        .map((fileEntry) => fileEntry.relativePath)
         .sort((a, b) => a.localeCompare(b))
         .slice(0, MAX_MATCHES);
       if (matches.length === 0) {
         return { ok: true, output: `未匹配到文件（模式：${pattern}）` };
       }
-      const truncated =
+      const truncationNote =
         matches.length >= MAX_MATCHES
           ? `\n...（仅展示前 ${MAX_MATCHES} 个匹配）`
           : "";
-      return { ok: true, output: matches.join("\n") + truncated };
+      return { ok: true, output: matches.join("\n") + truncationNote };
     } catch (err) {
       return {
         ok: false,

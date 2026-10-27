@@ -29,25 +29,27 @@ export interface RuleEvaluation {
  * 用一组同工具名的规则匹配单个命令段
  * @param {ParsedRule[]} rules - 已解析的规则（假定与目标工具同名）
  * @param {string} segment - 原始命令段（已折叠空白）
- * @param {boolean} unwrapped - 是否额外用剥离包装形态匹配
+ * @param {boolean} shouldMatchUnwrapped - 是否额外用剥离包装形态匹配
  * @returns {ParsedRule | undefined} 命中的第一条规则
  */
 function matchSegment(
   rules: ParsedRule[],
   segment: string,
-  unwrapped: boolean,
+  shouldMatchUnwrapped: boolean,
 ): ParsedRule | undefined {
-  const candidates = unwrapped ? [segment, stripWrappers(segment)] : [segment];
+  const candidates = shouldMatchUnwrapped
+    ? [segment, stripWrappers(segment)]
+    : [segment];
   for (const rule of rules) {
-    if (rule.spec === undefined) {
+    if (rule.pattern === undefined) {
       // 整工具规则：段非空即命中
-      if (candidates.some((c) => c.length > 0)) {
+      if (candidates.some((candidate) => candidate.length > 0)) {
         return rule;
       }
       continue;
     }
     for (const candidate of candidates) {
-      if (matchSpec(rule.spec, candidate)) {
+      if (matchSpec(rule.pattern, candidate)) {
         return rule;
       }
     }
@@ -171,13 +173,22 @@ export function evaluateCommand(
 ): RuleEvaluation {
   const denyRules = rules.deny
     .map(parseRule)
-    .filter((r): r is ParsedRule => r !== undefined && r.name === "bash");
+    .filter(
+      (parsed): parsed is ParsedRule =>
+        parsed !== undefined && parsed.toolName === "bash",
+    );
   const askRules = rules.ask
     .map(parseRule)
-    .filter((r): r is ParsedRule => r !== undefined && r.name === "bash");
+    .filter(
+      (parsed): parsed is ParsedRule =>
+        parsed !== undefined && parsed.toolName === "bash",
+    );
   const allowRules = rules.allow
     .map(parseRule)
-    .filter((r): r is ParsedRule => r !== undefined && r.name === "bash");
+    .filter(
+      (parsed): parsed is ParsedRule =>
+        parsed !== undefined && parsed.toolName === "bash",
+    );
 
   const segments = splitTopLevel(command).map(normalizeCommand);
   if (segments.length === 0) {
@@ -188,52 +199,52 @@ export function evaluateCommand(
     };
   }
 
-  let sawAsk = false;
-  let sawDefault = false;
+  let hasAskHit = false;
+  let hasUnmatchedSegment = false;
   let askMatched = "";
   for (const segment of segments) {
     // 内置危险类目与用户 deny 均走穿透匹配（allow 不穿透）
-    const danger = dangerRules
+    const dangerHit = dangerRules
       ? matchDangerRule(stripWrappers(segment), dangerRules)
       : undefined;
-    if (danger) {
+    if (dangerHit) {
       return {
         decision: "deny",
-        matchedRule: danger.name,
-        reason: `命令命中内置危险类目「${danger.reason}」`,
+        matchedRule: dangerHit.name,
+        reason: `命令命中内置危险类目「${dangerHit.reason}」`,
       };
     }
-    const denied = matchSegment(denyRules, segment, true);
-    if (denied) {
+    const deniedRule = matchSegment(denyRules, segment, true);
+    if (deniedRule) {
       return {
         decision: "deny",
-        matchedRule: denied.raw,
-        reason: `命令命中拒绝规则 ${denied.raw}`,
+        matchedRule: deniedRule.rawText,
+        reason: `命令命中拒绝规则 ${deniedRule.rawText}`,
       };
     }
-    const asked = matchSegment(askRules, segment, true);
-    if (asked) {
-      sawAsk = true;
+    const askedRule = matchSegment(askRules, segment, true);
+    if (askedRule) {
+      hasAskHit = true;
       // 记录首条命中的询问规则：会话/始终授权按此规则粒度复用
       if (!askMatched) {
-        askMatched = asked.raw;
+        askMatched = askedRule.rawText;
       }
       continue;
     }
-    const allowed = matchSegment(allowRules, segment, false);
-    if (!allowed) {
-      sawDefault = true;
+    const allowedRule = matchSegment(allowRules, segment, false);
+    if (!allowedRule) {
+      hasUnmatchedSegment = true;
     }
   }
 
-  if (sawAsk) {
+  if (hasAskHit) {
     return {
       decision: "ask",
       matchedRule: askMatched,
       reason: `命令段命中询问规则 ${askMatched}，需要用户审批`,
     };
   }
-  if (sawDefault) {
+  if (hasUnmatchedSegment) {
     return defaultDecision(level, approval, "command");
   }
   return {
@@ -291,37 +302,41 @@ export function evaluateRuleKey(
       reason: `规则键非法：${ruleKey}`,
     };
   }
-  const sameName = (list: string[], decision: RuleDecision): RuleEvaluation | undefined => {
-    for (const raw of list) {
-      const rule = parseRule(raw);
-      if (!rule || !nameMatches(rule.name, parsedKey.name)) {
+  const sameName = (
+    ruleTexts: string[],
+    decision: RuleDecision,
+  ): RuleEvaluation | undefined => {
+    for (const ruleText of ruleTexts) {
+      const rule = parseRule(ruleText);
+      if (!rule || !nameMatches(rule.toolName, parsedKey.toolName)) {
         continue;
       }
-      const hit =
-        rule.spec === undefined ||
-        (parsedKey.spec !== undefined && matchSpec(rule.spec, parsedKey.spec));
-      if (hit) {
+      const isMatch =
+        rule.pattern === undefined ||
+        (parsedKey.pattern !== undefined &&
+          matchSpec(rule.pattern, parsedKey.pattern));
+      if (isMatch) {
         return {
           decision,
-          matchedRule: rule.raw,
-          reason: `命中${decision === "deny" ? "拒绝" : decision === "ask" ? "询问" : "允许"}规则 ${rule.raw}`,
+          matchedRule: rule.rawText,
+          reason: `命中${decision === "deny" ? "拒绝" : decision === "ask" ? "询问" : "允许"}规则 ${rule.rawText}`,
         };
       }
     }
     return undefined;
   };
 
-  const denied = sameName(rules.deny, "deny");
-  if (denied) {
-    return denied;
+  const deniedResult = sameName(rules.deny, "deny");
+  if (deniedResult) {
+    return deniedResult;
   }
-  const asked = sameName(rules.ask, "ask");
-  if (asked) {
-    return asked;
+  const askedResult = sameName(rules.ask, "ask");
+  if (askedResult) {
+    return askedResult;
   }
-  const allowed = sameName(rules.allow, "allow");
-  if (allowed) {
-    return allowed;
+  const allowedResult = sameName(rules.allow, "allow");
+  if (allowedResult) {
+    return allowedResult;
   }
   return defaultDecision(level, approval, category, ruleKey, capabilities);
 }

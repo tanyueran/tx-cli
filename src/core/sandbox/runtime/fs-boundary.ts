@@ -27,12 +27,12 @@ export function checkFsRead(
   if (level === "danger-full-access") {
     return { allowed: true };
   }
-  const target = resolve(path);
+  const resolvedPath = resolve(path);
   for (const pattern of tier.denyRead) {
-    if (matchPathPattern(pattern, target)) {
+    if (matchPathPattern(pattern, resolvedPath)) {
       return {
         allowed: false,
-        reason: `路径 ${target} 命中当前档位禁读边界 ${pattern}`,
+        reason: `路径 ${resolvedPath} 命中当前档位禁读边界 ${pattern}`,
       };
     }
   }
@@ -57,27 +57,27 @@ export function checkFsWrite(
   if (level === "danger-full-access") {
     return { allowed: true };
   }
-  const target = resolve(path);
+  const resolvedPath = resolve(path);
   if (tier.allowWrite.length === 0) {
     return {
       allowed: false,
       reason: `当前档位为 ${level}，禁止一切文件写入`,
     };
   }
-  const writable = tier.allowWrite.some(
-    (root) => target === root || target.startsWith(`${root}/`),
+  const isWritable = tier.allowWrite.some(
+    (root) => resolvedPath === root || resolvedPath.startsWith(`${root}/`),
   );
-  if (!writable) {
+  if (!isWritable) {
     return {
       allowed: false,
-      reason: `路径 ${target} 不在可写范围内（可写根：${tier.allowWrite.join("、")}）`,
+      reason: `路径 ${resolvedPath} 不在可写范围内（可写根：${tier.allowWrite.join("、")}）`,
     };
   }
   for (const pattern of tier.denyWrite) {
-    if (matchPathPattern(pattern, target)) {
+    if (matchPathPattern(pattern, resolvedPath)) {
       return {
         allowed: false,
-        reason: `文件 ${target} 命中禁写模式 ${pattern}`,
+        reason: `文件 ${resolvedPath} 命中禁写模式 ${pattern}`,
       };
     }
   }

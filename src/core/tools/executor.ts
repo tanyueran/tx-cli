@@ -40,7 +40,7 @@ export async function executeToolCall(
     args = JSON.parse(call.arguments || "{}") as Record<string, unknown>;
   } catch {
     return {
-      callId: call.id,
+      callId: call.callId,
       ok: false,
       output: `参数不是合法的 JSON 对象: ${call.arguments}`,
     };
@@ -66,7 +66,7 @@ export async function executeToolCall(
     };
   }
   return {
-    callId: call.id,
+    callId: call.callId,
     ok: output.ok,
     output: truncateOutput(output.output),
   };

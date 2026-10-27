@@ -51,8 +51,8 @@ export const grepTool: Tool = {
      * @returns {string} 形如 grep(/abs/path) 的规则键
      */
     ruleKey(args: Record<string, unknown>): string {
-      const raw = typeof args.path === "string" ? args.path : "";
-      return `grep(${resolveFromCwd(raw)})`;
+      const rawPath = typeof args.path === "string" ? args.path : "";
+      return `grep(${resolveFromCwd(rawPath)})`;
     },
     /**
      * 声明本次搜索涉及的根路径（门卫按档位禁读边界校验）
@@ -60,8 +60,8 @@ export const grepTool: Tool = {
      * @returns {string[]} 绝对路径列表
      */
     paths(args: Record<string, unknown>): string[] {
-      const raw = typeof args.path === "string" ? args.path : "";
-      return [resolveFromCwd(raw)];
+      const rawPath = typeof args.path === "string" ? args.path : "";
+      return [resolveFromCwd(rawPath)];
     },
   },
   /**
@@ -88,19 +88,19 @@ export const grepTool: Tool = {
     const root = resolveFromCwd(rawRoot);
 
     try {
-      const info = await stat(root);
-      const targets: SearchTarget[] = info.isDirectory()
+      const stats = await stat(root);
+      const targets: SearchTarget[] = stats.isDirectory()
         ? (await walkDir(root))
-            .filter((entry) => !entry.isDirectory)
-            .map((entry) => ({
-              relativePath: entry.relativePath,
-              absolutePath: join(root, entry.relativePath),
+            .filter((fileEntry) => !fileEntry.isDirectory)
+            .map((fileEntry) => ({
+              relativePath: fileEntry.relativePath,
+              absolutePath: join(root, fileEntry.relativePath),
             }))
         : [{ relativePath: basename(root), absolutePath: root }];
 
-      const results: string[] = [];
+      const hitLines: string[] = [];
       for (const target of targets) {
-        const remaining = MAX_MATCHES - results.length;
+        const remaining = MAX_MATCHES - hitLines.length;
         if (remaining <= 0) {
           break;
         }
@@ -110,18 +110,18 @@ export const grepTool: Tool = {
           remaining,
         );
         for (const match of matches) {
-          results.push(`${target.relativePath}:${match.line}: ${match.text}`);
+          hitLines.push(`${target.relativePath}:${match.line}: ${match.text}`);
         }
       }
 
-      if (results.length === 0) {
+      if (hitLines.length === 0) {
         return { ok: true, output: `未匹配到内容（正则：${pattern}）` };
       }
-      const truncated =
-        results.length >= MAX_MATCHES
+      const truncationNote =
+        hitLines.length >= MAX_MATCHES
           ? `\n...（仅展示前 ${MAX_MATCHES} 条匹配）`
           : "";
-      return { ok: true, output: results.join("\n") + truncated };
+      return { ok: true, output: hitLines.join("\n") + truncationNote };
     } catch (err) {
       return {
         ok: false,

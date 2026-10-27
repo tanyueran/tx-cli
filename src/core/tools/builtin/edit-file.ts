@@ -9,8 +9,8 @@ import type { Tool, ToolOutput } from "../types";
  * @returns {string} 解析后的绝对路径
  */
 function parseEditPath(args: Record<string, unknown>): string {
-  const raw = typeof args.path === "string" ? args.path.trim() : "";
-  return resolveFromCwd(raw);
+  const rawPath = typeof args.path === "string" ? args.path.trim() : "";
+  return resolveFromCwd(rawPath);
 }
 
 /**
@@ -79,7 +79,7 @@ export const editFileTool: Tool = {
     paths(args: Record<string, unknown>): string[] {
       return [parseEditPath(args)];
     },
-    serial: true,
+    isSerial: true,
   },
   /**
    * 调用提示渲染：只展示目标与替换规模，不回显新旧文本（避免长片段刷屏）
@@ -100,8 +100,8 @@ export const editFileTool: Tool = {
    * @returns {Promise<ToolOutput>} 编辑结果摘要或失败说明
    */
   async execute(args: Record<string, unknown>): Promise<ToolOutput> {
-    const raw = typeof args.path === "string" ? args.path.trim() : "";
-    if (!raw) {
+    const rawPath = typeof args.path === "string" ? args.path.trim() : "";
+    if (!rawPath) {
       return { ok: false, output: "缺少必填参数 path（文件路径）" };
     }
     if (typeof args.old_string !== "string" || args.old_string.length === 0) {
@@ -122,7 +122,7 @@ export const editFileTool: Tool = {
         output: "old_string 与 new_string 相同，无需编辑；请调整参数",
       };
     }
-    const absolute = resolveFromCwd(raw);
+    const absolute = resolveFromCwd(rawPath);
     let content: string;
     try {
       // 复用 readTextFile 的大小上限与二进制判断（编辑同样受其约束）
@@ -150,9 +150,9 @@ export const editFileTool: Tool = {
           "请扩大片段范围（带上前后行）使其唯一后重试",
       };
     }
-    const next = content.replace(args.old_string, args.new_string);
+    const replacedContent = content.replace(args.old_string, args.new_string);
     try {
-      await writeFile(absolute, next, "utf-8");
+      await writeFile(absolute, replacedContent, "utf-8");
       return {
         ok: true,
         output: `已编辑 ${absolute}：替换 1 处（${args.old_string.length} 字符 → ${args.new_string.length} 字符）`,

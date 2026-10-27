@@ -36,25 +36,27 @@ interface AgentOptions {
 /**
  * 组装沙箱 CLI 选项：枚举合法性已由 commander 的 choices() 在 action 执行前拦截，
  * 入参字段已声明为联合类型，此处只做可选字段到 SandboxCliOptions 的映射（导出以便单测直测映射逻辑）
- * @param {AgentOptions} opts - 命令行选项
+ * @param {AgentOptions} agentOptions - 命令行选项
  * @returns {SandboxCliOptions} 沙箱选项（未指定任何沙箱相关项时为空对象，走配置文件默认）
  */
-export function buildSandboxOptions(opts: AgentOptions): SandboxCliOptions {
-  const sandbox: SandboxCliOptions = {};
-  if (opts.sandbox !== undefined) {
-    sandbox.level = opts.sandbox;
+export function buildSandboxOptions(
+  agentOptions: AgentOptions,
+): SandboxCliOptions {
+  const sandboxOptions: SandboxCliOptions = {};
+  if (agentOptions.sandbox !== undefined) {
+    sandboxOptions.level = agentOptions.sandbox;
   }
-  if (opts.approval !== undefined) {
-    sandbox.approval = opts.approval;
+  if (agentOptions.approval !== undefined) {
+    sandboxOptions.approval = agentOptions.approval;
   }
-  // commander 的 --no-bash 取反约定：显式传入时 opts.bash 为 false，缺省为 true
-  if (opts.bash === false) {
-    sandbox.bashEnabled = false;
+  // commander 的 --no-bash 取反约定：显式传入时 agentOptions.bash 为 false，缺省为 true
+  if (agentOptions.bash === false) {
+    sandboxOptions.bashEnabled = false;
   }
-  if (opts.sandboxMissing !== undefined) {
-    sandbox.missingAction = opts.sandboxMissing;
+  if (agentOptions.sandboxMissing !== undefined) {
+    sandboxOptions.missingAction = agentOptions.sandboxMissing;
   }
-  return sandbox;
+  return sandboxOptions;
 }
 
 /**
@@ -62,33 +64,38 @@ export function buildSandboxOptions(opts: AgentOptions): SandboxCliOptions {
  * 与 commander 解耦后可直接对分流与空参逻辑单测；
  * 空白任务（如 tx agent "" 或 tx agent "  "）按未传参处理，进入多轮任务模式而非向模型发送空任务；
  * Agent 模式为全量工具带（bash 受沙箱与审批管控），只读问答请用 chat 命令
- * @param {string[]} task - 命令位置参数（可变参数）
- * @param {AgentOptions} opts - 命令行选项
+ * @param {string[]} taskSegments - 命令位置参数（可变参数，未拼接的任务分段）
+ * @param {AgentOptions} agentOptions - 命令行选项
  * @returns {Promise<void>}
  */
 export async function runAgentAction(
-  task: string[],
-  opts: AgentOptions,
+  taskSegments: string[],
+  agentOptions: AgentOptions,
 ): Promise<void> {
   // CLI 选项处理全部前置：loadLlmConfig 在配置缺失时会进入交互向导并写盘，
   // 必须先完成所有命令行选项的解析（枚举合法性已由 commander choices() 拦截）
-  const thinkingLevel = parseThinkingLevel(opts.think);
-  const sandboxCli = buildSandboxOptions(opts);
-  const config = await loadLlmConfig();
-  // commander 的 --no-mcp 取反约定：显式传入时 opts.mcp 为 false，缺省为 true
-  const mcpEnabled = opts.mcp !== false;
-  const taskText = task.join(" ").trim();
+  const thinkingLevel = parseThinkingLevel(agentOptions.think);
+  const cliSandboxOptions = buildSandboxOptions(agentOptions);
+  const llmConfig = await loadLlmConfig();
+  // commander 的 --no-mcp 取反约定：显式传入时 agentOptions.mcp 为 false，缺省为 true
+  const mcpEnabled = agentOptions.mcp !== false;
+  const taskText = taskSegments.join(" ").trim();
   if (taskText) {
     await runOneShotAgent({
-      config,
+      llmConfig,
       task: taskText,
       thinkingLevel,
       mcpEnabled,
-      sandboxCli,
+      cliSandboxOptions,
     });
     return;
   }
-  await runReplAgent({ config, thinkingLevel, mcpEnabled, sandboxCli });
+  await runReplAgent({
+    llmConfig,
+    thinkingLevel,
+    mcpEnabled,
+    cliSandboxOptions,
+  });
 }
 
 /**
@@ -138,7 +145,7 @@ export function registerAgentCommand(program: Command): void {
         "沙箱在当前环境不可用时的处置：allow 降级为无隔离执行（规则与审批仍生效）| deny 失败关闭（默认）",
       ).choices(["allow", "deny"]),
     )
-    .action(async (task: string[], opts: AgentOptions) => {
-      await runAgentAction(task, opts);
+    .action(async (taskSegments: string[], agentOptions: AgentOptions) => {
+      await runAgentAction(taskSegments, agentOptions);
     });
 }

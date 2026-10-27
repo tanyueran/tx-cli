@@ -28,7 +28,7 @@ function makeTool(
  * @returns {ToolCall} 工具调用请求
  */
 function makeCall(args: string): ToolCall {
-  return { id: "call_1", name: "fake", arguments: args };
+  return { callId: "call_1", name: "fake", arguments: args };
 }
 
 afterEach(() => {

@@ -27,23 +27,23 @@ function rules(override: Partial<SandboxRulesConfig> = {}): SandboxRulesConfig {
 describe("parseRule", () => {
   it("解析细粒度规则：Name(spec) 拆出小写名与模式", () => {
     expect(parseRule("Bash(git push:*)")).toEqual({
-      name: "bash",
-      spec: "git push:*",
-      raw: "Bash(git push:*)",
+      toolName: "bash",
+      pattern: "git push:*",
+      rawText: "Bash(git push:*)",
     });
   });
 
   it("解析整工具规则：裸 Name 无 spec（别名归一化为内部工具名）", () => {
     expect(parseRule("WebSearch")).toEqual({
-      name: "web_search",
-      raw: "WebSearch",
+      toolName: "web_search",
+      rawText: "WebSearch",
     });
   });
 
   it("规则名别名归一化：Read/ListDir 映射到内部工具名", () => {
-    expect(parseRule("Read(/src/**)")?.name).toBe("read_file");
-    expect(parseRule("ListDir(/tmp)")?.name).toBe("list_dir");
-    expect(parseRule("READ_FILE(/x)")?.name).toBe("read_file");
+    expect(parseRule("Read(/src/**)")?.toolName).toBe("read_file");
+    expect(parseRule("ListDir(/tmp)")?.toolName).toBe("list_dir");
+    expect(parseRule("READ_FILE(/x)")?.toolName).toBe("read_file");
   });
 
   it("括号不闭合的非法规则返回 undefined", () => {

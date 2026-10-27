@@ -320,12 +320,12 @@ describe("SandboxContext.evaluate", () => {
 describe("SandboxContext.guard: MCP 授权粒度", () => {
   /** 可写 MCP 工具元信息 */
   const writableMeta = {
-    server: "github",
+    serverName: "github",
     serverKey: "github",
     readOnly: false,
   };
   /** 只读 MCP 工具元信息 */
-  const readMeta = { server: "github", serverKey: "github", readOnly: true };
+  const readMeta = { serverName: "github", serverKey: "github", readOnly: true };
 
   it("只读 MCP 工具默认放行且不触发审批", async () => {
     const approver = new FakeApprover([{ kind: "deny" }]);
@@ -354,7 +354,7 @@ describe("SandboxContext.guard: MCP 授权粒度", () => {
     );
     expect(blocked).toBeNull();
     expect(approver.askCalls).toBe(1);
-    expect(approver.lastContext?.mcp?.server).toBe("github");
+    expect(approver.lastContext?.mcp?.serverName).toBe("github");
   });
 
   it("可写 MCP 工具默认询问，选服务器级会话授权后同服务器其他工具不再询问", async () => {
@@ -408,7 +408,7 @@ describe("SandboxContext.guard: MCP 授权粒度", () => {
   });
 
   it("服务器名含非法字符时授权规则使用净化后的 serverKey", async () => {
-    const meta = { server: "my.mcp", serverKey: "my_mcp", readOnly: false };
+    const meta = { serverName: "my.mcp", serverKey: "my_mcp", readOnly: false };
     const approver = new FakeApprover([{ kind: "always-server" }]);
     const context = makeContext({}, approver);
     await context.guard(

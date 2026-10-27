@@ -8,12 +8,12 @@ export class SerialQueue {
 
   /**
    * 把函数排入队列，前序完成后再执行
-   * @param {() => Promise<T>} fn - 待串行执行的异步函数
-   * @returns {Promise<T>} fn 的执行结果
+   * @param {() => Promise<T>} task - 待串行执行的异步函数
+   * @returns {Promise<T>} task 的执行结果
    */
-  run<T>(fn: () => Promise<T>): Promise<T> {
-    const run = this.tail.then(fn, fn);
-    this.tail = run.catch(() => undefined);
-    return run;
+  run<T>(task: () => Promise<T>): Promise<T> {
+    const chained = this.tail.then(task, task);
+    this.tail = chained.catch(() => undefined);
+    return chained;
   }
 }
