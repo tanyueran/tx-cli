@@ -46,7 +46,7 @@ export const noopProvider: SandboxProvider = {
     _commandId: string,
     stderr: string,
   ): Promise<SandboxViolationInfo> {
-    return { annotated: stderr, events: [] };
+    return { annotatedStderr: stderr, events: [] };
   },
 
   /**

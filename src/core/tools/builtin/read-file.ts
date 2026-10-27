@@ -27,8 +27,8 @@ export const readFileTool: Tool = {
      * @returns {string} 形如 read_file(/abs/path) 的规则键
      */
     ruleKey(args: Record<string, unknown>): string {
-      const raw = typeof args.path === "string" ? args.path.trim() : "";
-      return `read_file(${resolveFromCwd(raw)})`;
+      const rawPath = typeof args.path === "string" ? args.path.trim() : "";
+      return `read_file(${resolveFromCwd(rawPath)})`;
     },
     /**
      * 声明本次读取涉及的路径（门卫按档位禁读边界校验）
@@ -36,8 +36,8 @@ export const readFileTool: Tool = {
      * @returns {string[]} 绝对路径列表
      */
     paths(args: Record<string, unknown>): string[] {
-      const raw = typeof args.path === "string" ? args.path : "";
-      return [resolveFromCwd(raw)];
+      const rawPath = typeof args.path === "string" ? args.path : "";
+      return [resolveFromCwd(rawPath)];
     },
   },
   /**

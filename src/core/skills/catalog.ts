@@ -55,9 +55,9 @@ export class SkillCatalog {
     if (!meta) {
       return undefined;
     }
-    const cached = this.bodyCache.get(name);
-    if (cached !== undefined) {
-      return cached;
+    const cachedBody = this.bodyCache.get(name);
+    if (cachedBody !== undefined) {
+      return cachedBody;
     }
     const body = extractSkillBody(await readFile(meta.path, "utf-8"));
     this.bodyCache.set(name, body);

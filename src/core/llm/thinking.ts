@@ -30,23 +30,23 @@ const STYLE_DESCRIPTIONS: Record<ThinkingStyle, string> = {
 
 /**
  * 解析用户输入的思考档位：仅接受 off/low/medium/high，非法值抛错并列出合法档位
- * @param {string | undefined} input - 用户输入（如 "low"）；不传或空串返回 undefined（表示未指定）
+ * @param {string | undefined} levelInput - 用户输入（如 "low"）；不传或空串返回 undefined（表示未指定）
  * @returns {ThinkingLevel | undefined} 档位；未指定时为 undefined
  * @throws {CliError} 输入了无法识别的档位时抛出
  */
 export function parseThinkingLevel(
-  input: string | undefined,
+  levelInput: string | undefined,
 ): ThinkingLevel | undefined {
-  if (!input) {
+  if (!levelInput) {
     return undefined;
   }
-  const value = input.trim().toLowerCase();
-  if (!(THINKING_LEVELS as readonly string[]).includes(value)) {
+  const normalizedLevel = levelInput.trim().toLowerCase();
+  if (!(THINKING_LEVELS as readonly string[]).includes(normalizedLevel)) {
     throw new CliError(
-      `无法识别的思考档位 "${input}"，可选：${THINKING_LEVELS.join(" | ")}`,
+      `无法识别的思考档位 "${levelInput}"，可选：${THINKING_LEVELS.join(" | ")}`,
     );
   }
-  return value as ThinkingLevel;
+  return normalizedLevel as ThinkingLevel;
 }
 
 /** 全部合法的思考协议风格 */
@@ -59,76 +59,81 @@ const THINKING_STYLES: readonly ThinkingStyle[] = [
 
 /**
  * 解析用户输入的思考协议风格：非法值抛错并列出合法风格
- * @param {string | undefined} input - 用户输入；不传或空串返回 undefined（表示未指定，走 baseUrl 推断）
+ * @param {string | undefined} styleInput - 用户输入；不传或空串返回 undefined（表示未指定，走 baseUrl 推断）
  * @returns {ThinkingStyle | undefined} 风格；未指定时为 undefined
  * @throws {CliError} 输入了无法识别的风格时抛出
  */
 export function parseThinkingStyle(
-  input: string | undefined,
+  styleInput: string | undefined,
 ): ThinkingStyle | undefined {
-  if (!input) {
+  if (!styleInput) {
     return undefined;
   }
-  if (!(THINKING_STYLES as readonly string[]).includes(input)) {
+  if (!(THINKING_STYLES as readonly string[]).includes(styleInput)) {
     throw new CliError(
-      `无法识别的思考协议风格 "${input}"，可选：${THINKING_STYLES.join(" | ")}`,
+      `无法识别的思考协议风格 "${styleInput}"，可选：${THINKING_STYLES.join(" | ")}`,
     );
   }
-  return input as ThinkingStyle;
+  return styleInput as ThinkingStyle;
 }
 
 /**
  * 决定思考协议风格：显式配置优先，否则按 baseUrl 推断，默认走 reasoning_effort（最大公约数）
- * @param {LlmConfig} config - LLM 接入配置
+ * @param {LlmConfig} llmConfig - LLM 接入配置
  * @returns {ThinkingStyle} 思考协议风格
  */
-export function resolveThinkingStyle(config: LlmConfig): ThinkingStyle {
-  if (config.thinkingStyle) {
-    return config.thinkingStyle;
+export function resolveThinkingStyle(llmConfig: LlmConfig): ThinkingStyle {
+  if (llmConfig.thinkingStyle) {
+    return llmConfig.thinkingStyle;
   }
-  const hit = STYLE_INFERENCE_RULES.find((rule) =>
-    rule.pattern.test(config.baseUrl),
+  const matchedRule = STYLE_INFERENCE_RULES.find((rule) =>
+    rule.pattern.test(llmConfig.baseUrl),
   );
-  return hit?.style ?? "reasoning_effort";
+  return matchedRule?.style ?? "reasoning_effort";
 }
 
 /** resolveResponsesThinkingFields 入参对象 */
 export interface ResolveResponsesThinkingFieldsOptions {
   /** 思考档位 */
-  level: ThinkingLevel;
+  thinkingLevel: ThinkingLevel;
   /** 思考协议风格 */
-  style: ThinkingStyle;
+  thinkingStyle: ThinkingStyle;
   /** 高级映射，优先于内置映射 */
-  effortMap?: Partial<Record<ThinkingLevel, string>>;
+  thinkingEffortMap?: Partial<Record<ThinkingLevel, string>>;
 }
 
 /**
  * 按档位与风格生成 Responses API 的附加请求字段
  * off 在 reasoning_effort/none 风格下不发任何字段，最大化兼容不支持思考扩展的服务；
  * thinking/enable_thinking 为开关式风格，low/medium/high 均折算为开启
- * @param {ResolveResponsesThinkingFieldsOptions} options - 入参对象（level/style/effortMap 字段说明见接口定义）
+ * @param {ResolveResponsesThinkingFieldsOptions} options - 入参对象（thinkingLevel/thinkingStyle/thinkingEffortMap 字段说明见接口定义）
  * @returns {Record<string, unknown>} 附加请求字段，空对象表示不下发
  */
 export function resolveResponsesThinkingFields({
-  level,
-  style,
-  effortMap,
+  thinkingLevel,
+  thinkingStyle,
+  thinkingEffortMap,
 }: ResolveResponsesThinkingFieldsOptions): Record<string, unknown> {
-  switch (style) {
+  switch (thinkingStyle) {
     case "reasoning_effort": {
-      if (level === "off") {
+      if (thinkingLevel === "off") {
         return {};
       }
       // reasoning_effort 风格映射为嵌套的 reasoning.effort 字段
-      return { reasoning: { effort: effortMap?.[level] ?? level } };
+      return {
+        reasoning: {
+          effort: thinkingEffortMap?.[thinkingLevel] ?? thinkingLevel,
+        },
+      };
     }
     case "thinking": {
       const type =
-        effortMap?.[level] ?? (level === "off" ? "disabled" : "enabled");
+        thinkingEffortMap?.[thinkingLevel] ??
+        (thinkingLevel === "off" ? "disabled" : "enabled");
       return { thinking: { type } };
     }
     case "enable_thinking":
-      return { enable_thinking: level !== "off" };
+      return { enable_thinking: thinkingLevel !== "off" };
     case "none":
       return {};
   }
@@ -160,42 +165,46 @@ export interface ResolveThinkingLevelOptions {
   /** 命令行指定的档位，未指定时回退配置默认 */
   cliLevel?: ThinkingLevel;
   /** LLM 接入配置 */
-  config: LlmConfig;
+  llmConfig: LlmConfig;
   /** 配置也未指定时的兜底档位（chat 为 low，其余为 medium） */
   fallback?: ThinkingLevel;
 }
 
 /**
  * 解析生效的思考档位：命令行 --think > 配置文件（项目 > 全局）> 模式内置默认值
- * @param {ResolveThinkingLevelOptions} options - 入参对象（cliLevel/config/fallback 字段说明见接口定义）
+ * @param {ResolveThinkingLevelOptions} options - 入参对象（cliLevel/llmConfig/fallback 字段说明见接口定义）
  * @returns {ThinkingLevel} 生效的思考档位
  */
 export function resolveThinkingLevel({
   cliLevel,
-  config,
+  llmConfig,
   fallback = DEFAULT_THINKING_LEVEL,
 }: ResolveThinkingLevelOptions): ThinkingLevel {
-  return cliLevel ?? config.thinkingLevel ?? fallback;
+  return cliLevel ?? llmConfig.thinkingLevel ?? fallback;
 }
 
 /**
  * 打印思考档位的服务能力折算警告：服务完全支持分档思考时静默
  * none 风格说明思考字段不会下发；开关式风格仅在非 off 档位时提示折算（off 本就对应关闭，无需提示）
- * @param {ThinkingLevel} level - 生效的思考档位
- * @param {ThinkingStyle} style - 思考协议风格
+ * @param {ThinkingLevel} thinkingLevel - 生效的思考档位
+ * @param {ThinkingStyle} thinkingStyle - 思考协议风格
  * @returns {void}
  */
 export function warnThinkingFallback(
-  level: ThinkingLevel,
-  style: ThinkingStyle
+  thinkingLevel: ThinkingLevel,
+  thinkingStyle: ThinkingStyle,
 ): void {
-  if (style === "none") {
+  if (thinkingStyle === "none") {
     console.log(
-      pico.yellow(`思考档位为 ${level}，但${describeThinkingStyle(style)}`)
+      pico.yellow(
+        `思考档位为 ${thinkingLevel}，但${describeThinkingStyle(thinkingStyle)}`,
+      ),
     );
     return;
   }
-  if (isToggleOnlyStyle(style) && level !== "off") {
-    console.log(pico.yellow(`注意：当前服务${describeThinkingStyle(style)}`));
+  if (isToggleOnlyStyle(thinkingStyle) && thinkingLevel !== "off") {
+    console.log(
+      pico.yellow(`注意：当前服务${describeThinkingStyle(thinkingStyle)}`),
+    );
   }
 }

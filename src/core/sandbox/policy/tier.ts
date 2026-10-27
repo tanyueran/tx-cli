@@ -19,18 +19,18 @@ export const DEFAULT_DENY_WRITE: readonly string[] = [".env", "*.pem"];
  * workspace-write：可写 cwd 与临时目录，禁写敏感文件，网络按用户配置；
  * danger-full-access：无隔离（调用方不装配真实沙箱，此档返回值仅作展示）
  * @param {SandboxLevel} level - 沙箱档位
- * @param {SandboxFileConfig} config - 用户沙箱配置（扩展限制合并进档位默认）
+ * @param {SandboxFileConfig} sandboxConfig - 用户沙箱配置（扩展限制合并进档位默认）
  * @param {string} cwd - 当前工作目录（workspace-write 档的可写根）
  * @returns {TierConfig} 档位配置
  */
 export function buildTierConfig(
   level: SandboxLevel,
-  config: SandboxFileConfig,
+  sandboxConfig: SandboxFileConfig,
   cwd: string,
 ): TierConfig {
   const denyRead = [
     ...DEFAULT_DENY_READ,
-    ...config.filesystem.denyRead.map(expandHome),
+    ...sandboxConfig.filesystem.denyRead.map(expandHome),
   ];
   if (level === "read-only") {
     return {
@@ -45,9 +45,9 @@ export function buildTierConfig(
   return {
     level,
     denyRead,
-    allowWrite: [cwd, tmpdir(), ...config.filesystem.writableRoots.map(expandHome)],
-    denyWrite: [...DEFAULT_DENY_WRITE, ...config.filesystem.denyWrite.map(expandHome)],
-    allowedDomains: [...config.network.allowedDomains],
+    allowWrite: [cwd, tmpdir(), ...sandboxConfig.filesystem.writableRoots.map(expandHome)],
+    denyWrite: [...DEFAULT_DENY_WRITE, ...sandboxConfig.filesystem.denyWrite.map(expandHome)],
+    allowedDomains: [...sandboxConfig.network.allowedDomains],
     deniedDomains: [],
   };
 }

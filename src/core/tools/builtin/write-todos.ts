@@ -56,27 +56,27 @@ export function formatTodoList(todos: TodoItem[]): string {
  * @returns {TodoItem[] | string} 解析成功返回清单，失败返回错误说明（回传模型自纠）
  */
 function parseTodoItems(args: Record<string, unknown>): TodoItem[] | string {
-  const raw = args.todos;
-  if (!Array.isArray(raw)) {
+  const rawTodos = args.todos;
+  if (!Array.isArray(rawTodos)) {
     return "缺少 todos 数组参数（传入完整任务清单，空数组表示清空）";
   }
-  if (raw.length > MAX_TODO_ITEMS) {
-    return `任务清单最多 ${MAX_TODO_ITEMS} 项，收到 ${raw.length} 项，请精简后再提交`;
+  if (rawTodos.length > MAX_TODO_ITEMS) {
+    return `任务清单最多 ${MAX_TODO_ITEMS} 项，收到 ${rawTodos.length} 项，请精简后再提交`;
   }
-  const items: TodoItem[] = [];
-  for (const [index, entry] of raw.entries()) {
+  const parsedTodos: TodoItem[] = [];
+  for (const [index, rawTodo] of rawTodos.entries()) {
     const content =
-      typeof entry?.content === "string" ? entry.content.trim() : "";
+      typeof rawTodo?.content === "string" ? rawTodo.content.trim() : "";
     if (!content) {
       return `todos[${index}].content 不能为空`;
     }
-    const status = entry?.status;
+    const status = rawTodo?.status;
     if (!TODO_STATUSES.includes(status)) {
       return `todos[${index}].status 必须为 ${TODO_STATUSES.join("|")} 之一`;
     }
-    items.push({ content, status });
+    parsedTodos.push({ content, status });
   }
-  return items;
+  return parsedTodos;
 }
 
 /**
@@ -88,12 +88,16 @@ function buildModelSummary(todos: TodoItem[]): string {
   if (todos.length === 0) {
     return "任务清单已清空";
   }
-  const inProgress = todos.filter((t) => t.status === "in_progress").length;
-  const completed = todos.filter((t) => t.status === "completed").length;
+  const inProgressCount = todos.filter(
+    (todo) => todo.status === "in_progress",
+  ).length;
+  const completedCount = todos.filter(
+    (todo) => todo.status === "completed",
+  ).length;
   const lines = [
-    `任务清单已更新（共 ${todos.length} 项：${completed} 已完成 / ${inProgress} 进行中 / ${todos.length - completed - inProgress} 待办）`,
+    `任务清单已更新（共 ${todos.length} 项：${completedCount} 已完成 / ${inProgressCount} 进行中 / ${todos.length - completedCount - inProgressCount} 待办）`,
   ];
-  if (inProgress > 1) {
+  if (inProgressCount > 1) {
     lines.push("提醒：进行中任务超过 1 项，建议聚焦单个任务推进");
   }
   return lines.join("\n");
@@ -146,18 +150,22 @@ export function createTodoTool(): TodoToolHandle {
      * @returns {string} 清单展示文本（首行为摘要，随后为逐项清单）
      */
     renderCall(args: Record<string, unknown>): string {
-      const items = parseTodoItems(args);
-      if (typeof items === "string") {
-        return `（清单参数无效：${items}）`;
+      const parsedTodos = parseTodoItems(args);
+      if (typeof parsedTodos === "string") {
+        return `（清单参数无效：${parsedTodos}）`;
       }
-      if (items.length === 0) {
+      if (parsedTodos.length === 0) {
         return "清空任务清单";
       }
-      const inProgress = items.filter((t) => t.status === "in_progress").length;
-      const completed = items.filter((t) => t.status === "completed").length;
+      const inProgressCount = parsedTodos.filter(
+        (todo) => todo.status === "in_progress",
+      ).length;
+      const completedCount = parsedTodos.filter(
+        (todo) => todo.status === "completed",
+      ).length;
       return (
-        `更新任务清单（${items.length} 项：${completed} 完成 / ${inProgress} 进行中 / ${items.length - completed - inProgress} 待办）\n` +
-        formatTodoList(items)
+        `更新任务清单（${parsedTodos.length} 项：${completedCount} 完成 / ${inProgressCount} 进行中 / ${parsedTodos.length - completedCount - inProgressCount} 待办）\n` +
+        formatTodoList(parsedTodos)
       );
     },
     /**
@@ -166,12 +174,12 @@ export function createTodoTool(): TodoToolHandle {
      * @returns {Promise<ToolOutput>} 写入结果摘要或错误说明
      */
     async execute(args: Record<string, unknown>): Promise<ToolOutput> {
-      const items = parseTodoItems(args);
-      if (typeof items === "string") {
-        return { ok: false, output: items };
+      const parsedTodos = parseTodoItems(args);
+      if (typeof parsedTodos === "string") {
+        return { ok: false, output: parsedTodos };
       }
-      todos = items;
-      return { ok: true, output: buildModelSummary(items) };
+      todos = parsedTodos;
+      return { ok: true, output: buildModelSummary(parsedTodos) };
     },
   };
   return { tool, getTodos: () => todos.map((todo) => ({ ...todo })) };

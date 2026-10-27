@@ -57,8 +57,8 @@ export interface SandboxContextOptions {
  */
 function deriveGrantRule(toolName: string, ruleKey: string): string {
   if (toolName === "bash") {
-    const spec = parseRule(ruleKey)?.spec;
-    return spec ? `bash(${spec}:*)` : ruleKey;
+    const ruleSpec = parseRule(ruleKey)?.pattern;
+    return ruleSpec ? `bash(${ruleSpec}:*)` : ruleKey;
   }
   return toolName;
 }
@@ -143,8 +143,8 @@ export class SandboxContext {
     mcp?: McpToolMeta,
   ): RuleEvaluation {
     if (toolName === "bash") {
-      const parsed = parseRule(ruleKey);
-      const command = parsed?.spec ?? ruleKey;
+      const parsedKey = parseRule(ruleKey);
+      const command = parsedKey?.pattern ?? ruleKey;
       return evaluateCommand(
         command,
         this.rules,
@@ -255,7 +255,7 @@ export class SandboxContext {
       // 服务器级授权不撤销显式 ask 规则（显式规则优先，保持用户配置意图）
       if (choice.kind === "session" && evaluation.matchedRule) {
         this.rules.ask = this.rules.ask.filter(
-          (r) => r !== evaluation.matchedRule,
+          (askRule) => askRule !== evaluation.matchedRule,
         );
       }
       this.rules.allow = [...this.rules.allow, grantRule];
@@ -310,19 +310,19 @@ export class SandboxContext {
 
   /**
    * 记录一行审计日志（audit 关闭时为空操作）
-   * @param {Omit<AuditEntry, "ts" | "tier" | "approval">} partial - 审计事件（时间戳与档位自动补全）
+   * @param {Omit<AuditEntry, "timestamp" | "level" | "approval">} entry - 审计事件（时间戳与档位自动补全）
    * @returns {void}
    */
-  recordAudit(partial: Omit<AuditEntry, "ts" | "tier" | "approval">): void {
+  recordAudit(entry: Omit<AuditEntry, "timestamp" | "level" | "approval">): void {
     if (!this.auditEnabled) {
       return;
     }
     appendAudit(
       {
-        ts: new Date().toISOString(),
-        tier: this.level,
+        timestamp: new Date().toISOString(),
+        level: this.level,
         approval: this.approval,
-        ...partial,
+        ...entry,
       },
       this.auditPath,
     );
@@ -331,11 +331,11 @@ export class SandboxContext {
   /**
    * 串行执行：把函数排入会话级队列，保证前序完成后再执行后续
    * 前序失败不阻断后续（错误在各自调用方处理）
-   * @param {() => Promise<T>} fn - 待串行执行的异步函数
-   * @returns {Promise<T>} fn 的执行结果
+   * @param {() => Promise<T>} task - 待串行执行的异步函数
+   * @returns {Promise<T>} task 的执行结果
    */
-  runSerial<T>(fn: () => Promise<T>): Promise<T> {
-    return this.serialQueue.run(fn);
+  runSerial<T>(task: () => Promise<T>): Promise<T> {
+    return this.serialQueue.run(task);
   }
 
   /**

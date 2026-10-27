@@ -14,11 +14,11 @@ export function buildSystemPrompt(
   if (skills.length === 0) {
     return basePrompt;
   }
-  const lines = skills.map((skill) => `- ${skill.name}: ${skill.description}`);
+  const skillLines = skills.map((skill) => `- ${skill.name}: ${skill.description}`);
   return [
     basePrompt,
     "",
     "你可以使用 load_skill 工具加载以下技能手册，当任务匹配某个技能的描述时，先调用 load_skill 加载对应手册，再按手册指引执行：",
-    ...lines,
+    ...skillLines,
   ].join("\n");
 }

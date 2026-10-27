@@ -20,12 +20,12 @@ interface LlmFileConfig {
  * @param {string} configPath - 配置文件路径
  * @returns {LlmFileConfig} llm 段内容（文件不存在或损坏时为空对象）
  */
-function readLlmSection(configPath: string): LlmFileConfig {
-  const { data, warnings } = readUserConfig(configPath);
+function readLlmFileConfig(configPath: string): LlmFileConfig {
+  const { configData: fileConfig, warnings } = readUserConfig(configPath);
   for (const warning of warnings) {
     console.warn(pico.yellow(warning));
   }
-  const { llm } = data;
+  const { llm } = fileConfig;
   return {
     llm:
       typeof llm === "object" && llm !== null && !Array.isArray(llm)
@@ -36,13 +36,11 @@ function readLlmSection(configPath: string): LlmFileConfig {
 
 /**
  * 判断字符串配置项是否有效：空字符串视为未配置
- * @param {string | undefined} value - 配置原始值
+ * @param {string | undefined} configValue - 配置原始值
  * @returns {string | undefined} 有效值或 undefined
  */
-function normalizeText(
-  value: string | undefined,
-): string | undefined {
-  return value ? value : undefined;
+function normalizeText(configValue: string | undefined): string | undefined {
+  return configValue ? configValue : undefined;
 }
 
 /**
@@ -57,20 +55,29 @@ function resolveConfigFromSources(
   globalPath: string,
   projectPath?: string,
 ): Partial<LlmConfig> {
-  const global = readLlmSection(globalPath).llm;
-  const project = projectPath ? readLlmSection(projectPath).llm : undefined;
+  const globalLlm = readLlmFileConfig(globalPath).llm;
+  const projectLlm = projectPath
+    ? readLlmFileConfig(projectPath).llm
+    : undefined;
   return {
-    apiKey: normalizeText(project?.apiKey) ?? normalizeText(global?.apiKey),
-    baseUrl: normalizeText(project?.baseUrl) ?? normalizeText(global?.baseUrl),
-    model: normalizeText(project?.model) ?? normalizeText(global?.model),
+    apiKey:
+      normalizeText(projectLlm?.apiKey) ?? normalizeText(globalLlm?.apiKey),
+    baseUrl:
+      normalizeText(projectLlm?.baseUrl) ?? normalizeText(globalLlm?.baseUrl),
+    model: normalizeText(projectLlm?.model) ?? normalizeText(globalLlm?.model),
     // 思考档位/风格为可选配置：项目覆盖全局；合法性与格式校验统一在装载时进行
-    thinkingLevel: (project?.thinkingLevel ??
-      global?.thinkingLevel) as ThinkingLevel | undefined,
-    thinkingStyle: (project?.thinkingStyle ??
-      global?.thinkingStyle) as ThinkingStyle | undefined,
+    thinkingLevel: (projectLlm?.thinkingLevel ?? globalLlm?.thinkingLevel) as
+      | ThinkingLevel
+      | undefined,
+    thinkingStyle: (projectLlm?.thinkingStyle ?? globalLlm?.thinkingStyle) as
+      | ThinkingStyle
+      | undefined,
     thinkingEffortMap:
-      project?.thinkingEffortMap || global?.thinkingEffortMap
-        ? mergeRecords(global?.thinkingEffortMap ?? {}, project?.thinkingEffortMap ?? {})
+      projectLlm?.thinkingEffortMap || globalLlm?.thinkingEffortMap
+        ? mergeRecords(
+            globalLlm?.thinkingEffortMap ?? {},
+            projectLlm?.thinkingEffortMap ?? {},
+          )
         : undefined,
   };
 }
@@ -78,11 +85,11 @@ function resolveConfigFromSources(
 /**
  * 保存 LLM 配置到用户级配置文件
  * 走统一写入口：只替换 llm 段，mcpServers 等其他段由共享模块负责保留，缓存同步刷新
- * @param {LlmConfig} config - 完整配置
+ * @param {LlmConfig} llmConfig - 完整配置
  * @returns {void}
  */
-function saveConfigFile(config: LlmConfig): void {
-  updateConfigSection("llm", config);
+function saveConfigFile(llmConfig: LlmConfig): void {
+  updateConfigSection("llm", llmConfig);
   console.log(pico.green(`配置已保存到 ${resolveUserConfigPath()}`));
 }
 
@@ -99,28 +106,32 @@ export async function loadLlmConfig(
   globalPath: string = resolveUserConfigPath(),
   projectPath: string = resolveProjectConfigPath(process.cwd()),
 ): Promise<LlmConfig> {
-  const partial = resolveConfigFromSources(globalPath, projectPath);
+  const partialLlmConfig = resolveConfigFromSources(globalPath, projectPath);
   // 思考配置装载即校验：非法值直接报错，避免静默失效
-  const thinkingLevel = parseThinkingLevel(partial.thinkingLevel);
-  const thinkingStyle = parseThinkingStyle(partial.thinkingStyle);
-  const thinking = {
+  const thinkingLevel = parseThinkingLevel(partialLlmConfig.thinkingLevel);
+  const thinkingStyle = parseThinkingStyle(partialLlmConfig.thinkingStyle);
+  const thinkingConfig = {
     ...(thinkingLevel ? { thinkingLevel } : {}),
     ...(thinkingStyle ? { thinkingStyle } : {}),
-    ...(partial.thinkingEffortMap
-      ? { thinkingEffortMap: partial.thinkingEffortMap }
+    ...(partialLlmConfig.thinkingEffortMap
+      ? { thinkingEffortMap: partialLlmConfig.thinkingEffortMap }
       : {}),
   };
-  if (partial.apiKey && partial.baseUrl && partial.model) {
+  if (
+    partialLlmConfig.apiKey &&
+    partialLlmConfig.baseUrl &&
+    partialLlmConfig.model
+  ) {
     return {
-      apiKey: partial.apiKey,
-      baseUrl: partial.baseUrl,
-      model: partial.model,
-      ...thinking,
+      apiKey: partialLlmConfig.apiKey,
+      baseUrl: partialLlmConfig.baseUrl,
+      model: partialLlmConfig.model,
+      ...thinkingConfig,
     };
   }
-  const config = await runSetupWizard(partial);
+  const wizardConfig = await runSetupWizard(partialLlmConfig);
   // 向导只收集必填三项，可选思考配置原样合并保留
-  const merged = { ...config, ...thinking };
-  saveConfigFile(merged);
-  return merged;
+  const mergedLlmConfig = { ...wizardConfig, ...thinkingConfig };
+  saveConfigFile(mergedLlmConfig);
+  return mergedLlmConfig;
 }

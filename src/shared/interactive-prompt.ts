@@ -23,13 +23,13 @@ export async function ask(
  * @returns {Promise<string>} 去除首尾空格后的非空字符串
  */
 export async function askText(message: string): Promise<string> {
-  const { value } = await ask({
+  const { text } = await ask({
     type: "text",
-    name: "value",
+    name: "text",
     message,
-    validate: (input: string) => (input?.trim() ? true : "不能为空"),
+    validate: (userInput: string) => (userInput?.trim() ? true : "不能为空"),
   });
-  return String(value).trim();
+  return String(text).trim();
 }
 
 /**
@@ -42,13 +42,13 @@ export async function askSelect<T>(
   message: string,
   choices: { title: string; value: T }[]
 ): Promise<T> {
-  const { value } = await ask({
+  const { selectedValue } = await ask({
     type: "select",
-    name: "value",
+    name: "selectedValue",
     message,
     choices: choices as prompts.Choice[],
   });
-  return value as T;
+  return selectedValue as T;
 }
 
 /**
@@ -61,11 +61,11 @@ export async function askConfirm(
   message: string,
   initial = false
 ): Promise<boolean> {
-  const { value } = await ask({
+  const { confirmed } = await ask({
     type: "confirm",
-    name: "value",
+    name: "confirmed",
     message,
     initial,
   });
-  return Boolean(value);
+  return Boolean(confirmed);
 }

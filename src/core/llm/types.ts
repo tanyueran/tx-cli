@@ -52,7 +52,7 @@ export interface ToolDefinition {
  */
 export interface ToolCall {
   /** 调用 ID：结果回传时用于配对（对应 Responses API 的 call_id） */
-  id: string;
+  callId: string;
   /** 工具名称 */
   name: string;
   /** 参数的 JSON 字符串：保持服务端原始格式，回传时原样使用 */

@@ -26,7 +26,7 @@ function makeTool(name: string, output = "ok"): Tool {
  * @returns {ToolCall} 工具调用请求
  */
 function makeCall(name: string, args = "{}"): ToolCall {
-  return { id: `call_${name}`, name, arguments: args };
+  return { callId: `call_${name}`, name, arguments: args };
 }
 
 describe("runAgentLoop", () => {
@@ -47,13 +47,13 @@ describe("runAgentLoop", () => {
     const tool = makeTool("read_file", "文件内容");
     const onToolCall = vi.fn();
     let call = 0;
-    const runTurn: RunTurn = async (toolResults, disableTools) => {
+    const runTurn: RunTurn = async (toolResults, toolsDisabled) => {
       call += 1;
       if (call === 1) {
         return { type: "tool_calls", toolCalls: [makeCall("read_file")] };
       }
       // 第二轮应收到上一轮工具执行结果
-      expect(disableTools).toBe(false);
+      expect(toolsDisabled).toBe(false);
       expect(toolResults).toEqual([
         { callId: "call_read_file", ok: true, output: "文件内容" },
       ]);
@@ -96,9 +96,9 @@ describe("runAgentLoop", () => {
 
   it("达到 maxIterations 后进入软收敛，不再下发工具定义", async () => {
     const disableFlags: boolean[] = [];
-    const runTurn: RunTurn = async (_toolResults, disableTools) => {
-      disableFlags.push(disableTools);
-      if (disableTools) {
+    const runTurn: RunTurn = async (_toolResults, toolsDisabled) => {
+      disableFlags.push(toolsDisabled);
+      if (toolsDisabled) {
         return { type: "reply", reply: "收敛作答" };
       }
       return { type: "tool_calls", toolCalls: [makeCall("read_file")] };
@@ -129,12 +129,12 @@ describe("runAgentLoop", () => {
   it("首次进入软收敛轮时触发 onSoftConverge 恰好一次", async () => {
     const onSoftConverge = vi.fn();
     let call = 0;
-    const runTurn: RunTurn = async (_toolResults, disableTools) => {
+    const runTurn: RunTurn = async (_toolResults, toolsDisabled) => {
       call += 1;
       if (call <= 2) {
         return { type: "tool_calls", toolCalls: [makeCall("read_file")] };
       }
-      expect(disableTools).toBe(true);
+      expect(toolsDisabled).toBe(true);
       return { type: "reply", reply: "收敛作答" };
     };
 

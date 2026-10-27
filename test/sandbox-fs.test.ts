@@ -403,7 +403,7 @@ describe("landlockProvider", () => {
 
   it("annotateStderr 透传原文且无违规事件", async () => {
     const info = await landlockProvider.annotateStderr("id-3", "boom");
-    expect(info.annotated).toBe("boom");
+    expect(info.annotatedStderr).toBe("boom");
     expect(info.events).toEqual([]);
   });
 });

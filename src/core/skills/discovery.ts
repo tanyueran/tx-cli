@@ -54,13 +54,13 @@ export function resolveProjectSkillsDir(cwd: string): string {
 /**
  * 解析 SKILL.md 的 frontmatter 与正文
  * 仅支持 key: value 单行字段（成对首尾引号可去除），多行 YAML 语法不在约定范围内
- * @param {string} content - SKILL.md 全文
+ * @param {string} fileContent - SKILL.md 全文
  * @returns {{ fields: Record<string, string>; body: string } | undefined} 字段表与正文；无 frontmatter 时为 undefined
  */
 function parseFrontmatter(
-  content: string,
+  fileContent: string,
 ): { fields: Record<string, string>; body: string } | undefined {
-  const match = FRONTMATTER_RE.exec(content);
+  const match = FRONTMATTER_RE.exec(fileContent);
   if (!match) {
     return undefined;
   }
@@ -83,17 +83,17 @@ function parseFrontmatter(
       fields[key] = value;
     }
   }
-  return { fields, body: content.slice(match[0].length).trim() };
+  return { fields, body: fileContent.slice(match[0].length).trim() };
 }
 
 /**
  * 提取 SKILL.md 正文（frontmatter 之后的 Markdown 部分）
- * @param {string} content - SKILL.md 全文
+ * @param {string} fileContent - SKILL.md 全文
  * @returns {string} 正文（无 frontmatter 时为全文去空白后的内容）
  */
-export function extractSkillBody(content: string): string {
-  const match = FRONTMATTER_RE.exec(content);
-  return (match ? content.slice(match[0].length) : content).trim();
+export function extractSkillBody(fileContent: string): string {
+  const match = FRONTMATTER_RE.exec(fileContent);
+  return (match ? fileContent.slice(match[0].length) : fileContent).trim();
 }
 
 /**
@@ -111,21 +111,21 @@ function parseSkillFile(
   source: SkillSource,
   warnings: string[],
 ): SkillMeta | undefined {
-  let content: string;
+  let fileContent: string;
   try {
-    content = readFileSync(skillFile, "utf-8");
+    fileContent = readFileSync(skillFile, "utf-8");
   } catch (err) {
     warnings.push(
       `技能 ${dirName} 读取失败：${(err as Error).message}，已跳过`,
     );
     return undefined;
   }
-  const parsed = parseFrontmatter(content);
-  if (!parsed) {
+  const frontmatter = parseFrontmatter(fileContent);
+  if (!frontmatter) {
     warnings.push(`技能 ${dirName} 的 SKILL.md 缺少 frontmatter，已跳过`);
     return undefined;
   }
-  const { name, description } = parsed.fields;
+  const { name, description } = frontmatter.fields;
   if (!name || name !== dirName) {
     warnings.push(
       `技能 ${dirName} 的 name（${name || "缺失"}）与目录名不一致，已跳过`,
@@ -138,16 +138,21 @@ function parseSkillFile(
     );
     return undefined;
   }
-  if (!parsed.body) {
+  if (!frontmatter.body) {
     warnings.push(`技能 ${dirName} 缺少正文，已跳过`);
     return undefined;
   }
   // 描述超长仅静默截断（防止元数据清单膨胀拖大每轮请求），不产生警告噪音
-  let desc = description;
-  if (desc.length > MAX_SKILL_DESCRIPTION_CHARS) {
-    desc = `${desc.slice(0, MAX_SKILL_DESCRIPTION_CHARS)}…`;
+  let truncatedDescription = description;
+  if (truncatedDescription.length > MAX_SKILL_DESCRIPTION_CHARS) {
+    truncatedDescription = `${truncatedDescription.slice(0, MAX_SKILL_DESCRIPTION_CHARS)}…`;
   }
-  return { name, description: desc, source, path: skillFile };
+  return {
+    name,
+    description: truncatedDescription,
+    source,
+    path: skillFile,
+  };
 }
 
 /**
@@ -166,15 +171,15 @@ function scanSkillDir(
     return [];
   }
   const skills: SkillMeta[] = [];
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    if (!entry.isDirectory()) {
+  for (const dirent of readdirSync(dir, { withFileTypes: true })) {
+    if (!dirent.isDirectory()) {
       continue;
     }
-    const skillFile = join(dir, entry.name, "SKILL.md");
+    const skillFile = join(dir, dirent.name, "SKILL.md");
     if (!existsSync(skillFile)) {
       continue;
     }
-    const meta = parseSkillFile(entry.name, skillFile, source, warnings);
+    const meta = parseSkillFile(dirent.name, skillFile, source, warnings);
     if (meta) {
       skills.push(meta);
     }
@@ -195,21 +200,21 @@ export function discoverSkills(
   userDir: string = resolveUserSkillsDir(),
 ): SkillDiscoveryResult {
   const warnings: string[] = [];
-  const seen = new Map<string, SkillMeta>();
+  const skillsByName = new Map<string, SkillMeta>();
   const projectDir = resolveProjectSkillsDir(cwd);
-  const sameDir = projectDir === userDir;
+  const isSameDir = projectDir === userDir;
   for (const meta of scanSkillDir(projectDir, "project", warnings)) {
-    seen.set(meta.name, meta);
+    skillsByName.set(meta.name, meta);
   }
-  if (sameDir) {
-    return { skills: [...seen.values()], warnings };
+  if (isSameDir) {
+    return { skills: [...skillsByName.values()], warnings };
   }
   for (const meta of scanSkillDir(userDir, "user", warnings)) {
-    if (seen.has(meta.name)) {
+    if (skillsByName.has(meta.name)) {
       warnings.push(`用户级技能 ${meta.name} 与项目级重名，已忽略用户级`);
       continue;
     }
-    seen.set(meta.name, meta);
+    skillsByName.set(meta.name, meta);
   }
-  return { skills: [...seen.values()], warnings };
+  return { skills: [...skillsByName.values()], warnings };
 }

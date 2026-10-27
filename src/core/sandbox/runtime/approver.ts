@@ -24,20 +24,20 @@ export const interactiveApprover: Approver = {
     reason: string,
     context?: ApprovalAskContext,
   ): Promise<ApprovalChoice> {
-    const mcp = context?.mcp;
+    const mcpMeta = context?.mcp;
     console.log(
-      pico.yellow(`\n${mcp ? "MCP 工具" : "命令"}需要审批：${ruleKey}`),
+      pico.yellow(`\n${mcpMeta ? "MCP 工具" : "命令"}需要审批：${ruleKey}`),
     );
     console.log(pico.gray(`原因：${reason}`));
-    if (mcp) {
+    if (mcpMeta) {
       const choice = await askSelect("是否允许执行？", [
         { title: "本次允许", value: "once" as const },
         {
-          title: `本会话允许服务器 ${mcp.server} 的全部工具`,
+          title: `本会话允许服务器 ${mcpMeta.serverName} 的全部工具`,
           value: "session-server" as const,
         },
         {
-          title: `始终允许服务器 ${mcp.server} 的全部工具（写入项目配置）`,
+          title: `始终允许服务器 ${mcpMeta.serverName} 的全部工具（写入项目配置）`,
           value: "always-server" as const,
         },
         { title: "拒绝执行", value: "deny" as const },

@@ -15,29 +15,29 @@ interface ChatOptions {
  * 与 commander 解耦后可直接对分流与空参逻辑单测；
  * 空白问题（如 tx chat "" 或 tx chat "  "）按未传参处理，进入多轮对话而非向模型发送空消息；
  * Chat 模式为轻量只读问答：不装配 bash 与 MCP，思考档位兜底 low，需要执行任务请用 agent 命令
- * @param {string[]} question - 命令位置参数（可变参数）
- * @param {ChatOptions} opts - 命令行选项
+ * @param {string[]} questionSegments - 命令位置参数（可变参数，未拼接的问题分段）
+ * @param {ChatOptions} chatOptions - 命令行选项
  * @returns {Promise<void>}
  */
 export async function runChatAction(
-  question: string[],
-  opts: ChatOptions,
+  questionSegments: string[],
+  chatOptions: ChatOptions,
 ): Promise<void> {
   // CLI 选项处理全部前置：loadLlmConfig 在配置缺失时会进入交互向导并写盘，
   // 必须先完成所有命令行选项的解析
   // 思考档位链路：--think > 配置文件（项目 > 全局）> low，兜底值由会话层按模式解析；
-  // 枚举合法性已由 commander choices() 拦截，opts.think 直接下传即可
-  const config = await loadLlmConfig();
-  const questionText = question.join(" ").trim();
+  // 枚举合法性已由 commander choices() 拦截，chatOptions.think 直接下传即可
+  const llmConfig = await loadLlmConfig();
+  const questionText = questionSegments.join(" ").trim();
   if (questionText) {
     await runOneShotChat({
-      config,
+      llmConfig,
       question: questionText,
-      thinkingLevel: opts.think,
+      thinkingLevel: chatOptions.think,
     });
     return;
   }
-  await runReplChat(config, opts.think);
+  await runReplChat(llmConfig, chatOptions.think);
 }
 
 /**
@@ -61,7 +61,7 @@ export function registerChatCommand(program: Command): void {
         `思考档位：${THINKING_LEVELS.join(" | ")}，优先级：命令行 > 项目配置 > 全局配置（chat 最终默认 low，仅对本次对话生效）`,
       ).choices([...THINKING_LEVELS]),
     )
-    .action(async (question: string[], opts: ChatOptions) => {
-      await runChatAction(question, opts);
+    .action(async (questionSegments: string[], chatOptions: ChatOptions) => {
+      await runChatAction(questionSegments, chatOptions);
     });
 }

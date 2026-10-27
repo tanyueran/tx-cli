@@ -18,7 +18,7 @@ export interface ToolOutput {
  * 工具执行结果：ToolOutput 加上调用配对 ID，供回合适配器回传
  */
 export interface ToolResult extends ToolOutput {
-  /** 对应的工具调用 ID（ToolCall.id），回传结果时用于配对 */
+  /** 对应的工具调用 ID（ToolCall.callId），回传结果时用于配对 */
   callId: string;
 }
 
@@ -48,7 +48,7 @@ export interface ToolPermission {
    */
   paths?(args: Record<string, unknown>): string[];
   /** 是否串行执行（如 bash 并发会互相干扰），串行工具在会话级队列中依次执行 */
-  serial?: boolean;
+  isSerial?: boolean;
   /**
    * MCP 工具元信息（仅 MCP 工具声明）：携带服务器名与只读标记，
    * 沙箱据此区分 mcp-tool / mcp-read 类目，并按服务器粒度生成授权规则

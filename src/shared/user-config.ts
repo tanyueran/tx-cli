@@ -5,7 +5,7 @@ import { dirname, join } from "node:path";
 /** 用户级配置文件读取结果：解析后的全文与读取过程中的警告 */
 export interface UserConfigResult {
   /** 配置全文（顶层各段原样保留，llm/mcpServers 等由调用方各自取用） */
-  data: Record<string, unknown>;
+  configData: Record<string, unknown>;
   /** 读取警告（文件损坏等），由调用方决定如何提示 */
   warnings: string[];
 }
@@ -44,10 +44,10 @@ export function readUserConfig(
 ): UserConfigResult {
   const cached = cache.get(configPath);
   if (cached) {
-    return { data: cached, warnings: [] };
+    return { configData: cached, warnings: [] };
   }
   if (!existsSync(configPath)) {
-    return { data: {}, warnings: [] };
+    return { configData: {}, warnings: [] };
   }
   try {
     const parsed = JSON.parse(readFileSync(configPath, "utf-8")) as unknown;
@@ -58,15 +58,15 @@ export function readUserConfig(
       Array.isArray(parsed)
     ) {
       cache.set(configPath, {});
-      return { data: {}, warnings: [] };
+      return { configData: {}, warnings: [] };
     }
-    const data = parsed as Record<string, unknown>;
-    cache.set(configPath, data);
-    return { data, warnings: [] };
+    const configData = parsed as Record<string, unknown>;
+    cache.set(configPath, configData);
+    return { configData, warnings: [] };
   } catch (err) {
     cache.set(configPath, {});
     return {
-      data: {},
+      configData: {},
       warnings: [
         `配置文件 ${configPath} 解析失败：${
           (err as Error).message
@@ -90,8 +90,8 @@ export function updateConfigSection(
   value: unknown,
   configPath: string = resolveUserConfigPath(),
 ): void {
-  const { data } = readUserConfig(configPath);
-  const merged = { ...data, [section]: value };
+  const { configData } = readUserConfig(configPath);
+  const merged = { ...configData, [section]: value };
   mkdirSync(dirname(configPath), { recursive: true });
   // 0o600：文件可能含密钥（llm.apiKey 等），仅允许当前用户读写
   writeFileSync(configPath, `${JSON.stringify(merged, null, 2)}\n`, {

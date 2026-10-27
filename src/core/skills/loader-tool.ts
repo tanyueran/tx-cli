@@ -35,14 +35,14 @@ export function createLoadSkillTool(catalog: SkillCatalog): Tool {
       try {
         const body = await catalog.readBody(name);
         if (body === undefined) {
-          const available =
+          const availableSkillNames =
             catalog
               .list()
               .map((skill) => skill.name)
               .join("、") || "（无）";
           return {
             ok: false,
-            output: `未找到技能 ${name}，可用技能：${available}`,
+            output: `未找到技能 ${name}，可用技能：${availableSkillNames}`,
           };
         }
         return { ok: true, output: body };

@@ -19,13 +19,13 @@ export function appendProjectGrant(
   path: string = resolveProjectConfigPath(cwd),
 ): void {
   // 读原始 JSON 并保留未知字段，只重写目标段的 rules.allow 路径
-  let raw: Record<string, unknown> = {};
+  let configRaw: Record<string, unknown> = {};
   if (existsSync(path)) {
     try {
       const parsed = JSON.parse(readFileSync(path, "utf-8")) as unknown;
       if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
         // object 收窄后缺少 index signature，需显式断言为 Record
-        raw = parsed as Record<string, unknown>;
+        configRaw = parsed as Record<string, unknown>;
       }
     } catch {
       // 损坏文件无法解析：从空结构重建（原内容本就不可读）
@@ -33,10 +33,10 @@ export function appendProjectGrant(
   }
   const section = rule.startsWith("mcp__") ? "mcp" : "sandbox";
   const sectionRecord: Record<string, unknown> =
-    typeof raw[section] === "object" &&
-    raw[section] !== null &&
-    !Array.isArray(raw[section])
-      ? (raw[section] as Record<string, unknown>)
+    typeof configRaw[section] === "object" &&
+    configRaw[section] !== null &&
+    !Array.isArray(configRaw[section])
+      ? (configRaw[section] as Record<string, unknown>)
       : {};
   const rulesRecord: Record<string, unknown> =
     typeof sectionRecord.rules === "object" &&
@@ -45,14 +45,15 @@ export function appendProjectGrant(
       ? (sectionRecord.rules as Record<string, unknown>)
       : {};
   const allow =
-    Array.isArray(rulesRecord.allow) && rulesRecord.allow.every((a) => typeof a === "string")
+    Array.isArray(rulesRecord.allow) &&
+    rulesRecord.allow.every((rule) => typeof rule === "string")
       ? [...(rulesRecord.allow as string[])]
       : [];
   if (allow.includes(rule)) {
     return;
   }
   allow.push(rule);
-  raw[section] = { ...sectionRecord, rules: { ...rulesRecord, allow } };
+  configRaw[section] = { ...sectionRecord, rules: { ...rulesRecord, allow } };
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, `${JSON.stringify(raw, null, 2)}\n`);
+  writeFileSync(path, `${JSON.stringify(configRaw, null, 2)}\n`);
 }

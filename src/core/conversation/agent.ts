@@ -1,6 +1,6 @@
 /**
  * conversation/agent：agent 命令的任务执行能力（Agent 模式）
- * 模式差异收敛为 AGENT_MODE 配置，单次/多轮机制复用 common
+ * 模式差异收敛为 AGENT_MODE_CONFIG 配置，单次/多轮机制复用 common
  */
 import { runOneShotConversation, runReplConversation } from "./common";
 import type { ConversationModeConfig } from "./common/mode";
@@ -17,8 +17,8 @@ export const SYSTEM_PROMPT =
   "（全量替换，同一时刻仅一项 in_progress），简单任务不必使用；" +
   "完成后简要汇报：做了什么、改了哪些文件、遗留什么风险。";
 
-/** agent 模式配置：任务执行人设，全量工具带（bash 跟随 sandboxCli/配置装配，write_todos 开启），任务拆解步骤多故放宽到 20 轮 */
-export const AGENT_MODE: ConversationModeConfig = {
+/** agent 模式配置：任务执行人设，全量工具带（bash 跟随 cliSandboxOptions/配置装配，write_todos 开启），任务拆解步骤多故放宽到 20 轮 */
+export const AGENT_MODE_CONFIG: ConversationModeConfig = {
   basePrompt: SYSTEM_PROMPT,
   modeLabel: "Agent 模式",
   maxIterations: 20,
@@ -28,69 +28,69 @@ export const AGENT_MODE: ConversationModeConfig = {
 /** runOneShotAgent 入参对象 */
 interface OneShotAgentOptions {
   /** LLM 接入配置 */
-  config: LlmConfig;
+  llmConfig: LlmConfig;
   /** 用户任务 */
   task: string;
   /** 命令行指定的思考档位，未指定时回退配置默认 */
   thinkingLevel?: ThinkingLevel;
   /** 是否启用 MCP 服务器（--no-mcp 关闭），缺省开启 */
   mcpEnabled?: boolean;
-  /** 沙箱 CLI 选项（--sandbox/--approval/--no-bash 等），缺省按配置文件装配 */
-  sandboxCli?: SandboxCliOptions;
+  /** CLI 传入的沙箱选项（--sandbox/--approval/--no-bash 等），缺省按配置文件装配 */
+  cliSandboxOptions?: SandboxCliOptions;
 }
 
 /**
  * 单次任务执行（agent 命令的 Agent 模式入口）：全量工具带，bash 受沙箱与审批管控；
  * 具体流程复用 common 的 runOneShotConversation
- * @param {OneShotAgentOptions} options - 入参对象（config/task/thinkingLevel/mcpEnabled/sandboxCli 字段说明见接口定义）
+ * @param {OneShotAgentOptions} options - 入参对象（llmConfig/task/thinkingLevel/mcpEnabled/cliSandboxOptions 字段说明见接口定义）
  * @returns {Promise<void>}
  */
 export async function runOneShotAgent({
-  config,
+  llmConfig,
   task,
   thinkingLevel,
   mcpEnabled = true,
-  sandboxCli,
+  cliSandboxOptions,
 }: OneShotAgentOptions): Promise<void> {
   await runOneShotConversation({
-    config,
-    mode: AGENT_MODE,
-    input: task,
+    llmConfig,
+    modeConfig: AGENT_MODE_CONFIG,
+    userInput: task,
     thinkingLevel,
     mcpEnabled,
-    sandboxCli,
+    cliSandboxOptions,
   });
 }
 
 /** runReplAgent 入参对象 */
 interface ReplAgentOptions {
   /** LLM 接入配置 */
-  config: LlmConfig;
+  llmConfig: LlmConfig;
   /** 命令行指定的思考档位，未指定时回退配置默认 */
   thinkingLevel?: ThinkingLevel;
   /** 是否启用 MCP 服务器（--no-mcp 关闭），缺省开启 */
   mcpEnabled?: boolean;
-  /** 沙箱 CLI 选项（--sandbox/--approval/--no-bash 等），缺省按配置文件装配 */
-  sandboxCli?: SandboxCliOptions;
+  /** CLI 传入的沙箱选项（--sandbox/--approval/--no-bash 等），缺省按配置文件装配 */
+  cliSandboxOptions?: SandboxCliOptions;
 }
 
 /**
  * 多轮任务模式（REPL，agent 命令的 Agent 模式入口）：全量工具带，bash 受沙箱与审批管控，
  * 沙箱档位与审批策略按 CLI/env/配置装配；会话循环复用 common 的 runReplConversation
- * @param {ReplAgentOptions} options - 入参对象（config/thinkingLevel/mcpEnabled/sandboxCli 字段说明见接口定义）
+ * @param {ReplAgentOptions} options - 入参对象（llmConfig/thinkingLevel/mcpEnabled/cliSandboxOptions 字段说明见接口定义）
  * @returns {Promise<void>}
  */
 export async function runReplAgent({
-  config,
+  llmConfig,
   thinkingLevel,
   mcpEnabled = true,
-  sandboxCli,
+  cliSandboxOptions,
 }: ReplAgentOptions): Promise<void> {
   await runReplConversation({
-    config,
-    mode: AGENT_MODE,
+    llmConfig,
+    modeConfig: AGENT_MODE_CONFIG,
     thinkingLevel,
     mcpEnabled,
-    sandboxCli,
+    cliSandboxOptions,
   });
 }

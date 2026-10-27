@@ -29,28 +29,28 @@ export function wrapToolWithPermission(
     async execute(args: Record<string, unknown>): Promise<ToolOutput> {
       const invoke = async (): Promise<ToolOutput> => {
         const ruleKey = permission.ruleKey(args);
-        const blocked = await sandbox.guard(
+        const guardDenial = await sandbox.guard(
           tool.name,
           ruleKey,
           permission.capabilities,
           permission.mcp,
         );
-        if (blocked) {
-          return blocked;
+        if (guardDenial) {
+          return guardDenial;
         }
-        const fsBlocked = checkFsBoundary(
+        const fsDenial = checkFsBoundary(
           permission,
           tool.name,
           sandbox,
           args,
           ruleKey,
         );
-        if (fsBlocked) {
-          return fsBlocked;
+        if (fsDenial) {
+          return fsDenial;
         }
         return tool.execute(args);
       };
-      return permission.serial
+      return permission.isSerial
         ? sandbox.runSerial(invoke)
         : invoke();
     },

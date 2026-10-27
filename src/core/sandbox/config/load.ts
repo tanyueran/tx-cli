@@ -27,164 +27,168 @@ function isStringArray(value: unknown): value is string[] {
 
 /**
  * 解析字符串数组字段：非法时跳过并记录警告
- * @param {string} path - 字段的配置路径（警告文案用，如 filesystem、根级传空串）
+ * @param {string} sectionPath - 字段的配置路径（警告文案用，如 filesystem、根级传空串）
  * @param {string} key - 字段名
- * @param {unknown} raw - 原始值
+ * @param {unknown} rawValue - 原始值
  * @param {string[]} warnings - 警告收集器（就地追加）
  * @returns {string[] | undefined} 合法时返回数组，否则为 undefined
  */
 function parseStringArray(
-  path: string,
+  sectionPath: string,
   key: string,
-  raw: unknown,
+  rawValue: unknown,
   warnings: string[],
 ): string[] | undefined {
-  if (raw === undefined) {
+  if (rawValue === undefined) {
     return undefined;
   }
-  if (!isStringArray(raw)) {
-    const prefix = path ? `sandbox.${path}.` : "sandbox.";
+  if (!isStringArray(rawValue)) {
+    const prefix = sectionPath ? `sandbox.${sectionPath}.` : "sandbox.";
     warnings.push(`${prefix}${key} 必须是字符串数组，已忽略该项`);
     return undefined;
   }
-  return raw;
+  return rawValue;
 }
 
 /**
  * 解析子对象字段：非对象时跳过并记录警告
  * @param {string} section - 段名
- * @param {unknown} raw - 原始值
+ * @param {unknown} rawValue - 原始值
  * @param {string[]} warnings - 警告收集器（就地追加）
  * @returns {Record<string, unknown> | undefined} 合法时返回子对象，否则为 undefined
  */
 function parseRecord(
   section: string,
-  raw: unknown,
+  rawValue: unknown,
   warnings: string[],
 ): Record<string, unknown> | undefined {
-  if (raw === undefined) {
+  if (rawValue === undefined) {
     return undefined;
   }
-  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+  if (
+    typeof rawValue !== "object" ||
+    rawValue === null ||
+    Array.isArray(rawValue)
+  ) {
     warnings.push(`sandbox.${section} 必须是对象，已忽略该段`);
     return undefined;
   }
-  return raw as Record<string, unknown>;
+  return rawValue as Record<string, unknown>;
 }
 
 /**
  * 解析 sandbox.enabled（布尔）
- * @param {unknown} raw - 原始值
+ * @param {unknown} rawValue - 原始值
  * @param {string[]} warnings - 警告收集器（就地追加）
  * @returns {boolean | undefined} 合法时返回布尔，否则为 undefined
  */
-function parseEnabled(raw: unknown, warnings: string[]): boolean | undefined {
-  if (raw === undefined) {
+function parseEnabled(rawValue: unknown, warnings: string[]): boolean | undefined {
+  if (rawValue === undefined) {
     return undefined;
   }
-  if (typeof raw !== "boolean") {
+  if (typeof rawValue !== "boolean") {
     warnings.push("sandbox.enabled 必须是布尔值，已忽略该项");
     return undefined;
   }
-  return raw;
+  return rawValue;
 }
 
 /**
  * 解析 sandbox.level（枚举）
- * @param {unknown} raw - 原始值
+ * @param {unknown} rawValue - 原始值
  * @param {string[]} warnings - 警告收集器（就地追加）
  * @returns {SandboxLevel | undefined} 合法时返回档位，否则为 undefined
  */
 function parseLevel(
-  raw: unknown,
+  rawValue: unknown,
   warnings: string[],
 ): SandboxLevel | undefined {
-  if (raw === undefined) {
+  if (rawValue === undefined) {
     return undefined;
   }
   if (
-    typeof raw !== "string" ||
-    !SANDBOX_LEVELS.includes(raw as SandboxLevel)
+    typeof rawValue !== "string" ||
+    !SANDBOX_LEVELS.includes(rawValue as SandboxLevel)
   ) {
     warnings.push(
       `sandbox.level 必须是 ${SANDBOX_LEVELS.join(" | ")} 之一，已忽略该项`,
     );
     return undefined;
   }
-  return raw as SandboxLevel;
+  return rawValue as SandboxLevel;
 }
 
 /**
  * 解析 sandbox.approval（枚举）
- * @param {unknown} raw - 原始值
+ * @param {unknown} rawValue - 原始值
  * @param {string[]} warnings - 警告收集器（就地追加）
  * @returns {ApprovalPolicy | undefined} 合法时返回策略，否则为 undefined
  */
 function parseApproval(
-  raw: unknown,
+  rawValue: unknown,
   warnings: string[],
 ): ApprovalPolicy | undefined {
-  if (raw === undefined) {
+  if (rawValue === undefined) {
     return undefined;
   }
   if (
-    typeof raw !== "string" ||
-    !APPROVAL_POLICIES.includes(raw as ApprovalPolicy)
+    typeof rawValue !== "string" ||
+    !APPROVAL_POLICIES.includes(rawValue as ApprovalPolicy)
   ) {
     warnings.push(
       `sandbox.approval 必须是 ${APPROVAL_POLICIES.join(" | ")} 之一，已忽略该项`,
     );
     return undefined;
   }
-  return raw as ApprovalPolicy;
+  return rawValue as ApprovalPolicy;
 }
 
 /**
  * 解析 sandbox.timeoutMs（正整数，带下限钳制）
- * @param {unknown} raw - 原始值
+ * @param {unknown} rawValue - 原始值
  * @param {string} section - 子段名（警告文案用）
  * @param {number} minMs - 允许的最小值
  * @param {string[]} warnings - 警告收集器（就地追加）
  * @returns {number | undefined} 合法时返回毫秒数，否则为 undefined
  */
 function parseTimeoutMs(
-  raw: unknown,
+  rawValue: unknown,
   section: string,
   minMs: number,
   warnings: string[],
 ): number | undefined {
-  if (raw === undefined) {
+  if (rawValue === undefined) {
     return undefined;
   }
-  if (typeof raw !== "number" || !Number.isFinite(raw) || raw < minMs) {
+  if (typeof rawValue !== "number" || !Number.isFinite(rawValue) || rawValue < minMs) {
     warnings.push(
       `sandbox.${section}.timeoutMs 必须是不小于 ${minMs} 的数字，已忽略该项`,
     );
     return undefined;
   }
-  return Math.floor(raw);
+  return Math.floor(rawValue);
 }
 
 /**
  * 解析单个配置文件的 sandbox 段为部分配置：仅收录显式配置且合法的字段，
  * 单个字段非法只跳过并记录警告，不影响其余字段（失败隔离）
- * @param {unknown} raw - 配置文件 sandbox 段原始值
+ * @param {unknown} rawValue - 配置文件 sandbox 段原始值
  * @param {string[]} warnings - 警告收集器（就地追加）
  * @returns {PartialSandboxFileConfig} 部分配置（段缺失时为空对象）
  */
 function parseSandboxSection(
-  raw: unknown,
+  rawValue: unknown,
   warnings: string[],
 ): PartialSandboxFileConfig {
   const partial: PartialSandboxFileConfig = {};
-  if (raw === undefined) {
+  if (rawValue === undefined) {
     return partial;
   }
-  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+  if (typeof rawValue !== "object" || rawValue === null || Array.isArray(rawValue)) {
     warnings.push("配置文件 sandbox 段必须是对象，已忽略整段沙箱配置");
     return partial;
   }
-  const record = raw as Record<string, unknown>;
+  const record = rawValue as Record<string, unknown>;
 
   const enabled = parseEnabled(record.enabled, warnings);
   if (enabled !== undefined) {
@@ -203,14 +207,14 @@ function parseSandboxSection(
   } else if (record.provider !== undefined) {
     warnings.push("sandbox.provider 必须是非空字符串，已忽略该项");
   }
-  const trust = parseStringArray(
+  const trustDirectories = parseStringArray(
     "",
     "trustDirectories",
     record.trustDirectories,
     warnings,
   );
-  if (trust !== undefined) {
-    partial.trustDirectories = trust;
+  if (trustDirectories !== undefined) {
+    partial.trustDirectories = trustDirectories;
   }
   if (record.builtinDangerRules !== undefined) {
     if (typeof record.builtinDangerRules === "boolean") {
@@ -227,12 +231,12 @@ function parseSandboxSection(
     }
   }
 
-  const fs = parseRecord("filesystem", record.filesystem, warnings);
-  if (fs) {
+  const filesystemSection = parseRecord("filesystem", record.filesystem, warnings);
+  if (filesystemSection) {
     const denyRead = parseStringArray(
       "filesystem",
       "denyRead",
-      fs.denyRead,
+      filesystemSection.denyRead,
       warnings,
     );
     if (denyRead !== undefined) {
@@ -244,7 +248,7 @@ function parseSandboxSection(
     const denyWrite = parseStringArray(
       "filesystem",
       "denyWrite",
-      fs.denyWrite,
+      filesystemSection.denyWrite,
       warnings,
     );
     if (denyWrite !== undefined) {
@@ -253,30 +257,30 @@ function parseSandboxSection(
         denyWrite,
       };
     }
-    const roots = parseStringArray(
+    const writableRoots = parseStringArray(
       "filesystem",
       "writableRoots",
-      fs.writableRoots,
+      filesystemSection.writableRoots,
       warnings,
     );
-    if (roots !== undefined) {
+    if (writableRoots !== undefined) {
       partial.filesystem = {
         ...partial.filesystem,
-        writableRoots: roots,
+        writableRoots,
       };
     }
   }
 
-  const net = parseRecord("network", record.network, warnings);
-  if (net) {
-    const domains = parseStringArray(
+  const networkSection = parseRecord("network", record.network, warnings);
+  if (networkSection) {
+    const allowedDomains = parseStringArray(
       "network",
       "allowedDomains",
-      net.allowedDomains,
+      networkSection.allowedDomains,
       warnings,
     );
-    if (domains !== undefined) {
-      partial.network = { allowedDomains: domains };
+    if (allowedDomains !== undefined) {
+      partial.network = { allowedDomains };
     }
   }
 
@@ -329,22 +333,22 @@ function normalizeMcpRule(rule: string): string {
  * 解析配置文件顶层 mcp 段的 rules 子段：MCP 工具专属的 allow/ask/deny 规则，
  * 与 sandbox.rules 分离存放，避免 MCP 规则混入沙箱配置造成误解；
  * 仅收录显式配置且合法的字段，单个字段非法只跳过并记录警告（失败隔离）
- * @param {unknown} raw - 配置文件 mcp 段原始值
+ * @param {unknown} rawValue - 配置文件 mcp 段原始值
  * @param {string[]} warnings - 警告收集器（就地追加）
  * @returns {Partial<SandboxRulesConfig> | undefined} 归一化后的部分规则，段缺失时为 undefined
  */
 function parseMcpRulesSection(
-  raw: unknown,
+  rawValue: unknown,
   warnings: string[],
 ): Partial<SandboxRulesConfig> | undefined {
-  if (raw === undefined) {
+  if (rawValue === undefined) {
     return undefined;
   }
-  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+  if (typeof rawValue !== "object" || rawValue === null || Array.isArray(rawValue)) {
     warnings.push("配置文件 mcp 段必须是对象，已忽略整段 MCP 规则");
     return undefined;
   }
-  const rules = (raw as Record<string, unknown>).rules;
+  const rules = (rawValue as Record<string, unknown>).rules;
   if (rules === undefined) {
     return undefined;
   }
@@ -355,15 +359,15 @@ function parseMcpRulesSection(
   const record = rules as Record<string, unknown>;
   const partial: Partial<SandboxRulesConfig> = {};
   for (const key of ["allow", "ask", "deny"] as const) {
-    const list = record[key];
-    if (list === undefined) {
+    const rawList = record[key];
+    if (rawList === undefined) {
       continue;
     }
-    if (!isStringArray(list)) {
+    if (!isStringArray(rawList)) {
       warnings.push(`mcp.rules.${key} 必须是字符串数组，已忽略该项`);
       continue;
     }
-    partial[key] = list.map(normalizeMcpRule);
+    partial[key] = rawList.map(normalizeMcpRule);
   }
   return partial;
 }
@@ -463,54 +467,54 @@ function applyToDefaults(
 
 /**
  * 项目配置叠加到全局配置：标量字段项目覆盖全局，数组字段并集去重（全局在前、项目在后）
- * @param {SandboxFileConfig} global - 全局配置（已套用默认值）
- * @param {PartialSandboxFileConfig} project - 项目配置的部分解析结果
+ * @param {SandboxFileConfig} globalConfig - 全局配置（已套用默认值）
+ * @param {PartialSandboxFileConfig} projectConfig - 项目配置的部分解析结果
  * @returns {SandboxFileConfig} 合并后的生效配置
  */
 function mergeProjectConfig(
-  global: SandboxFileConfig,
-  project: PartialSandboxFileConfig,
+  globalConfig: SandboxFileConfig,
+  projectConfig: PartialSandboxFileConfig,
 ): SandboxFileConfig {
   return {
-    enabled: project.enabled ?? global.enabled,
-    level: project.level ?? global.level,
-    approval: project.approval ?? global.approval,
-    provider: project.provider ?? global.provider,
-    trustDirectories: project.trustDirectories
-      ? mergeStringArrays(global.trustDirectories, project.trustDirectories)
-      : global.trustDirectories,
-    builtinDangerRules: project.builtinDangerRules ?? global.builtinDangerRules,
-    audit: project.audit ?? global.audit,
+    enabled: projectConfig.enabled ?? globalConfig.enabled,
+    level: projectConfig.level ?? globalConfig.level,
+    approval: projectConfig.approval ?? globalConfig.approval,
+    provider: projectConfig.provider ?? globalConfig.provider,
+    trustDirectories: projectConfig.trustDirectories
+      ? mergeStringArrays(globalConfig.trustDirectories, projectConfig.trustDirectories)
+      : globalConfig.trustDirectories,
+    builtinDangerRules: projectConfig.builtinDangerRules ?? globalConfig.builtinDangerRules,
+    audit: projectConfig.audit ?? globalConfig.audit,
     filesystem: {
-      denyRead: project.filesystem?.denyRead
-        ? mergeStringArrays(global.filesystem.denyRead, project.filesystem.denyRead)
-        : global.filesystem.denyRead,
-      denyWrite: project.filesystem?.denyWrite
-        ? mergeStringArrays(global.filesystem.denyWrite, project.filesystem.denyWrite)
-        : global.filesystem.denyWrite,
-      writableRoots: project.filesystem?.writableRoots
-        ? mergeStringArrays(global.filesystem.writableRoots, project.filesystem.writableRoots)
-        : global.filesystem.writableRoots,
+      denyRead: projectConfig.filesystem?.denyRead
+        ? mergeStringArrays(globalConfig.filesystem.denyRead, projectConfig.filesystem.denyRead)
+        : globalConfig.filesystem.denyRead,
+      denyWrite: projectConfig.filesystem?.denyWrite
+        ? mergeStringArrays(globalConfig.filesystem.denyWrite, projectConfig.filesystem.denyWrite)
+        : globalConfig.filesystem.denyWrite,
+      writableRoots: projectConfig.filesystem?.writableRoots
+        ? mergeStringArrays(globalConfig.filesystem.writableRoots, projectConfig.filesystem.writableRoots)
+        : globalConfig.filesystem.writableRoots,
     },
     network: {
-      allowedDomains: project.network?.allowedDomains
-        ? mergeStringArrays(global.network.allowedDomains, project.network.allowedDomains)
-        : global.network.allowedDomains,
+      allowedDomains: projectConfig.network?.allowedDomains
+        ? mergeStringArrays(globalConfig.network.allowedDomains, projectConfig.network.allowedDomains)
+        : globalConfig.network.allowedDomains,
     },
     bash: {
-      enabled: project.bash?.enabled ?? global.bash.enabled,
-      timeoutMs: project.bash?.timeoutMs ?? global.bash.timeoutMs,
+      enabled: projectConfig.bash?.enabled ?? globalConfig.bash.enabled,
+      timeoutMs: projectConfig.bash?.timeoutMs ?? globalConfig.bash.timeoutMs,
     },
     rules: {
-      allow: project.rules?.allow
-        ? mergeStringArrays(global.rules.allow, project.rules.allow)
-        : global.rules.allow,
-      ask: project.rules?.ask
-        ? mergeStringArrays(global.rules.ask, project.rules.ask)
-        : global.rules.ask,
-      deny: project.rules?.deny
-        ? mergeStringArrays(global.rules.deny, project.rules.deny)
-        : global.rules.deny,
+      allow: projectConfig.rules?.allow
+        ? mergeStringArrays(globalConfig.rules.allow, projectConfig.rules.allow)
+        : globalConfig.rules.allow,
+      ask: projectConfig.rules?.ask
+        ? mergeStringArrays(globalConfig.rules.ask, projectConfig.rules.ask)
+        : globalConfig.rules.ask,
+      deny: projectConfig.rules?.deny
+        ? mergeStringArrays(globalConfig.rules.deny, projectConfig.rules.deny)
+        : globalConfig.rules.deny,
     },
   };
 }
@@ -530,15 +534,15 @@ export function loadSandboxConfig(
   projectPath?: string,
 ): SandboxConfigResult {
   const warnings: string[] = [];
-  const { data, warnings: readWarnings } = readUserConfig(configPath);
+  const { configData, warnings: readWarnings } = readUserConfig(configPath);
   warnings.push(...readWarnings);
-  const globalPartial = parseSandboxSection(data.sandbox, warnings);
-  mergeMcpRules(globalPartial, parseMcpRulesSection(data.mcp, warnings));
+  const globalPartial = parseSandboxSection(configData.sandbox, warnings);
+  mergeMcpRules(globalPartial, parseMcpRulesSection(configData.mcp, warnings));
   const config = applyToDefaults(globalPartial);
   if (projectPath === undefined) {
     return { config, warnings };
   }
-  const { data: projectData, warnings: projectWarnings } =
+  const { configData: projectData, warnings: projectWarnings } =
     readUserConfig(projectPath);
   warnings.push(...projectWarnings);
   const projectPartial = parseSandboxSection(projectData.sandbox, warnings);

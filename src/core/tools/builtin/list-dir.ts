@@ -28,8 +28,8 @@ export const listDirTool: Tool = {
      * @returns {string} 形如 list_dir(/abs/dir) 的规则键
      */
     ruleKey(args: Record<string, unknown>): string {
-      const raw = typeof args.path === "string" ? args.path : "";
-      return `list_dir(${resolveFromCwd(raw)})`;
+      const rawPath = typeof args.path === "string" ? args.path : "";
+      return `list_dir(${resolveFromCwd(rawPath)})`;
     },
     /**
      * 声明本次列目录涉及的路径（门卫按档位禁读边界校验）
@@ -37,8 +37,8 @@ export const listDirTool: Tool = {
      * @returns {string[]} 绝对路径列表
      */
     paths(args: Record<string, unknown>): string[] {
-      const raw = typeof args.path === "string" ? args.path : "";
-      return [resolveFromCwd(raw)];
+      const rawPath = typeof args.path === "string" ? args.path : "";
+      return [resolveFromCwd(rawPath)];
     },
   },
   /**
@@ -47,11 +47,11 @@ export const listDirTool: Tool = {
    * @returns {Promise<ToolOutput>} 目录条目列表或失败说明
    */
   async execute(args: Record<string, unknown>): Promise<ToolOutput> {
-    const raw = typeof args.path === "string" ? args.path : "";
-    const absolute = resolveFromCwd(raw);
+    const rawPath = typeof args.path === "string" ? args.path : "";
+    const absolute = resolveFromCwd(rawPath);
     try {
-      const info = await stat(absolute);
-      if (!info.isDirectory()) {
+      const stats = await stat(absolute);
+      if (!stats.isDirectory()) {
         return { ok: false, output: `不是目录: ${absolute}` };
       }
       const dirents = await readdir(absolute, { withFileTypes: true });

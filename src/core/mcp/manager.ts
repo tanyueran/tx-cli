@@ -105,12 +105,10 @@ export class McpManager {
     let ClientCtor: typeof Client;
     let listRootsSchema: typeof ListRootsRequestSchema;
     try {
-      ({ Client: ClientCtor } = await import(
-        "@modelcontextprotocol/sdk/client/index.js"
-      ));
-      ({ ListRootsRequestSchema: listRootsSchema } = await import(
-        "@modelcontextprotocol/sdk/types.js"
-      ));
+      ({ Client: ClientCtor } =
+        await import("@modelcontextprotocol/sdk/client/index.js"));
+      ({ ListRootsRequestSchema: listRootsSchema } =
+        await import("@modelcontextprotocol/sdk/types.js"));
     } catch (err) {
       throw new CliError(
         `MCP SDK 加载失败：${
@@ -192,13 +190,10 @@ export class McpManager {
     if (config.type === "stdio") {
       return this.createStdioTransport(config);
     }
-    const { StreamableHTTPClientTransport } = await import(
-      "@modelcontextprotocol/sdk/client/streamableHttp.js"
-    );
+    const { StreamableHTTPClientTransport } =
+      await import("@modelcontextprotocol/sdk/client/streamableHttp.js");
     return new StreamableHTTPClientTransport(new URL(config.url), {
-      ...(config.headers
-        ? { requestInit: { headers: config.headers } }
-        : {}),
+      ...(config.headers ? { requestInit: { headers: config.headers } } : {}),
     });
   }
 
@@ -214,9 +209,8 @@ export class McpManager {
   private async createStdioTransport(
     config: StdioServerConfig,
   ): Promise<Transport> {
-    const { StdioClientTransport } = await import(
-      "@modelcontextprotocol/sdk/client/stdio.js"
-    );
+    const { StdioClientTransport } =
+      await import("@modelcontextprotocol/sdk/client/stdio.js");
     return new StdioClientTransport({
       command: config.command,
       ...(config.args ? { args: config.args } : {}),
@@ -233,7 +227,7 @@ export class McpManager {
   listTools(): { tools: Tool[]; warnings: string[] } {
     const tools: Tool[] = [];
     const warnings: string[] = [];
-    const seen = new Set<string>();
+    const registeredToolNames = new Set<string>();
     for (const [serverName, mcpTools] of this.remoteTools) {
       const client = this.clients.get(serverName);
       if (!client) {
@@ -241,11 +235,11 @@ export class McpManager {
       }
       for (const mcpTool of mcpTools) {
         const tool = createMcpTool(serverName, client, mcpTool);
-        if (seen.has(tool.name)) {
+        if (registeredToolNames.has(tool.name)) {
           warnings.push(`MCP 工具 ${tool.name} 跨服务器重名，已保留先注册者`);
           continue;
         }
-        seen.add(tool.name);
+        registeredToolNames.add(tool.name);
         tools.push(tool);
       }
     }
@@ -269,12 +263,12 @@ export class McpManager {
 
 /**
  * realpath 的容错封装：路径不存在或不可解析时返回 undefined
- * @param {string} target - 目标路径
+ * @param {string} path - 目标路径
  * @returns {string | undefined} 规范化后的绝对路径
  */
-function safeRealpath(target: string): string | undefined {
+function safeRealpath(path: string): string | undefined {
   try {
-    return realpathSync(target);
+    return realpathSync(path);
   } catch {
     return undefined;
   }
@@ -285,23 +279,23 @@ function safeRealpath(target: string): string | undefined {
  * read-only 档承诺全禁写，不下发任何目录（服务器回退自身默认白名单）；
  * 其余档位下发项目根与 OS 临时目录。路径经 realpath 规范化后转 file:// URL，
  * 避免 macOS 符号链接（/tmp → /private/tmp、/var → /private/var）导致服务器端前缀比对失配
- * @param {SandboxLevel | undefined} level - 沙箱档位；undefined 表示无沙箱会话，与 full-access 同权
+ * @param {SandboxLevel | undefined} sandboxLevel - 沙箱档位；undefined 表示无沙箱会话，与 full-access 同权
  * @param {string} cwd - 项目根目录
  * @returns {McpRoot[]} roots 列表（uri 为 file:// URL）
  */
 export function buildMcpRoots(
-  level: SandboxLevel | undefined,
+  sandboxLevel: SandboxLevel | undefined,
   cwd: string,
 ): McpRoot[] {
-  if (level === "read-only") {
+  if (sandboxLevel === "read-only") {
     return [];
   }
   const roots: McpRoot[] = [];
   const workspace = safeRealpath(cwd) ?? resolve(cwd);
   roots.push({ uri: pathToFileURL(workspace).href, name: "workspace" });
-  const temp = safeRealpath(tmpdir());
-  if (temp) {
-    roots.push({ uri: pathToFileURL(temp).href, name: "temp" });
+  const tmpDirPath = safeRealpath(tmpdir());
+  if (tmpDirPath) {
+    roots.push({ uri: pathToFileURL(tmpDirPath).href, name: "temp" });
   }
   return roots;
 }

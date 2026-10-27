@@ -5,13 +5,13 @@ import { dirname, join } from "node:path";
 /** 审计日志单行结构（JSONL） */
 export interface AuditEntry {
   /** 事件时间戳（ISO 字符串） */
-  ts: string;
+  timestamp: string;
   /** 工具名（如 bash） */
   tool: string;
   /** 规则键（如 bash(git push)） */
   ruleKey: string;
   /** 沙箱档位 */
-  tier: string;
+  level: string;
   /** 审批策略 */
   approval: string;
   /** 判定：allow / deny / approved / denied / escalated */

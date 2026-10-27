@@ -103,16 +103,16 @@ function spawnShell(command: string, timeoutMs: number): Promise<SpawnResult> {
 
 /**
  * 拼接命令执行输出（成功回传模型）
- * @param {SpawnResult} result - 执行结果
+ * @param {SpawnResult} spawnResult - 执行结果
  * @returns {string} 输出文本
  */
-function formatOutput(result: SpawnResult): string {
+function formatOutput(spawnResult: SpawnResult): string {
   const parts: string[] = [];
-  if (result.stdout.trim()) {
-    parts.push(result.stdout.trim());
+  if (spawnResult.stdout.trim()) {
+    parts.push(spawnResult.stdout.trim());
   }
-  if (result.stderr.trim()) {
-    parts.push(`[stderr]\n${result.stderr.trim()}`);
+  if (spawnResult.stderr.trim()) {
+    parts.push(`[stderr]\n${spawnResult.stderr.trim()}`);
   }
   if (parts.length === 0) {
     return "（命令无输出）";
@@ -160,7 +160,7 @@ export function createBashTool(sandbox: SandboxContext): Tool {
           typeof args.command === "string" ? args.command.trim() : "";
         return `bash(${command})`;
       },
-      serial: true,
+      isSerial: true,
     },
     /**
      * 执行命令：L4 沙箱执行与失败升级
@@ -174,35 +174,35 @@ export function createBashTool(sandbox: SandboxContext): Tool {
         return { ok: false, output: "缺少必填参数 command（命令文本）" };
       }
       // 模型可请求的超时钳制在 [1s, 10min]
-      const requested =
+      const requestedTimeoutMs =
         typeof args.timeout === "number" && Number.isFinite(args.timeout)
           ? args.timeout
           : sandbox.bashTimeoutMs;
       const timeoutMs = Math.min(
-        Math.max(Math.floor(requested), MIN_TIMEOUT_MS),
+        Math.max(Math.floor(requestedTimeoutMs), MIN_TIMEOUT_MS),
         MAX_TIMEOUT_MS,
       );
       // danger-full-access 档：无沙箱直通执行
       if (sandbox.level === "danger-full-access") {
-        const result = await spawnShell(command, timeoutMs);
+        const spawnResult = await spawnShell(command, timeoutMs);
         sandbox.recordAudit({
           tool: "bash",
           ruleKey: `bash(${command})`,
           decision: "allow",
-          exitCode: result.exitCode,
+          exitCode: spawnResult.exitCode,
         });
-        if (result.timedOut) {
+        if (spawnResult.timedOut) {
           return {
             ok: false,
-            output: `命令执行超时（${timeoutMs}ms），已被终止\n${formatOutput(result)}`,
+            output: `命令执行超时（${timeoutMs}ms），已被终止\n${formatOutput(spawnResult)}`,
           };
         }
         return {
-          ok: result.exitCode === 0,
+          ok: spawnResult.exitCode === 0,
           output:
-            result.exitCode === 0
-              ? formatOutput(result)
-              : `${formatOutput(result)}\n退出码：${result.exitCode}`,
+            spawnResult.exitCode === 0
+              ? formatOutput(spawnResult)
+              : `${formatOutput(spawnResult)}\n退出码：${spawnResult.exitCode}`,
         };
       }
       // 其余档位需要沙箱 Provider；缺失即失败关闭
@@ -214,29 +214,29 @@ export function createBashTool(sandbox: SandboxContext): Tool {
         };
       }
       const commandId = sandbox.newCommandId();
-      const wrapped = await sandbox.provider.wrapCommand(command, {
+      const wrappedCommand = await sandbox.provider.wrapCommand(command, {
         commandId,
         commandText: command,
       });
-      const result = await spawnShell(wrapped, timeoutMs);
-      const violation = await sandbox.provider.annotateStderr(
+      const spawnResult = await spawnShell(wrappedCommand, timeoutMs);
+      const stderrAnnotation = await sandbox.provider.annotateStderr(
         commandId,
-        result.stderr,
+        spawnResult.stderr,
       );
-      const baseOutput = `${formatOutput({ ...result, stderr: violation.annotated })}${
-        result.exitCode === 0 ? "" : `\n退出码：${result.exitCode}`
+      const baseOutput = `${formatOutput({ ...spawnResult, stderr: stderrAnnotation.annotatedStderr })}${
+        spawnResult.exitCode === 0 ? "" : `\n退出码：${spawnResult.exitCode}`
       }`;
       sandbox.recordAudit({
         tool: "bash",
         ruleKey: `bash(${command})`,
         decision: "allow",
-        exitCode: result.exitCode,
-        violations: violation.events,
+        exitCode: spawnResult.exitCode,
+        violations: stderrAnnotation.events,
       });
-      if (result.exitCode === 0) {
-        return { ok: true, output: formatOutput(result) };
+      if (spawnResult.exitCode === 0) {
+        return { ok: true, output: formatOutput(spawnResult) };
       }
-      if (result.timedOut) {
+      if (spawnResult.timedOut) {
         return {
           ok: false,
           output: `命令执行超时（${timeoutMs}ms），已被终止\n${baseOutput}`,
@@ -244,7 +244,7 @@ export function createBashTool(sandbox: SandboxContext): Tool {
       }
       // 沙箱违规导致的失败：回传违规说明供模型自纠；
       // on-failure 策略且可交互时提供升级通道（用户批准后脱离沙箱重跑一次）
-      if (violation.events.length > 0) {
+      if (stderrAnnotation.events.length > 0) {
         const escalateNote =
           sandbox.approval === "on-failure" && sandbox.isInteractive
             ? await maybeEscalate(sandbox, command, timeoutMs)
@@ -254,7 +254,7 @@ export function createBashTool(sandbox: SandboxContext): Tool {
         }
         return {
           ok: false,
-          output: `${baseOutput}\n命令被沙箱拦截：${violation.events.join("；")}\n可调整命令避开受限操作，或扩展沙箱边界：联网被拒时在 sandbox.network.allowedDomains 放行域名，文件写入被拒时在 sandbox.filesystem.writableRoots 扩展可写根（~/.tx-cli/config.json）`,
+          output: `${baseOutput}\n命令被沙箱拦截：${stderrAnnotation.events.join("；")}\n可调整命令避开受限操作，或扩展沙箱边界：联网被拒时在 sandbox.network.allowedDomains 放行域名，文件写入被拒时在 sandbox.filesystem.writableRoots 扩展可写根（~/.tx-cli/config.json）`,
         };
       }
       return { ok: false, output: baseOutput };

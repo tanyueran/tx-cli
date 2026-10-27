@@ -26,7 +26,7 @@ vi.mock("openai", () => {
 });
 
 /** 测试用的最小 LLM 配置 */
-const config: LlmConfig = {
+const llmConfig: LlmConfig = {
   apiKey: "sk-test",
   baseUrl: "https://api.test.com/v1",
   model: "test-model",
@@ -75,7 +75,7 @@ describe("streamResponse", () => {
     const onReasoningDelta = vi.fn();
 
     const result = await streamResponse({
-      config,
+      llmConfig,
       input: [{ type: "message", role: "user", content: "问题" }],
       onDelta,
       onReasoningDelta,
@@ -83,7 +83,7 @@ describe("streamResponse", () => {
 
     expect(result.reply).toBe("hi");
     expect(result.toolCalls).toEqual([
-      { id: "c1", name: "read_file", arguments: "{}" },
+      { callId: "c1", name: "read_file", arguments: "{}" },
     ]);
     expect(onReasoningDelta).toHaveBeenCalledWith("琢磨");
     expect(responsesCreate).toHaveBeenCalledWith(
@@ -97,7 +97,7 @@ describe("streamResponse", () => {
     ]);
 
     const result = await streamResponse({
-      config,
+      llmConfig,
       input: [{ type: "message", role: "user", content: "问题" }],
       onDelta: vi.fn(),
     });
@@ -109,7 +109,7 @@ describe("streamResponse", () => {
     mockResponsesStream([{ type: "response.output_text.delta", delta: "done" }]);
 
     await streamResponse({
-      config,
+      llmConfig,
       input: [
         { type: "message", role: "user", content: "读文件" },
         {
@@ -143,7 +143,7 @@ describe("streamResponse", () => {
     mockResponsesStream([{ type: "response.output_text.delta", delta: "ok" }]);
 
     await streamResponse({
-      config,
+      llmConfig,
       input: [{ type: "message", role: "user", content: "问题" }],
       extraBody: { reasoning: { effort: "low" } },
       onDelta: vi.fn(),
@@ -158,7 +158,7 @@ describe("streamResponse", () => {
     responsesCreate.mockRejectedValue(new Error("fetch failed"));
 
     const params = {
-      config,
+      llmConfig,
       input: [{ type: "message" as const, role: "user" as const, content: "问题" }],
       onDelta: vi.fn(),
     };
@@ -174,7 +174,7 @@ describe("streamResponse", () => {
 
     await expect(
       streamResponse({
-        config,
+        llmConfig,
         input: [{ type: "message", role: "user", content: "问题" }],
         onDelta: vi.fn(),
       })

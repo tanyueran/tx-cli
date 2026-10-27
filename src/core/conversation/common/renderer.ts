@@ -10,43 +10,38 @@ import type { Tool } from "../../tools";
 export function createStreamRenderer() {
   // 上一段输出的流类型：用于在思考块与正文之间插入换行分隔
   // undefined 表示光标已处于行首（初始状态或刚输出过换行）
-  let last: "reasoning" | "content" | undefined;
+  let lastStreamKind: "reasoning" | "content" | undefined;
   const endThinking = (): void => {
-    if (last === "reasoning") {
+    if (lastStreamKind === "reasoning") {
       process.stdout.write("\n");
-      last = undefined;
+      lastStreamKind = undefined;
     }
   };
   return {
     onDelta: (text: string): void => {
       endThinking();
       process.stdout.write(text);
-      last = "content";
+      lastStreamKind = "content";
     },
     onReasoningDelta: (text: string): void => {
-      if (last !== "reasoning") {
+      if (lastStreamKind !== "reasoning") {
         // 首个思考增量：以暗色省略号标记思考块开始
         process.stdout.write(pico.dim("…… "));
       }
       process.stdout.write(pico.dim(text));
-      last = "reasoning";
+      lastStreamKind = "reasoning";
     },
     endThinking,
     // 正文输出后光标停在行尾：切换到非流式输出（工具调用提示等）前补换行
     ensureNewline: (): void => {
-      if (last === "content") {
+      if (lastStreamKind === "content") {
         process.stdout.write("\n");
-        last = undefined;
+        lastStreamKind = undefined;
       }
     },
   };
 }
 
-/**
- * 打印工具调用提示：各对话模式共用的渲染样式
- * @param {ToolCall} call - 模型发起的调用请求
- * @returns {void}
- */
 /**
  * 打印工具调用提示：优先使用工具自定义渲染（renderCall，如 write_todos 的清单视图），否则打印原始参数
  * 参数解析失败或非对象时回退默认渲染，不影响后续工具执行
@@ -57,10 +52,10 @@ export function createStreamRenderer() {
 export function printToolCall(call: ToolCall, tool?: Tool): void {
   if (tool?.renderCall) {
     try {
-      const args = JSON.parse(call.arguments || "{}");
-      if (args && typeof args === "object" && !Array.isArray(args)) {
+      const parsedArgs = JSON.parse(call.arguments || "{}");
+      if (parsedArgs && typeof parsedArgs === "object" && !Array.isArray(parsedArgs)) {
         console.log(pico.cyan(`→ 调用 ${call.name}`));
-        console.log(tool.renderCall(args));
+        console.log(tool.renderCall(parsedArgs));
         return;
       }
     } catch {
