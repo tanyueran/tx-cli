@@ -1,9 +1,13 @@
 import prompts from "prompts";
 import { CancelError } from "./errors";
+import { markTurnCancelled } from "./turn-cancel";
 
 /**
  * prompts 的统一封装：用户取消（Ctrl+C / Esc）时抛出 CancelError
- * 说明：原生 prompts 被取消时只会返回缺字段的对象，调用方极易误把空值当成默认值继续执行
+ * 说明：原生 prompts 被取消时只会返回缺字段的对象，调用方极易误把空值当成默认值继续执行；
+ * onCancel 同步回调中先行标记回合取消——审批/确认等交互取消发生在工具执行链内时，
+ * 取消标记早于一切 Promise 传播链置位，串行队列中排队的同轮任务启动时必然已可见，
+ * 保证「取消一轮即中止整轮」的时序可靠性（异常传播链上的标记存在微任务时序竞争）
  * @param {prompts.PromptObject | prompts.PromptObject[]} questions - 问题配置
  * @returns {Promise<prompts.Answers<string>>} 用户的完整作答结果
  */
@@ -12,6 +16,7 @@ export async function ask(
 ): Promise<prompts.Answers<string>> {
   return prompts(questions, {
     onCancel: () => {
+      markTurnCancelled();
       throw new CancelError();
     },
   });

@@ -25,6 +25,7 @@ import {
   pauseToolTimeout,
   resumeToolTimeout,
 } from "../../../shared/timeout";
+import { throwIfTurnCancelled } from "../../../shared/turn-cancel";
 import { checkFsRead, checkFsWrite, type FsBoundaryResult } from "./fs-boundary";
 import { SerialQueue } from "./serial-queue";
 
@@ -250,6 +251,8 @@ export class SandboxContext {
     pauseToolTimeout();
     let choice: ApprovalChoice;
     try {
+      // 回合已取消（同轮其它工具被用户取消）时不再弹新的审批窗
+      throwIfTurnCancelled();
       choice = await this.approver.ask(ruleKey, evaluation.reason, { mcp });
     } finally {
       resumeToolTimeout();

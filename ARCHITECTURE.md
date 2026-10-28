@@ -102,6 +102,7 @@ flowchart LR
 - **MCP 与沙箱同生命周期**：随会话创建、`finally` 中统一释放。
 - **MCP roots capability**：客户端声明 roots 能力并响应 `roots/list`，按沙箱档位联动下发目录白名单——read-only 档不放权（返回空），其余档位下发项目根与 OS 临时目录（均经 realpath 规范化为 file:// URI，规避 macOS 符号链接前缀失配）；支持该协议的服务器（如 chrome-devtools-mcp）将其文件白名单与 tx-cli 工作区对齐，不支持的服务器无感知。
 - **失败隔离**：REPL 中单轮业务错误只提示不终止会话。
+- **回合级取消传播**：`runAgentLoop` 整体运行在回合取消上下文中（`shared/turn-cancel.ts`，AsyncLocalStorage），交互取消（审批/确认的 onCancel）同步置位取消标记——同轮尚未启动的工具、串行队列中排队的任务（permission 启动点）与待审批的问询（guard 审批点）全部短路；正在执行的 Promise 无法终止（JS 限制），照常完成但结果随整体 reject 丢弃；同步置位保证取消标记早于一切 Promise 传播链，排空串行队列时序可靠。
 - **工具调用轮数上限按模式配置**：`ConversationModeConfig.maxIterations`，chat 8 轮、agent 20 轮（未指定回退 loop 默认 `DEFAULT_MAX_ITERATIONS`）；达到上限后软收敛为直接作答，经 `onSoftConverge` 回调黄字提示，避免用户不知情。
 
 ## 深度思考（thinking）处理方案

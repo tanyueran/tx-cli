@@ -1,9 +1,14 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   pauseToolTimeout,
   resumeToolTimeout,
   withPausableTimeout,
 } from "../src/shared/timeout";
+import {
+  markTurnCancelled,
+  runWithTurnCancellation,
+} from "../src/shared/turn-cancel";
+import { CancelError } from "../src/shared/errors";
 import { SandboxContext } from "../src/core/sandbox/runtime/context";
 import { DEFAULT_SANDBOX_CONFIG } from "../src/core/sandbox/config/schema";
 import { noopProvider } from "../src/core/sandbox/providers/backends/noop";
@@ -209,5 +214,19 @@ describe("审批问询不消耗工具超时（guard / askEscalation 集成）", 
       "工具执行超时",
     );
     await expect(task).rejects.toThrow("工具执行超时");
+  });
+
+  it("回合已取消时审批点直接短路，不再弹新的审批窗", async () => {
+    const approver = new SlowApprover({ kind: "once" }, 1);
+    const askSpy = vi.spyOn(approver, "ask");
+    const context = makeContext(approver);
+    // 模拟同轮其它工具已被用户取消：取消标记置位后，guard 的审批问询直接抛 CancelError
+    await expect(
+      runWithTurnCancellation(async () => {
+        markTurnCancelled();
+        return context.guard("bash", "bash(git status)");
+      }),
+    ).rejects.toThrow(CancelError);
+    expect(askSpy).not.toHaveBeenCalled();
   });
 });
