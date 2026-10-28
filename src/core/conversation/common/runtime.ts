@@ -3,7 +3,6 @@ import type { McpConnectSummary, McpManager } from "../../mcp";
 import { createSandboxContext } from "../../sandbox";
 import type { SandboxCliOptions } from "../../sandbox";
 import type { SandboxContext } from "../../sandbox/runtime/context";
-import type { Tool } from "../../tools";
 import { setupSkillContext } from "./skill-context";
 import type { SkillContext } from "./skill-context";
 
@@ -16,8 +15,6 @@ export interface ConversationRuntime {
   mcpManager: McpManager | undefined;
   /** 会话级沙箱上下文（未启用沙箱时为 undefined） */
   sandbox: SandboxContext | undefined;
-  /** MCP 适配后的工具（已并入 skill.tools，单独保留用于会话信息展示） */
-  mcpTools: Tool[];
   /** 技能装配结果（system 提示词、工具列表、技能目录、扫描警告） */
   skill: SkillContext;
   /** MCP 连接状态摘要（禁用或未配置服务器时为 undefined，就绪面板展示） */
@@ -84,7 +81,6 @@ export async function createConversationRuntime(
     return {
       mcpManager,
       sandbox,
-      mcpTools: mcpConnectResult.tools,
       skill,
       mcpSummary: mcpConnectResult.summary,
       bootWarnings: [...sandboxWarnings, ...mcpConnectResult.warnings],

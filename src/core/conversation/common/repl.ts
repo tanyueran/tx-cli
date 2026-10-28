@@ -65,7 +65,7 @@ export interface ReplOptions {
   thinkingStyle: ThinkingStyle;
   /** 初始思考档位（/think 切换后下一轮使用新档位） */
   initialThinkingLevel: ThinkingLevel;
-  /** 模式标签（欢迎语展示，如「对话模式」「Agent 模式」） */
+  /** 模式标签（就绪面板「模式」行展示，如「对话模式」「Agent 模式」） */
   modeLabel: string;
   /** 工具调用轮数上限（来自模式配置，如 chat 8 轮、agent 20 轮） */
   maxIterations: number;
@@ -151,11 +151,11 @@ function formatElapsed(ms: number): string {
 }
 
 /**
- * 打印 REPL 启动就绪面板：信息分组行（模型/技能/MCP）与命令提示行，
+ * 打印 REPL 启动就绪面板：信息分组行（模式/模型/技能/MCP）与命令提示行，
  * 命令提示行由斜杠命令注册表按 available 过滤生成，与补全面板、/help 单一事实来源；
  * 装配阶段警告（技能扫描、沙箱装载、MCP 连接）统一缩进展示在面板下方，
  * 替代原先分散的连接日志与长句欢迎语，默认状态只保留面板主体
- * @param {ReplOptions} options - 启动参数（配置、会话运行时）
+ * @param {ReplOptions} options - 启动参数（配置、会话运行时、模式标签）
  * @param {ThinkingLevel} thinkingLevel - 初始思考档位
  * @param {SlashCommand[]} commands - 斜杠命令注册表
  * @returns {void}
@@ -170,6 +170,7 @@ function printReadyPanel(
   const { catalog, scanWarnings } = runtime.skill;
 
   const rows: Array<[string, string]> = [
+    ["模式", options.modeLabel],
     ["模型", `${llmConfig.model} · 思考 ${thinkingLevel}`],
   ];
   if (catalog.size > 0) {

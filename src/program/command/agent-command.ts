@@ -17,9 +17,9 @@ import type {
   SandboxMissingAction,
 } from "../../core/sandbox/types";
 
-/** agent 命令执行体的选项入参（枚举字段直接用联合类型，choices() 保证运行时合法，无需断言） */
+/** agent 命令执行体的选项入参（沙箱枚举字段用联合类型，choices() 保证运行时合法，无需断言） */
 interface AgentOptions {
-  /** 思考档位（--think），未指定时回退配置默认 */
+  /** 思考档位（--think），由 parseThinkingLevel 校验归一化，未指定时回退配置默认 */
   think?: string;
   /** 是否启用 MCP 服务器：--no-mcp 显式传入 false，缺省视为开启 */
   mcp?: boolean;
@@ -73,7 +73,8 @@ export async function runAgentAction(
   agentOptions: AgentOptions,
 ): Promise<void> {
   // CLI 选项处理全部前置：loadLlmConfig 在配置缺失时会进入交互向导并写盘，
-  // 必须先完成所有命令行选项的解析（枚举合法性已由 commander choices() 拦截）
+  // 必须先完成所有命令行选项的解析（沙箱枚举合法性由 commander choices() 拦截，
+  // 思考档位经 parseThinkingLevel 校验归一化，非法值在进入交互向导前报错退出）
   const thinkingLevel = parseThinkingLevel(agentOptions.think);
   const cliSandboxOptions = buildSandboxOptions(agentOptions);
   const llmConfig = await loadLlmConfig();
@@ -101,9 +102,12 @@ export async function runAgentAction(
 /**
  * 注册 agent 命令：让 AI Agent 执行任务（Agent 模式，对标 Codex CLI / Claude Code 默认模式）
  * 工具带为全量：只读内置工具 + bash（受三档沙箱与审批策略管控）+ 技能 + MCP；
- * 沙箱档位优先级：--sandbox > 项目配置 sandbox.level > 全局配置 sandbox.level > read-only；
+ * 默认 read-only 档：写文件与 bash 命令需逐次审批或被沙箱拒绝，可用 --sandbox/--approval 调整；
+ * 沙箱档位优先级：--sandbox > 项目配置 sandbox.level > 全局配置 sandbox.level > read-only，
+ * --sandbox 显式传入时同时启用沙箱（覆盖配置 sandbox.enabled=false）；
  * 审批策略优先级：--approval > 项目配置 sandbox.approval > 全局配置 sandbox.approval > on-failure；
- * 枚举型选项经 choices() 声明：非法值由 commander 在 action 执行前拒绝，无需命令内手工校验
+ * 沙箱枚举选项经 choices() 声明：非法值由 commander 在 action 执行前拒绝；
+ * 思考档位经 parseThinkingLevel 校验（支持大小写与首尾空格归一化）：非法值报错退出
  * @param {Command} program - commander 实例
  * @returns {void}
  */
@@ -111,13 +115,11 @@ export function registerAgentCommand(program: Command): void {
   program
     .command("agent [task...]")
     .description(
-      "让 AI Agent 执行任务（可读写文件、执行 bash，受沙箱与审批管控）：传入任务为单次执行，不带参数进入多轮任务模式",
+      "让 AI Agent 执行任务（默认 read-only 档：写文件与 bash 需逐次审批或被拒，可用 --sandbox/--approval 放宽）：传入任务为单次执行，不带参数进入多轮任务模式",
     )
-    .addOption(
-      new Option(
-        "--think <level>",
-        `思考档位：${THINKING_LEVELS.join(" | ")}，优先级：命令行 > 项目配置 > 全局配置（最终默认 medium）`,
-      ).choices([...THINKING_LEVELS]),
+    .option(
+      "--think <level>",
+      `思考档位：${THINKING_LEVELS.join(" | ")}，优先级：命令行 > 项目配置 > 全局配置（最终默认 medium）`,
     )
     .option(
       "--no-mcp",
@@ -126,7 +128,7 @@ export function registerAgentCommand(program: Command): void {
     .addOption(
       new Option(
         "--sandbox <level>",
-        `bash 命令的沙箱档位：${SANDBOX_LEVELS.join(" | ")}，优先级：命令行 > 项目配置 > 全局配置（最终默认 read-only）`,
+        `bash 命令的沙箱档位：${SANDBOX_LEVELS.join(" | ")}，优先级：命令行 > 项目配置 > 全局配置（最终默认 read-only）；显式传入时同时启用沙箱（覆盖配置 sandbox.enabled=false）`,
       ).choices([...SANDBOX_LEVELS]),
     )
     .addOption(
@@ -137,12 +139,12 @@ export function registerAgentCommand(program: Command): void {
     )
     .option(
       "--no-bash",
-      "禁用 bash 工具（默认读取 ~/.tx-cli/config.json 的 sandbox.bash.enabled）",
+      "禁用 bash 工具（默认读取 ~/.tx-cli/config.json 与 <cwd>/.tx-cli/config.json 的 sandbox.bash.enabled，项目配置优先）",
     )
     .addOption(
       new Option(
         "--sandbox-missing <action>",
-        "沙箱在当前环境不可用时的处置：allow 降级为无隔离执行（规则与审批仍生效）| deny 失败关闭（默认）",
+        "沙箱在当前环境不可用时的处置：allow 降级为无隔离执行（规则与审批仍生效，read-only 档的写入隔离同样失效）| deny 失败关闭（默认）",
       ).choices(["allow", "deny"]),
     )
     .action(async (taskSegments: string[], agentOptions: AgentOptions) => {
