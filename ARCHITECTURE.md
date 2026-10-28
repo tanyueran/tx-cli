@@ -171,7 +171,7 @@ interface Tool extends ToolDefinition {
 }
 ```
 
-- **执行器**（`executor.ts`）负责参数 JSON 解析、超时（全局 30s，工具可覆盖）、输出 8KB 截断；工具抛错转为失败输出回传模型自纠。
+- **执行器**（`executor.ts`）负责参数 JSON 解析、超时（全局 30s，工具可覆盖，可暂停计时：审批问询/升级问询等待用户期间暂停，用户思考时间不计入超时，避免迟到授权与重复执行竞态）、输出 8KB 截断；工具抛错转为失败输出回传模型自纠。
 - **权限门卫**（`permission.ts`）：声明了 `permission` 的工具被 `wrapToolWithPermission` 包装，先经 L2 规则判定 + L3 审批再执行；未声明的工具原样放行（零破坏渐进迁移）。
 - **MCP 工具**经 `tool-adapter` 适配为 `Tool`，命名带 `mcp__server__tool` 前缀隔离；适配时读取远端工具定义的 `annotations.readOnlyHint`，把服务器名、净化后的规则键段与只读标记一并下传权限门卫。
 

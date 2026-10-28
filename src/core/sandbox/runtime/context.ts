@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { ToolOutput } from "../../tools/types";
 import type {
+  ApprovalChoice,
   ApprovalPolicy,
   Approver,
   McpToolMeta,
@@ -20,6 +21,10 @@ import {
 } from "../policy/evaluate";
 import { parseRule } from "../policy/syntax";
 import { buildTierConfig } from "../policy/tier";
+import {
+  pauseToolTimeout,
+  resumeToolTimeout,
+} from "../../../shared/timeout";
 import { checkFsRead, checkFsWrite, type FsBoundaryResult } from "./fs-boundary";
 import { SerialQueue } from "./serial-queue";
 
@@ -239,7 +244,16 @@ export class SandboxContext {
         output: `命令需要审批但当前为非交互环境，已拒绝：${evaluation.reason}`,
       };
     }
-    const choice = await this.approver.ask(ruleKey, evaluation.reason, { mcp });
+    // 审批问询期间暂停工具超时计时：用户思考时间不计入工具执行超时，
+    // 避免外层 withPausableTimeout 在等待用户输入时误判超时，
+    // 产生「失败结果已回传模型 + 迟到授权继续执行」的重复执行竞态
+    pauseToolTimeout();
+    let choice: ApprovalChoice;
+    try {
+      choice = await this.approver.ask(ruleKey, evaluation.reason, { mcp });
+    } finally {
+      resumeToolTimeout();
+    }
     if (choice.kind === "deny") {
       this.recordAudit({
         tool: toolName,
@@ -289,12 +303,18 @@ export class SandboxContext {
 
   /**
    * 沙箱内失败后的升级问询（on-failure 策略专用）
+   * 问询期间暂停工具超时计时（语义同 guard 的审批问询）
    * @param {string} commandText - 用户可见的命令文本
    * @param {string} reason - 失败/违规说明
    * @returns {Promise<boolean>} 用户批准脱离沙箱重跑时为 true
    */
   async askEscalation(commandText: string, reason: string): Promise<boolean> {
-    return this.approver.askEscalation(commandText, reason);
+    pauseToolTimeout();
+    try {
+      return await this.approver.askEscalation(commandText, reason);
+    } finally {
+      resumeToolTimeout();
+    }
   }
 
   /**

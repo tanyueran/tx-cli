@@ -1,5 +1,5 @@
 import { CancelError } from "../../shared/errors";
-import { withTimeout } from "../../shared/timeout";
+import { withPausableTimeout } from "../../shared/timeout";
 import type { ToolCall } from "../llm/types";
 import type { Tool, ToolOutput, ToolResult } from "./types";
 
@@ -48,10 +48,12 @@ export async function executeToolCall(
 
   let output: ToolOutput;
   try {
-    // 超时时长优先取工具自带的 timeoutMs（如 MCP 工具放宽到 60s），缺省用全局值
+    // 超时时长优先取工具自带的 timeoutMs（如 MCP 工具放宽到 60s），缺省用全局值；
+    // 可暂停超时：审批问询（guard / askEscalation）期间暂停计时，
+    // 用户思考时间不计入超时，避免超时误判后用户批准的「迟到授权」与底层继续执行造成的重复执行
     const timeoutMs = tool.timeoutMs ?? TOOL_TIMEOUT_MS;
-    output = await withTimeout(
-      tool.execute(args),
+    output = await withPausableTimeout(
+      () => tool.execute(args),
       timeoutMs,
       `工具执行超时（${timeoutMs / 1000}s）`,
     );
