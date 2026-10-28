@@ -1,6 +1,6 @@
 {
   "name": "@tanyueran/cli",
-  "version": "0.8.1",
+  "version": "0.9.0",
   "description": "一个cli工具，支持创建项目，添加模版，与大模型对话",
   "main": "./dist/cli.js",
   "bin": {

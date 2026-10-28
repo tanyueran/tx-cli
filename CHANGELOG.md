@@ -1,3 +1,27 @@
+## [0.9.0](https://github.com/tanyueran/tx-cli/compare/v0.8.1...v0.9.0) (2026-10-28)
+
+### Features
+
+* 多轮对话中支持'/'的提示和补全 ([bf03995](https://github.com/tanyueran/tx-cli/commit/bf0399597b79d4d6587f2b713e4ef4f7c530ee22))
+* 多轮对话输入中途支持'/'技能提示与补全 ([57f4927](https://github.com/tanyueran/tx-cli/commit/57f4927abd01169258e02176c906f9f6e3587d80))
+
+### Bug Fixes
+
+* chat 模式去噪并放行只读检索,对齐只读语义 ([af839bd](https://github.com/tanyueran/tx-cli/commit/af839bde8f0fcccecc06da14a5501706ea397220))
+* load_skill返回正文首部附带技能目录标注,修复模型无法定位技能脚本的问题 ([89e7c22](https://github.com/tanyueran/tx-cli/commit/89e7c224bc2eee2058053c9d02f588f837f607da))
+* thinkingLevel/ThinkingStyle 配置非字符串时友好报错而非崩溃 ([53c868c](https://github.com/tanyueran/tx-cli/commit/53c868c92c5a8b98b424fc82ae794f78d0dc057b))
+* 修复chat命令支持写操作的工具的bug ([6074c1a](https://github.com/tanyueran/tx-cli/commit/6074c1a6d8b2db23b586bd3d0971746a3f762d06))
+* 单次执行补齐装配阶段警告输出,避免沙箱与MCP异常被静默 ([a44ea37](https://github.com/tanyueran/tx-cli/commit/a44ea37d8a693312b8cd1454686fb02f9d85c6ce))
+* 回合级取消传播，用户取消后同轮剩余工具不再执行 ([80cd7a9](https://github.com/tanyueran/tx-cli/commit/80cd7a9bc9ef6fbe5de2abc5e422c80ca930cba5))
+* 审批问询暂停工具超时计时，消除迟到授权与重复执行竞态 ([c0a1feb](https://github.com/tanyueran/tx-cli/commit/c0a1febf8ff3483838a6c86fd0c5f49461549b37))
+* 补齐沙箱CLI语义与帮助文档,统一档位校验并清理死代码 ([44bcd7b](https://github.com/tanyueran/tx-cli/commit/44bcd7b0dc38b045ec94035cd5e8668ce28317a3))
+* 阻断沙箱配置自证信任漏洞（能力感知合并 + 目录信任确认） ([f515f7a](https://github.com/tanyueran/tx-cli/commit/f515f7ab0e74599658d78825af28d6cf0bbf6ebb))
+* 项目级与用户级技能目录相同时只扫描一次,避免重复告警与重名误报 ([4652108](https://github.com/tanyueran/tx-cli/commit/4652108d405ec23491dd9a6ce6e63d89bfc96648))
+
+### Code Refactoring
+
+* 3参及以上函数改为对象入参,统一chat/agent命令调用链签名 ([cf38ed4](https://github.com/tanyueran/tx-cli/commit/cf38ed4573c6f14ccd7eca9ef251ae51e265efd2))
+* 变量命名优化 ([a6bf697](https://github.com/tanyueran/tx-cli/commit/a6bf697d0253cf48592c1b3722f4a967d67817ec))
 ## [0.8.1](https://github.com/tanyueran/tx-cli/compare/v0.8.0...v0.8.1) (2026-10-26)
 
 ### Bug Fixes
