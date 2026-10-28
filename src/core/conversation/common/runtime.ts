@@ -46,7 +46,8 @@ export interface ConversationOptions {
  * 成功后的释放由调用方经 disposeConversationRuntime 完成；
  * bash 工具按 bashEnabled 装配（chat 模式固定 false，agent 模式跟随 cliSandboxOptions/配置），
  * 写侧内置工具按 writeToolsEnabled 装配（chat 模式固定 false，只读语义不依赖沙箱配置），
- * 沙箱上下文始终按配置装配（承担只读工具的 fs 门卫）
+ * 沙箱上下文始终按配置装配（承担只读工具的 fs 门卫）；
+ * 强制无 bash 的模式（chat）跳过 bash 专用装载（Provider）并抑制 bash 相关警告
  * @param {string} basePrompt - 场景基础提示词（chat、agent 等命令各自定义人设）
  * @param {ConversationOptions} options - 会话装配选项（MCP 开关、沙箱 CLI 选项、bash 开关、写侧工具开关）
  * @returns {Promise<ConversationRuntime>} 会话运行时
@@ -59,7 +60,9 @@ export async function createConversationRuntime(
     sandbox,
     bashEnabled,
     warnings: sandboxWarnings,
-  } = await createSandboxContext(options.cliSandboxOptions);
+  } = await createSandboxContext(options.cliSandboxOptions, {
+    bashForcedOff: options.bashEnabled === false,
+  });
   let mcpManager: McpManager | undefined;
   try {
     // roots 按沙箱档位联动：read-only 档不放权，其余下发项目根与 OS 临时目录

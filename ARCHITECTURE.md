@@ -201,7 +201,7 @@ flowchart TD
 - **规则语法**：`Bash(git push:*)` 前缀、`Bash(git status)` 精确、`Bash(git log *)` glob、`Read(/src/**)` 路径、`WebSearch` 整工具。deny/ask 匹配时剥离 `FOO=bar` / `env` / `nohup` / `xargs` 包装看真实命令（allow 不穿透）。
 - **规则名别名归一化**：`Read`→`read_file`、`WebSearch`→`web_search`、`ListDir`→`list_dir`、`Write`→`write_file`、`Edit`→`edit_file`（Claude Code 风格短名 ↔ 内部工具名），规则键与规则两侧都归一化后匹配。
 - **权限纳管范围**：bash（exec，串行）、read\_file / list\_dir / glob / grep（fs.read，规则键以绝对路径为主体）、write\_file / edit\_file（fs.write，串行，规则键以绝对路径为主体，read-only 档被可写边界拒绝）、web\_search（net，规则键 `web_search(关键词)`）、MCP 工具（整工具级键 `mcp__server__tool`；按 `annotations.readOnlyHint` 区分只读/可写，只读仅标注 net，其余保守标注 net+exec）。无沙箱会话（`sandbox` 为 undefined）不包装、行为不变。
-- **capabilities 禁网语义**：工具声明的能力（如 net）随 guard 链路传入规则判定；read-only 档承诺禁网，net 工具未命中规则时默认 ask（OS 沙箱只拦子进程，进程内网络调用不受边界约束，故由审批层兜底），`never` 策略下直接 deny。
+- **capabilities 禁网语义**：工具声明的能力（如 net）随 guard 链路传入规则判定；read-only 档承诺禁网，net 工具未命中规则时默认 ask（OS 沙箱只拦子进程，进程内网络调用不受边界约束，故由审批层兜底），`never` 策略下直接 deny；声明 `readOnlySafe` 的无副作用只读检索工具（`web_search`）例外——口径对齐 mcp-read 默认 allow（`always-ask` 仍 ask）。
 - **MCP 只读自动放行**：判定类目分 `mcp-tool`（可写）与 `mcp-read`（`readOnlyHint === true` 且未声明 `destructiveHint`）；`mcp-read` 未命中规则时默认 allow（`always-ask` 仍 ask），显式 deny/ask 规则依旧优先。
 - **MCP 服务器级授权**：可写 MCP 工具首次审批时提供「本次 / 本会话允许该服务器 / 始终允许该服务器 / 拒绝」，服务器级授权落 `mcp__server__*`（`serverKey` 为净化后的规则键段，与工具名同口径），同服务器其余工具不再逐个询问；显式 ask 规则优先，服务器级授权不覆盖。「始终允许」落盘按前缀分流：MCP 授权写入项目配置 `mcp.rules.allow`，其余写入 `sandbox.rules.allow`。
 - **fs 应用层边界**：fs 工具是进程内代码不经沙箱进程，权限门卫在规则放行后按 TierConfig 逐路径校验（`SandboxContext.checkFsRead/checkFsWrite`，路径模式支持目录前缀、`*` 单段、`**` 跨目录与纯文件名如 `.env`/`*.pem`），danger-full-access 档跳过检查。

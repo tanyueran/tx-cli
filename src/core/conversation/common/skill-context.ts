@@ -22,6 +22,8 @@ export interface SkillContext {
   catalog: SkillCatalog;
   /** 扫描警告（启动时黄字提示） */
   scanWarnings: string[];
+  /** bash 工具是否装配（/permissions 展示 Provider 行时区分「未装配」与「失败关闭」） */
+  bashEnabled: boolean;
   /** 任务清单工具句柄（write_todos 装配时存在，/todos 内联命令读取清单状态） */
   todoHandle?: TodoToolHandle;
 }
@@ -101,7 +103,8 @@ export function setupSkillContext({
     tools.push(todoHandle.tool);
   }
   // bash 依赖沙箱执行：无沙箱或显式关闭（chat 模式 / --no-bash）时不装配
-  if (sandbox && (assembly?.bashEnabled ?? true)) {
+  const bashAssembled = sandbox !== undefined && (assembly?.bashEnabled ?? true);
+  if (bashAssembled) {
     tools.push(createBashTool(sandbox));
   }
   tools.push(...extraTools);
@@ -115,6 +118,7 @@ export function setupSkillContext({
     tools: gatedTools,
     catalog,
     scanWarnings: skillWarnings,
+    bashEnabled: bashAssembled,
     todoHandle,
   };
 }

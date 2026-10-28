@@ -3,6 +3,7 @@ import type {
   ApprovalPolicy,
   SandboxLevel,
   SandboxMissingAction,
+  SandboxProvider,
 } from "./types";
 import { loadSandboxConfig } from "./config/load";
 import {
@@ -40,6 +41,17 @@ interface ResolvedOptions {
   approvalFromFile: boolean;
   /** 沙箱不可用时的处置 */
   missingAction: SandboxMissingAction;
+}
+
+/** createSandboxContext 的调用方上下文选项 */
+export interface CreateSandboxContextOptions {
+  /**
+   * 会话模式是否强制不装配 bash（如 chat 只读问答）
+   * 为 true 时：bash 装配开关直接置 false，跳过 Provider 选择与初始化（其仅服务于 bash 命令包装执行），
+   * 并抑制仅与 bash 相关的警告（网络白名单 403 提示、Provider 不可用提示）；
+   * 沙箱上下文仍创建，只读工具的 fs 门卫不受影响
+   */
+  bashForcedOff?: boolean;
 }
 
 /**
@@ -93,13 +105,17 @@ export interface SandboxAssembly {
  * 信任目录降级（仅配置文件来源的 danger-full-access / never）→ Provider 选择与初始化 →
  * 构建 SandboxContext；
  * bash 装配开关与沙箱上下文解耦：上下文承担只读工具的 fs 门卫，
- * --no-bash 只移除 bash 工具，不再连带关闭门卫
+ * --no-bash 只移除 bash 工具，不再连带关闭门卫；
+ * bashForcedOff（chat 等强制无 bash 的模式）时跳过 Provider 装载并抑制 bash 相关警告
  * @param {SandboxCliOptions} cliOptions - 命令行选项
+ * @param {CreateSandboxContextOptions} contextOptions - 调用方上下文选项（bashForcedOff 说明见接口定义）
  * @returns {Promise<SandboxAssembly>} 沙箱上下文与 bash 装配开关
  */
 export async function createSandboxContext(
   cliOptions: SandboxCliOptions = {},
+  contextOptions: CreateSandboxContextOptions = {},
 ): Promise<SandboxAssembly> {
+  const bashForcedOff = contextOptions.bashForcedOff === true;
   const warnings: string[] = [];
   const cwd = process.cwd();
   const { config: sandboxConfig, warnings: configWarnings } = loadSandboxConfig(
@@ -107,7 +123,9 @@ export async function createSandboxContext(
     resolveProjectConfigPath(cwd),
   );
   warnings.push(...configWarnings);
-  const bashEnabled = cliOptions.bashEnabled ?? sandboxConfig.bash.enabled;
+  const bashEnabled = bashForcedOff
+    ? false
+    : (cliOptions.bashEnabled ?? sandboxConfig.bash.enabled);
   if (!sandboxConfig.enabled) {
     return { sandbox: undefined, bashEnabled: false, warnings };
   }
@@ -131,49 +149,58 @@ export async function createSandboxContext(
   }
 
   // 网络白名单提示：workspace-write 档空白名单意味着 bash 内所有联网命令（npm install、curl 等）
-  // 都会被沙箱代理以 403 拒绝（allow-only 语义），提前告知配置入口而非让用户在报错里猜
-  if (level === "workspace-write" && sandboxConfig.network.allowedDomains.length === 0) {
+  // 都会被沙箱代理以 403 拒绝（allow-only 语义），提前告知配置入口而非让用户在报错里猜；
+  // 仅在 bash 实际装配时提示（chat 等无 bash 会话该提示与其无关）
+  if (
+    bashEnabled &&
+    level === "workspace-write" &&
+    sandboxConfig.network.allowedDomains.length === 0
+  ) {
     warnings.push(
       "sandbox.network.allowedDomains 为空：bash 命令的所有网络访问将被沙箱代理拒绝（HTTP 403），" +
         "如需 npm install / curl 等联网操作，请在 ~/.tx-cli/config.json 的 sandbox.network.allowedDomains 中放行域名",
     );
   }
 
-  // Provider 选择：full 档直通（noop）；其余档用配置的 Provider
-  let provider =
-    level === "danger-full-access"
-      ? getProvider("noop")
-      : getProvider(sandboxConfig.provider);
-  if (!provider && level !== "danger-full-access") {
-    warnings.push(
-      `未找到名为 ${sandboxConfig.provider} 的沙箱 Provider，bash 将以失败关闭模式运行`,
-    );
-  }
-  // 初始化失败或环境不可用：按 missingAction 处置（默认 fail-closed）
-  if (provider && level !== "danger-full-access") {
-    let isProviderAvailable = false;
-    try {
-      isProviderAvailable = await provider.isAvailable();
-      if (isProviderAvailable) {
-        await provider.initialize(buildTierConfig(level, sandboxConfig, cwd));
-      }
-    } catch (err) {
-      // isAvailable/initialize 抛错时 isProviderAvailable 保持 false，走不可用分支
+  // Provider 仅服务于 bash 命令的包装执行；无 bash 会话（chat 等）跳过装载与相关警告
+  let provider: SandboxProvider | undefined;
+  if (!bashForcedOff) {
+    // Provider 选择：full 档直通（noop）；其余档用配置的 Provider
+    provider =
+      level === "danger-full-access"
+        ? getProvider("noop")
+        : getProvider(sandboxConfig.provider);
+    if (!provider && level !== "danger-full-access") {
       warnings.push(
-        `沙箱 Provider ${provider.name} 初始化失败：${(err as Error).message}`,
+        `未找到名为 ${sandboxConfig.provider} 的沙箱 Provider，bash 将以失败关闭模式运行`,
       );
     }
-    if (!isProviderAvailable) {
-      if (resolvedOptions.missingAction === "allow") {
+    // 初始化失败或环境不可用：按 missingAction 处置（默认 fail-closed）
+    if (provider && level !== "danger-full-access") {
+      let isProviderAvailable = false;
+      try {
+        isProviderAvailable = await provider.isAvailable();
+        if (isProviderAvailable) {
+          await provider.initialize(buildTierConfig(level, sandboxConfig, cwd));
+        }
+      } catch (err) {
+        // isAvailable/initialize 抛错时 isProviderAvailable 保持 false，走不可用分支
         warnings.push(
-          `沙箱 Provider ${provider.name} 在当前环境不可用，已按 --sandbox-missing allow 降级为无隔离执行（规则与审批仍生效）`,
+          `沙箱 Provider ${provider.name} 初始化失败：${(err as Error).message}`,
         );
-        provider = getProvider("noop");
-      } else {
-        warnings.push(
-          `沙箱 Provider ${provider.name} 在当前环境不可用，bash 将以失败关闭模式运行（可用 --sandbox-missing allow 显式放行）`,
-        );
-        provider = undefined;
+      }
+      if (!isProviderAvailable) {
+        if (resolvedOptions.missingAction === "allow") {
+          warnings.push(
+            `沙箱 Provider ${provider.name} 在当前环境不可用，已按 --sandbox-missing allow 降级为无隔离执行（规则与审批仍生效）`,
+          );
+          provider = getProvider("noop");
+        } else {
+          warnings.push(
+            `沙箱 Provider ${provider.name} 在当前环境不可用，bash 将以失败关闭模式运行（可用 --sandbox-missing allow 显式放行）`,
+          );
+          provider = undefined;
+        }
       }
     }
   }

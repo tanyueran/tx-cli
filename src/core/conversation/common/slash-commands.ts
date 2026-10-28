@@ -56,6 +56,8 @@ export const MAX_SUGGESTIONS = 10;
 export interface SlashCommandDeps {
   /** 会话级沙箱上下文（未启用沙箱时为 undefined） */
   sandbox: SandboxContext | undefined;
+  /** bash 工具是否装配（/permissions 展示 Provider 行时区分「未装配」与「失败关闭」） */
+  bashEnabled: boolean;
   /** 技能目录（/skill 执行与 /skills 列表读取） */
   catalog: SkillCatalog;
   /** 任务清单工具句柄（未装配时为 undefined） */
@@ -123,6 +125,7 @@ export function parseSkillArgs(input: string): {
 export function buildSlashCommands(deps: SlashCommandDeps): SlashCommand[] {
   const {
     sandbox,
+    bashEnabled,
     catalog,
     todoHandle,
     thinkingStyle,
@@ -234,7 +237,7 @@ export function buildSlashCommands(deps: SlashCommandDeps): SlashCommand[] {
       description: "查看沙箱与权限状态",
       available: sandbox !== undefined,
       execute() {
-        printPermissions(sandbox);
+        printPermissions(sandbox, bashEnabled);
         return { kind: "handled" };
       },
     },
@@ -289,16 +292,22 @@ function printRuleSection(title: string, rules: string[]): void {
  * 打印当前会话的沙箱与权限状态（/permissions 内联命令）
  * 展示：档位、审批策略、Provider、fs 边界、三段规则（allow 含会话与持久授权合并）
  * @param {SandboxContext | undefined} sandbox - 会话级沙箱上下文
+ * @param {boolean} bashEnabled - bash 工具是否装配（区分 Provider「未装载」的两种原因）
  * @returns {void}
  */
-export function printPermissions(sandbox: SandboxContext | undefined): void {
+export function printPermissions(
+  sandbox: SandboxContext | undefined,
+  bashEnabled: boolean,
+): void {
   if (!sandbox) {
     console.log(pico.yellow("本会话未启用沙箱（bash 与权限门卫均未装配）"));
     return;
   }
-  const providerName = sandbox.provider
-    ? `${sandbox.provider.name}${sandbox.provider.name === "noop" ? "（直通无隔离）" : ""}`
-    : "无（bash 以失败关闭模式运行）";
+  const providerName = !bashEnabled
+    ? "未装载（本会话未装配 bash 工具）"
+    : sandbox.provider
+      ? `${sandbox.provider.name}${sandbox.provider.name === "noop" ? "（直通无隔离）" : ""}`
+      : "无（bash 以失败关闭模式运行）";
   console.log(pico.cyan(`沙箱档位：${sandbox.level}`));
   console.log(pico.cyan(`审批策略：${sandbox.approval}`));
   console.log(pico.cyan(`沙箱 Provider：${providerName}`));

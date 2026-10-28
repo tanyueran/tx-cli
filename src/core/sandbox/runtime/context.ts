@@ -134,6 +134,7 @@ export class SandboxContext {
    * @param {string} ruleKey - 工具生成的规则键
    * @param {readonly string[]} capabilities - 工具能力声明（read-only 档禁网语义判定用）
    * @param {McpToolMeta} mcp - MCP 工具元信息（服务器名与只读标记，非 MCP 工具时缺省）
+   * @param {boolean} readOnlySafe - 是否为无副作用只读检索工具（read-only 档 net 判定用）
    * @returns {RuleEvaluation} 判定结果
    */
   evaluate(
@@ -141,6 +142,7 @@ export class SandboxContext {
     ruleKey: string,
     capabilities: readonly string[] = [],
     mcp?: McpToolMeta,
+    readOnlySafe = false,
   ): RuleEvaluation {
     if (toolName === "bash") {
       const parsedKey = parseRule(ruleKey);
@@ -167,6 +169,7 @@ export class SandboxContext {
       this.approval,
       category,
       capabilities,
+      readOnlySafe,
     );
   }
 
@@ -196,6 +199,7 @@ export class SandboxContext {
    * @param {string} ruleKey - 规则键
    * @param {readonly string[]} capabilities - 工具能力声明（read-only 档禁网语义判定用）
    * @param {McpToolMeta} mcp - MCP 工具元信息（服务器名与只读标记，非 MCP 工具时缺省）
+   * @param {boolean} readOnlySafe - 是否为无副作用只读检索工具（read-only 档 net 判定用）
    * @returns {Promise<ToolOutput | null>} 拒绝时返回失败输出，放行时返回 null
    */
   async guard(
@@ -203,8 +207,15 @@ export class SandboxContext {
     ruleKey: string,
     capabilities: readonly string[] = [],
     mcp?: McpToolMeta,
+    readOnlySafe = false,
   ): Promise<ToolOutput | null> {
-    const evaluation = this.evaluate(toolName, ruleKey, capabilities, mcp);
+    const evaluation = this.evaluate(
+      toolName,
+      ruleKey,
+      capabilities,
+      mcp,
+      readOnlySafe,
+    );
     if (evaluation.decision === "deny") {
       this.recordAudit({
         tool: toolName,

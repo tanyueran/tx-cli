@@ -221,6 +221,7 @@ export async function runConversationRepl(options: ReplOptions): Promise<void> {
   // 斜杠命令注册表：补全面板、/help、就绪面板与分发共用；档位读写经闭包桥接本函数的 currentLevel
   const commands = buildSlashCommands({
     sandbox,
+    bashEnabled: runtime.skill.bashEnabled,
     catalog,
     todoHandle,
     thinkingStyle,

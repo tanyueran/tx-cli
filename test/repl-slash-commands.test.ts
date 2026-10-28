@@ -24,6 +24,7 @@ function makeDeps(
 ): SlashCommandDeps {
   return {
     sandbox: undefined,
+    bashEnabled: true,
     catalog,
     todoHandle: undefined,
     thinkingStyle: "none",
