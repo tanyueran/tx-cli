@@ -33,6 +33,7 @@ import { askReplLine } from "./repl-input";
 import {
   buildSlashCommands,
   buildSkillSuggestions,
+  filterInlineSkillSuggestions,
   filterSuggestions,
   matchSlashCommand,
 } from "./slash-commands";
@@ -204,7 +205,8 @@ function printReadyPanel(
  * 多轮对话 REPL 主循环（chat、agent 命令共用）：循环提问，直到用户输入 exit/quit 或按 Ctrl+C 退出
  * 基于 Responses API（无状态模式）+ agentic loop：历史由本地维护、每轮全量发送，
  * 模型可在任意一轮发起工具调用，工具带与沙箱由调用方经会话运行时按模式装配
- * 输入行由自研组件 askReplLine 采集：输入 "/" 弹出斜杠命令/技能补全面板（≤10 条、↑↓ 选择、Tab 补全），
+ * 输入行由自研组件 askReplLine 采集：行首输入 "/" 弹出斜杠命令/技能补全面板（≤10 条、↑↓ 选择、Tab 补全），
+ * 行中「空格 + /」弹出技能补全面板（仅技能提及，补全为 /name 纯文本，不展开手册），
  * 分发经命令注册表查表执行（/think、/skill、/skills、/todos、/permissions、/help）
  * 单轮请求失败（网络抖动、限流等可预期错误）只提示不终止会话，避免丢失整个对话上下文
  * @param {ReplOptions} options - 启动参数（配置、会话运行时、思考风格与初始档位、模式标签）
@@ -252,8 +254,11 @@ export async function runConversationRepl(options: ReplOptions): Promise<void> {
       // askReplLine 已保证返回值去除首尾空格且非空，命令匹配无需再 trim
       userInput = await askReplLine({
         message: pico.green("你 > "),
-        suggest: (input) =>
-          filterSuggestions(input, commands, skillSuggestions),
+        // 行首 /：命令与 /skill 二级补全；行中「空格 + /」：仅技能补全（技能提及）
+        suggest: (input, cursor) =>
+          input.startsWith("/")
+            ? filterSuggestions(input, commands, skillSuggestions)
+            : filterInlineSkillSuggestions(input, cursor, skillSuggestions),
         history: inputHistory,
       });
     } catch (err) {

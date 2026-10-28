@@ -226,6 +226,43 @@ describe("ReplInputController 补全面板", () => {
     controller.keypress("h", undefined);
     expect(controller.panelVisible).toBe(true);
   });
+
+  it("中途输入空格 + / 弹面板（中途技能补全场景）", () => {
+    const controller = new ReplInputController(suggestOf(COMMAND_SUGGESTIONS));
+    feed(controller, [
+      ["帮", undefined],
+      ["我", undefined],
+      [" ", undefined],
+      ["/", undefined],
+    ]);
+    expect(controller.input).toBe("帮我 /");
+    expect(controller.panelVisible).toBe(true);
+  });
+
+  it("单词内部的 / 不弹面板（路径、URL 场景）", () => {
+    const controller = new ReplInputController(suggestOf(COMMAND_SUGGESTIONS));
+    controller.input = "打开 a/b";
+    controller.cursor = 6;
+    expect(controller.panelVisible).toBe(false);
+  });
+
+  it("命令行后续参数保持面板可见（/skill 二级补全场景）", () => {
+    const controller = new ReplInputController(suggestOf([]));
+    controller.input = "/skill rev";
+    controller.cursor = 9;
+    expect(controller.panelVisible).toBe(true);
+  });
+
+  it("Tab 在中途 token 上补全并保留前文", () => {
+    const controller = new ReplInputController(
+      suggestOf([{ name: "/review", description: "评审" }]),
+    );
+    controller.input = "帮我 /re";
+    controller.cursor = 6;
+    controller.keypress(undefined, { name: "tab" });
+    expect(controller.input).toBe("帮我 /review");
+    expect(controller.cursor).toBe(10);
+  });
 });
 
 describe("ReplInputController 输入历史（P2）", () => {
