@@ -36,6 +36,8 @@ export interface ConversationOptions {
   bashEnabled?: boolean;
   /** 任务清单工具（write_todos）是否装配；agent 模式传 true，chat 模式不装配 */
   todosEnabled?: boolean;
+  /** 写侧内置工具（write_file / edit_file）是否装配；未指定时装配，chat 模式固定传 false */
+  writeToolsEnabled?: boolean;
 }
 
 /**
@@ -43,9 +45,10 @@ export interface ConversationOptions {
  * 任一步失败时按相反顺序释放已建立的资源，避免 MCP stdio 子进程残留；
  * 成功后的释放由调用方经 disposeConversationRuntime 完成；
  * bash 工具按 bashEnabled 装配（chat 模式固定 false，agent 模式跟随 cliSandboxOptions/配置），
+ * 写侧内置工具按 writeToolsEnabled 装配（chat 模式固定 false，只读语义不依赖沙箱配置），
  * 沙箱上下文始终按配置装配（承担只读工具的 fs 门卫）
  * @param {string} basePrompt - 场景基础提示词（chat、agent 等命令各自定义人设）
- * @param {ConversationOptions} options - 会话装配选项（MCP 开关、沙箱 CLI 选项、bash 开关）
+ * @param {ConversationOptions} options - 会话装配选项（MCP 开关、沙箱 CLI 选项、bash 开关、写侧工具开关）
  * @returns {Promise<ConversationRuntime>} 会话运行时
  */
 export async function createConversationRuntime(
@@ -72,6 +75,7 @@ export async function createConversationRuntime(
       assembly: {
         bashEnabled: options.bashEnabled ?? bashEnabled,
         todosEnabled: options.todosEnabled,
+        writeToolsEnabled: options.writeToolsEnabled,
       },
     });
     return {

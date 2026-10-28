@@ -10,11 +10,13 @@ import type { LlmConfig, ThinkingLevel } from "../llm/types";
 export const SYSTEM_PROMPT =
   "你是 tx-cli 内置的 AI 助手，用简洁的中文回答问题。";
 
-/** chat 模式配置：只读问答人设，固定不装配 bash（执行任务请用 agent 模式），问答场景 8 轮足够，思考档位兜底 low */
+/** chat 模式配置：只读问答人设，固定不装配 bash、MCP 与写侧工具（write_file / edit_file），问答场景 8 轮足够，思考档位兜底 low */
 export const CHAT_MODE_CONFIG: ConversationModeConfig = {
   basePrompt: SYSTEM_PROMPT,
   modeLabel: "对话模式",
   bashEnabled: false,
+  // 只读语义由代码强制：剔除写侧工具后不依赖 sandbox.level / sandbox.enabled 配置
+  writeToolsEnabled: false,
   maxIterations: 8,
   defaultThinkingLevel: "low",
 };
@@ -31,6 +33,7 @@ interface OneShotChatOptions {
 
 /**
  * 单次问答（chat 命令的 Chat 模式入口）：只读问答，轻量工具带——固定不装配 bash 与 MCP，
+ * 写侧工具（write_file / edit_file）在装配阶段剔除，只读语义不依赖沙箱档位配置；
  * 沙箱上下文仍创建（只读工具继续受 fs 边界管控），技能照常装配；
  * 思考档位链路：--think > 配置文件（项目 > 全局）> low（轻量兜底，由会话层解析）；
  * 具体流程复用 common 的 runOneShotConversation
@@ -53,6 +56,7 @@ export async function runOneShotChat({
 
 /**
  * 多轮对话模式（REPL，chat 命令的 Chat 模式入口）：只读问答，轻量工具带——固定不装配 bash 与 MCP，
+ * 写侧工具（write_file / edit_file）在装配阶段剔除，只读语义不依赖沙箱档位配置；
  * 沙箱上下文仍创建（只读工具继续受 fs 边界管控），技能照常装配；
  * 思考档位链路同单次问答，会话内可用 /think 切换；
  * 会话循环复用 common 的 runReplConversation

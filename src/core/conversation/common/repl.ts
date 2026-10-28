@@ -359,6 +359,7 @@ export async function runReplConversation({
     mcpEnabled,
     bashEnabled: modeConfig.bashEnabled,
     todosEnabled: modeConfig.todosEnabled,
+    writeToolsEnabled: modeConfig.writeToolsEnabled,
     cliSandboxOptions,
   });
   try {
