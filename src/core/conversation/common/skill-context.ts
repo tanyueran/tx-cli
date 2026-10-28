@@ -1,5 +1,10 @@
 import { createLoadSkillTool, discoverSkills, SkillCatalog } from "../../skills";
-import { builtinTools, createTodoTool, type Tool } from "../../tools";
+import {
+  builtinTools,
+  createTodoTool,
+  WRITE_TOOL_NAMES,
+  type Tool,
+} from "../../tools";
 import type { TodoToolHandle } from "../../tools";
 import { createBashTool } from "../../tools/builtin/bash";
 import { wrapToolWithPermission } from "../../tools/permission";
@@ -44,6 +49,11 @@ export interface SkillAssemblyOptions {
   bashEnabled?: boolean;
   /** 任务清单工具（write_todos）是否装配；缺省 false，agent 模式传 true */
   todosEnabled?: boolean;
+  /**
+   * 写侧内置工具（write_file / edit_file）是否装配；缺省 true（由沙箱档位兜底），
+   * chat 模式固定传 false，使只读语义不依赖沙箱配置（workspace-write / 沙箱关闭时同样不可写）
+   */
+  writeToolsEnabled?: boolean;
 }
 
 /** setupSkillContext 入参对象 */
@@ -60,7 +70,7 @@ export interface SetupSkillContextOptions {
 
 /**
  * 发现技能并装配对话所需的提示词与工具列表
- * 工具来源固定拼接：内置工具（随版本发布）+ load_skill（仅存在技能时）+ write_todos（agent 模式）+ bash（沙箱启用且 bash 开关未关闭时）+ 外部工具（如 MCP），
+ * 工具来源固定拼接：内置工具（随版本发布，chat 模式剔除 write_file / edit_file）+ load_skill（仅存在技能时）+ write_todos（agent 模式）+ bash（沙箱启用且 bash 开关未关闭时）+ 外部工具（如 MCP），
  * 不再支持运行时动态注册工具；
  * 仅当存在可用技能时才装配 load_skill，避免空技能场景多下发一个无用工具定义；
  * 传入沙箱上下文时对声明了 permission 的工具做权限门卫包装（chat 模式只读工具继续受 fs 边界管控）
@@ -76,7 +86,12 @@ export function setupSkillContext({
   const { skills, warnings: skillWarnings } = discoverSkills();
   const catalog = new SkillCatalog(skills);
   let todoHandle: TodoToolHandle | undefined;
-  const tools: Tool[] = [...builtinTools];
+  // chat 只读模式剔除写侧工具：使只读语义由代码保证，不随沙箱档位或沙箱开关变化
+  const availableBuiltinTools =
+    assembly?.writeToolsEnabled === false
+      ? builtinTools.filter((tool) => !WRITE_TOOL_NAMES.has(tool.name))
+      : builtinTools;
+  const tools: Tool[] = [...availableBuiltinTools];
   if (skills.length > 0) {
     tools.push(createLoadSkillTool(catalog));
   }
