@@ -54,6 +54,12 @@ export interface ToolPermission {
    * 沙箱据此区分 mcp-tool / mcp-read 类目，并按服务器粒度生成授权规则
    */
   mcp?: McpToolMeta;
+  /**
+   * 无副作用只读标记（可选，仅进程内检索类工具声明，如 web_search）
+   * read-only 档未命中规则时默认放行（口径对齐声明 readOnlyHint 的 MCP 只读工具），
+   * always-ask 策略下仍逐次询问；用户 ask/deny 规则优先级更高
+   */
+  readOnlySafe?: boolean;
 }
 
 /**

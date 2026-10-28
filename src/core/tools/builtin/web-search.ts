@@ -80,6 +80,8 @@ export const webSearchTool: Tool = {
   },
   permission: {
     capabilities: ["net"],
+    // 进程内无副作用的只读检索：read-only 档未命中规则时默认放行（口径对齐 MCP 只读工具）
+    readOnlySafe: true,
     /**
      * 生成规则键：以搜索关键词为细粒度主体
      * @param {Record<string, unknown>} args - 模型给出的参数

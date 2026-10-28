@@ -298,7 +298,7 @@ describe("fs 工具的权限门卫包装", () => {
     expect(result.output).toContain("非交互");
   });
 
-  it("read-only 档下 web_search 未命中规则默认审批（禁网语义，进程内调用不受沙箱约束）", async () => {
+  it("read-only 档下 web_search（只读检索）未命中规则默认放行（口径对齐 MCP 只读工具）", () => {
     const config: SandboxFileConfig = {
       ...DEFAULT_SANDBOX_CONFIG,
       level: "read-only",
@@ -314,11 +314,43 @@ describe("fs 工具的权限门卫包装", () => {
       projectConfigPath: join(dir, "project-config.json"),
       auditPath: join(dir, "audit.jsonl"),
     });
-    const wrapped = wrapToolWithPermission(webSearchTool, context);
-    const result = await wrapped.execute({ query: "新闻" });
-    // read-only 档承诺禁网：默认 ask，非交互环境 fail-closed 拒绝
-    expect(result.ok).toBe(false);
-    expect(result.output).toContain("非交互");
+    // 只读检索工具无外部副作用：默认放行，不再要求审批（避免非交互环境 fail-closed）；
+    // 断言判定结果而非执行工具，避免用例真实发起网络请求
+    const evaluation = context.evaluate(
+      "web_search",
+      "web_search(新闻)",
+      ["net"],
+      undefined,
+      true,
+    );
+    expect(evaluation.decision).toBe("allow");
+  });
+
+  it("read-only 档下 web_search 在 always-ask 策略下仍逐次询问", () => {
+    const config: SandboxFileConfig = {
+      ...DEFAULT_SANDBOX_CONFIG,
+      level: "read-only",
+      rules: { allow: [], ask: [], deny: [] },
+    };
+    const context = new SandboxContext({
+      config,
+      level: "read-only",
+      approval: "always-ask",
+      provider: noopProvider,
+      isInteractive: false,
+      approver: alwaysOnceApprover(),
+      projectConfigPath: join(dir, "project-config.json"),
+      auditPath: join(dir, "audit.jsonl"),
+    });
+    const evaluation = context.evaluate(
+      "web_search",
+      "web_search(新闻)",
+      ["net"],
+      undefined,
+      true,
+    );
+    expect(evaluation.decision).toBe("ask");
+    expect(evaluation.matchedRule).toBe("web_search(新闻)");
   });
 });
 

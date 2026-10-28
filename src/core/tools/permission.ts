@@ -34,6 +34,7 @@ export function wrapToolWithPermission(
           ruleKey,
           permission.capabilities,
           permission.mcp,
+          permission.readOnlySafe === true,
         );
         if (guardDenial) {
           return guardDenial;

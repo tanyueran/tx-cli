@@ -68,8 +68,9 @@ export type ToolCategory = "command" | "tool" | "mcp-tool" | "mcp-read";
  * - mcp-tool：MCP 工具在沙箱硬边界之外，不走"沙箱兜底放行"，默认改为审批；
  *   never 策略无法征询，按拒绝处理（fail-closed）
  * - tool 且声明 net 能力（read-only 档）：read-only 承诺禁网，而进程内网络工具
- *   不受沙箱网络白名单约束，未命中规则时默认审批（与 MCP 工具口径对齐）；
- *   never 策略无法征询，按拒绝处理
+ *   不受沙箱网络白名单约束；声明 readOnlySafe 的无副作用只读检索工具（如 web_search）
+ *   口径对齐 mcp-read 默认放行（always-ask 策略下仍征询），
+ *   其余未命中规则时默认审批（与 MCP 工具口径对齐）；never 策略无法征询，按拒绝处理
  * - 其余类目：read-only/workspace-write 依赖沙箱硬边界兜底默认放行；
  *   always-ask 策略下未知命令交由用户裁决
  * @param {SandboxLevel} level - 沙箱档位
@@ -77,6 +78,7 @@ export type ToolCategory = "command" | "tool" | "mcp-tool" | "mcp-read";
  * @param {ToolCategory} category - 工具类目（bash 为 command，内置工具为 tool，MCP 工具为 mcp-tool / mcp-read）
  * @param {string} ruleKey - 规则键（默认审批时用作授权粒度，其余类目忽略）
  * @param {readonly string[]} capabilities - 工具能力声明（net 等空格分隔键）
+ * @param {boolean} readOnlySafe - 是否为无副作用只读检索工具（read-only 档 net 判定用）
  * @returns {RuleEvaluation} 默认判定
  */
 function defaultDecision(
@@ -85,6 +87,7 @@ function defaultDecision(
   category: ToolCategory,
   ruleKey = "",
   capabilities: readonly string[] = [],
+  readOnlySafe = false,
 ): RuleEvaluation {
   if (level === "danger-full-access") {
     return {
@@ -124,6 +127,22 @@ function defaultDecision(
     };
   }
   if (level === "read-only" && category === "tool" && capabilities.includes("net")) {
+    // 只读检索工具无外部副作用，口径对齐声明 readOnlyHint 的 MCP 只读工具：默认放行，always-ask 仍询问
+    if (readOnlySafe) {
+      if (approval === "always-ask") {
+        return {
+          decision: "ask",
+          // matchedRule 取规则键本身：用户选"本会话/始终允许"时按该工具粒度复用授权
+          matchedRule: ruleKey,
+          reason: `只读检索工具 ${ruleKey} 未命中任何规则，always-ask 策略下默认询问`,
+        };
+      }
+      return {
+        decision: "allow",
+        matchedRule: "",
+        reason: `只读检索工具 ${ruleKey} 已声明无副作用，默认放行`,
+      };
+    }
     if (approval === "never") {
       return {
         decision: "deny",
@@ -284,6 +303,7 @@ function nameMatches(ruleName: string, keyName: string): boolean {
  * @param {ApprovalPolicy} approval - 审批策略
  * @param {ToolCategory} category - 工具类目（默认内置工具 tool）
  * @param {readonly string[]} capabilities - 工具能力声明（read-only 档 net 能力默认审批用）
+ * @param {boolean} readOnlySafe - 是否为无副作用只读检索工具（read-only 档 net 判定用）
  * @returns {RuleEvaluation} 判定结果
  */
 export function evaluateRuleKey(
@@ -293,6 +313,7 @@ export function evaluateRuleKey(
   approval: ApprovalPolicy,
   category: ToolCategory = "tool",
   capabilities: readonly string[] = [],
+  readOnlySafe = false,
 ): RuleEvaluation {
   const parsedKey = parseRule(ruleKey);
   if (!parsedKey) {
@@ -338,5 +359,12 @@ export function evaluateRuleKey(
   if (allowedResult) {
     return allowedResult;
   }
-  return defaultDecision(level, approval, category, ruleKey, capabilities);
+  return defaultDecision(
+    level,
+    approval,
+    category,
+    ruleKey,
+    capabilities,
+    readOnlySafe,
+  );
 }

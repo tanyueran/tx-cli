@@ -341,7 +341,7 @@ tx-cli chat --think low
 - 规则语法：`工具名` 整工具生效（如 `web_search`）；`工具名(模式)` 细粒度生效（如 `Bash(git push:*)`、`Read(/src/**)`）；规则名不区分大小写，支持 `Read`、`Write`、`Edit`、`ListDir`、`WebSearch` 等短名（自动映射到内部工具名）
 - 模式三种写法：`cmd` 精确匹配、`prefix:*` 前缀匹配、含 `*` 的 glob 通配
 - `sandbox.rules` 管 bash 与内置工具；MCP 工具规则写在顶层 `mcp.rules` 段，支持 `服务器名__*` 通配整组放行/审批/拒绝（兼容旧写法 `mcp__服务器名__*`，两层规则加载后合并判定）
-- `read-only` 档下 `web_search` 等联网工具未命中规则时默认进入审批（该档承诺禁网，进程内网络调用不受沙箱边界约束）
+- `read-only` 档下，除声明无副作用的只读检索工具（`web_search`，口径对齐 MCP 只读工具）默认放行外，其余联网工具未命中规则时默认进入审批（该档承诺禁网，进程内网络调用不受沙箱边界约束）
 - 审批时选择「始终允许」会把授权规则写入项目配置 `<cwd>/.tx-cli/config.json`（MCP 授权落 `mcp.rules.allow`，其余落 `sandbox.rules.allow`，仅对当前项目生效）
 
 **信任目录（trustDirectories）：**
