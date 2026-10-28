@@ -30,15 +30,22 @@ const STYLE_DESCRIPTIONS: Record<ThinkingStyle, string> = {
 
 /**
  * 解析用户输入的思考档位：仅接受 off/low/medium/high，非法值抛错并列出合法档位
+ * 配置文件中的非字符串值（如数字、布尔）同样在此拦截为友好报错，
+ * 避免对非字符串调用字符串方法导致整个 CLI 以 TypeError 崩溃
  * @param {string | undefined} levelInput - 用户输入（如 "low"）；不传或空串返回 undefined（表示未指定）
  * @returns {ThinkingLevel | undefined} 档位；未指定时为 undefined
- * @throws {CliError} 输入了无法识别的档位时抛出
+ * @throws {CliError} 输入非字符串或无法识别的档位时抛出
  */
 export function parseThinkingLevel(
   levelInput: string | undefined,
 ): ThinkingLevel | undefined {
   if (!levelInput) {
     return undefined;
+  }
+  if (typeof levelInput !== "string") {
+    throw new CliError(
+      `思考档位配置类型非法（需为字符串，实际为 ${typeof levelInput}），可选：${THINKING_LEVELS.join(" | ")}`,
+    );
   }
   const normalizedLevel = levelInput.trim().toLowerCase();
   if (!(THINKING_LEVELS as readonly string[]).includes(normalizedLevel)) {
@@ -59,15 +66,21 @@ const THINKING_STYLES: readonly ThinkingStyle[] = [
 
 /**
  * 解析用户输入的思考协议风格：非法值抛错并列出合法风格
+ * 配置文件中的非字符串值同样在此拦截为友好报错（保持与 parseThinkingLevel 一致）
  * @param {string | undefined} styleInput - 用户输入；不传或空串返回 undefined（表示未指定，走 baseUrl 推断）
  * @returns {ThinkingStyle | undefined} 风格；未指定时为 undefined
- * @throws {CliError} 输入了无法识别的风格时抛出
+ * @throws {CliError} 输入非字符串或无法识别的风格时抛出
  */
 export function parseThinkingStyle(
   styleInput: string | undefined,
 ): ThinkingStyle | undefined {
   if (!styleInput) {
     return undefined;
+  }
+  if (typeof styleInput !== "string") {
+    throw new CliError(
+      `思考协议风格配置类型非法（需为字符串，实际为 ${typeof styleInput}），可选：${THINKING_STYLES.join(" | ")}`,
+    );
   }
   if (!(THINKING_STYLES as readonly string[]).includes(styleInput)) {
     throw new CliError(

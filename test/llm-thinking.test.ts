@@ -45,6 +45,18 @@ describe("parseThinkingLevel", () => {
       /无法识别的思考档位 "ultra".*off \| low \| medium \| high/
     );
   });
+
+  it("配置为非字符串时抛出友好 CliError 而非 TypeError 崩溃", () => {
+    expect(() => parseThinkingLevel(5 as unknown as string)).toThrow(
+      /思考档位配置类型非法（需为字符串，实际为 number）/
+    );
+    expect(() =>
+      parseThinkingLevel(true as unknown as string),
+    ).toThrow(/实际为 boolean/);
+    expect(() =>
+      parseThinkingLevel({ low: 1 } as unknown as string),
+    ).toThrow(/实际为 object/);
+  });
 });
 
 describe("parseThinkingStyle", () => {
@@ -62,6 +74,12 @@ describe("parseThinkingStyle", () => {
 
   it("非法风格抛出错误", () => {
     expect(() => parseThinkingStyle("foo")).toThrow(/无法识别的思考协议风格/);
+  });
+
+  it("配置为非字符串时抛出友好 CliError 而非静默误判", () => {
+    expect(() => parseThinkingStyle(1 as unknown as string)).toThrow(
+      /思考协议风格配置类型非法（需为字符串，实际为 number）/,
+    );
   });
 });
 
