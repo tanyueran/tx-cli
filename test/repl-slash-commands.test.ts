@@ -7,6 +7,7 @@ import {
   buildSkillTask,
   buildCommandSuggestions,
   buildSkillSuggestions,
+  filterInlineSkillSuggestions,
   filterSuggestions,
   matchSlashCommand,
   parseSkillArgs,
@@ -158,6 +159,40 @@ describe("filterSuggestions", () => {
 
   it("/skill 二级过滤不返回命令", () => {
     expect(filterSuggestions("/skill ", chatCommands, [])).toEqual([]);
+  });
+});
+
+describe("filterInlineSkillSuggestions", () => {
+  const skills = [
+    { name: "review", description: "评审", group: "skill" as const },
+    { name: "refactor", description: "重构", group: "skill" as const },
+  ];
+
+  it("中途空格后输入 / 触发技能建议，建议项带 / 前缀", () => {
+    const input = "帮我 /";
+    const result = filterInlineSkillSuggestions(input, input.length, skills);
+    expect(result.map((item) => item.name)).toEqual(["/review", "/refactor"]);
+  });
+
+  it("按 / 后的前缀过滤技能名", () => {
+    const input = "帮我 /rev";
+    const result = filterInlineSkillSuggestions(input, input.length, skills);
+    expect(result.map((item) => item.name)).toEqual(["/review"]);
+  });
+
+  it("光标在 token 中间时按光标前片段过滤", () => {
+    // 光标位于 "/rev" 之后（"帮我 " 3 个 code unit + "/rev" 4 个）
+    const result = filterInlineSkillSuggestions("帮我 /rev 一下", 7, skills);
+    expect(result.map((item) => item.name)).toEqual(["/review"]);
+  });
+
+  it("行首 / 不由本函数处理（交给 filterSuggestions）", () => {
+    expect(filterInlineSkillSuggestions("/re", 3, skills)).toEqual([]);
+  });
+
+  it("单词内的 /（路径、URL）与普通文本不触发", () => {
+    expect(filterInlineSkillSuggestions("打开 a/b", 6, skills)).toEqual([]);
+    expect(filterInlineSkillSuggestions("普通问题", 4, skills)).toEqual([]);
   });
 });
 

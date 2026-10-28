@@ -109,8 +109,8 @@ export class ReplInputController {
   /** 面板当前应展示的候选列表（由 suggest 回调产出） */
   suggestions: ReplSuggestion[] = [];
 
-  /** 建议回调：输入行变化时重算候选 */
-  private readonly suggest: (input: string) => ReplSuggestion[];
+  /** 建议回调：输入行变化时重算候选（cursor 供中途 token 感知场景使用） */
+  private readonly suggest: (input: string, cursor: number) => ReplSuggestion[];
   /** 输入历史（调用方持有并追加，本组件只读；可能为 undefined 表示无历史） */
   private readonly history: readonly string[] | undefined;
   /** 历史回溯下标：null 表示不在回溯态 */
@@ -121,11 +121,11 @@ export class ReplInputController {
   private inPaste = false;
 
   /**
-   * @param {(input: string) => ReplSuggestion[]} suggest - 建议回调：按当前输入行返回候选
+   * @param {(input: string, cursor: number) => ReplSuggestion[]} suggest - 建议回调：按当前输入行与光标位置返回候选
    * @param {readonly string[] | undefined} history - 输入历史（调用方持有并追加的数组引用）
    */
   constructor(
-    suggest: (input: string) => ReplSuggestion[],
+    suggest: (input: string, cursor: number) => ReplSuggestion[],
     history?: readonly string[],
   ) {
     this.suggest = suggest;
@@ -133,9 +133,26 @@ export class ReplInputController {
     this.refresh();
   }
 
-  /** 补全面板是否可见：以 / 开头且未被 Esc 关闭 */
+  /**
+   * 补全面板是否可见：行首以 / 开头（命令与 /skill 二级补全），
+   * 或光标左侧 token 以 / 开头（中途技能补全），且未被 Esc 关闭
+   */
   get panelVisible(): boolean {
-    return this.input.startsWith("/") && !this.dismissed;
+    return (
+      (this.input.startsWith("/") || this.cursorToken().startsWith("/")) &&
+      !this.dismissed
+    );
+  }
+
+  /**
+   * 取光标左侧的当前 token（以空格为界，与 Tab 补全的 token 口径一致）：
+   * 「帮我 /re」光标在词尾时返回 "/re"，「a/b」返回 "a/b"（不以 / 开头，不触发面板）
+   * @returns {string} 光标左侧 token
+   */
+  private cursorToken(): string {
+    const tokenStart =
+      this.input.lastIndexOf(" ", Math.max(0, this.cursor - 1)) + 1;
+    return this.input.slice(tokenStart, this.cursor);
   }
 
   /**
@@ -143,7 +160,7 @@ export class ReplInputController {
    * @returns {void}
    */
   private refresh(): void {
-    this.suggestions = this.suggest(this.input);
+    this.suggestions = this.suggest(this.input, this.cursor);
     this.selection = 0;
     this.dismissed = false;
   }
@@ -509,8 +526,8 @@ function renderPanelRow(
 export interface AskReplLineOptions {
   /** 输入行提示词（可含 ANSI 色码） */
   message: string;
-  /** 建议回调：按当前输入行返回候选列表 */
-  suggest: (input: string) => ReplSuggestion[];
+  /** 建议回调：按当前输入行与光标位置返回候选列表 */
+  suggest: (input: string, cursor: number) => ReplSuggestion[];
   /** 输入历史数组引用（调用方持有并追加；缺省时不支持 ↑/↓ 回溯） */
   history?: string[];
 }

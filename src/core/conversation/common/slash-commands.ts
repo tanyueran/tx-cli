@@ -439,6 +439,39 @@ export function filterSuggestions(
 }
 
 /**
+ * 中途输入的技能补全：光标左侧 token 以「空格 + /」开头时，按 / 后的前缀过滤技能名
+ * 建议项 name 带 / 前缀，Tab 补全后输入行中保留完整技能提及（如「帮我 /review 检查」）；
+ * 仅服务中途场景：行首以 / 开头的输入由 filterSuggestions 处理（命令 + /skill 二级补全）
+ * @param {string} input - 当前输入行原文
+ * @param {number} cursor - 光标下标（按 code unit 计）
+ * @param {SlashSuggestion[]} skills - 技能建议列表（buildSkillSuggestions 的产物）
+ * @param {number} max - 最多返回条数（默认 MAX_SUGGESTIONS）
+ * @returns {SlashSuggestion[]} 前缀匹配的技能建议（不满足触发条件时为空数组）
+ */
+export function filterInlineSkillSuggestions(
+  input: string,
+  cursor: number,
+  skills: SlashSuggestion[],
+  max: number = MAX_SUGGESTIONS,
+): SlashSuggestion[] {
+  // token 口径与 repl-input 的 Tab 补全一致：以空格为界取光标左侧片段
+  const tokenStart = input.lastIndexOf(" ", Math.max(0, cursor - 1)) + 1;
+  const token = input.slice(tokenStart, cursor);
+  // 行首交给 filterSuggestions；token 不以 / 开头（普通词、URL、路径片段）不弹面板
+  if (tokenStart === 0 || !token.startsWith("/")) {
+    return [];
+  }
+  const query = token.slice(1).toLowerCase();
+  return skills
+    .filter(
+      (suggestion) =>
+        !query || suggestion.name.toLowerCase().startsWith(query),
+    )
+    .map((suggestion) => ({ ...suggestion, name: `/${suggestion.name}` }))
+    .slice(0, max);
+}
+
+/**
  * 从命令注册表构建命令建议列表（仅含 available 的命令，供面板广告位使用）
  * @param {SlashCommand[]} commands - 命令注册表
  * @returns {SlashSuggestion[]} 命令建议列表
