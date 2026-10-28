@@ -46,6 +46,7 @@ export interface OneShotConversationOptions {
  * 思考档位取值：命令行 > 配置文件（项目 > 全局）> 模式内置默认（chat low / agent medium），
  * 经 thinking 适配层翻译为协议扩展字段下发；
  * 服务不支持分档思考时先打印折算警告，避免用户误以为 high 等档位真实生效；
+ * 技能扫描与装配阶段警告（沙箱降级、Provider 不可用、MCP 连接失败等）在开始对话前一并输出；
  * 深度思考内容以暗色流式输出（模型未返回时不输出）
  * @param {OneShotConversationOptions} options - 入参对象（llmConfig/modeConfig/userInput/thinkingLevel/mcpEnabled/cliSandboxOptions 字段说明见接口定义）
  * @returns {Promise<void>}
@@ -76,7 +77,8 @@ export async function runOneShotConversation({
   });
   try {
     const { systemPrompt, tools, scanWarnings } = runtime.skill;
-    printWarnings(scanWarnings);
+    // 与 REPL 面板保持一致：技能扫描警告与装配阶段警告（沙箱降级、Provider 不可用、MCP 连接失败等）一并输出
+    printWarnings([...scanWarnings, ...runtime.bootWarnings]);
     // 单次会话的历史仅在本函数内存活：不跨次共享，会话结束即丢弃
     const history: ResponseHistoryItem[] = [];
     const runTurn = createResponsesTurn({
