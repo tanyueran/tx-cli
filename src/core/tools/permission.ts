@@ -1,11 +1,13 @@
 import type { SandboxContext } from "../sandbox/runtime/context";
+import { throwIfTurnCancelled } from "../../shared/turn-cancel";
 import type { Tool, ToolOutput, ToolPermission } from "./types";
 
 /**
  * 用权限门卫包装工具：声明了 permission 的工具先经 L2 规则判定 + L3 审批
  * 声明了 paths 且 capability 含 fs.read/fs.write 时，规则放行后按档位 TierConfig 做路径边界检查
  * （fs 工具是进程内代码不经沙箱进程，边界检查在此层兜底）；
- * 串行工具（如 bash）的「判定 + 执行」全程在会话级队列中依次进行；
+ * 串行工具（如 bash）的「判定 + 执行」全程在会话级队列中依次进行，避免并发读-改-写竞态，
+ * 且任务真正启动前检查回合取消（同轮其它工具被用户取消后，排队任务不再执行）；
  * 未声明 permission 的工具原样返回（零破坏，支持渐进迁移）
  * @param {Tool} tool - 待包装的工具
  * @param {SandboxContext} sandbox - 会话级沙箱上下文
@@ -28,6 +30,9 @@ export function wrapToolWithPermission(
      */
     async execute(args: Record<string, unknown>): Promise<ToolOutput> {
       const invoke = async (): Promise<ToolOutput> => {
+        // 串行队列中的任务真正启动前检查回合取消：同轮其它工具被用户取消后，
+        // 排队中的剩余任务不再执行，避免取消后静默跑完同轮命令
+        throwIfTurnCancelled();
         const ruleKey = permission.ruleKey(args);
         const guardDenial = await sandbox.guard(
           tool.name,
