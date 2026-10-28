@@ -110,7 +110,7 @@ describe("loadSandboxConfig", () => {
     expect(warnings[0]).toContain("解析失败");
   });
 
-  it("两级合并：标量项目覆盖全局，数组并集去重（全局在前、项目在后）", () => {
+  it("项目配置仅可收紧：放宽类字段忽略并警告，收紧类数组保持并集", () => {
     const globalPath = writeConfig({
       sandbox: {
         level: "read-only",
@@ -128,25 +128,109 @@ describe("loadSandboxConfig", () => {
       JSON.stringify({
         sandbox: {
           level: "workspace-write",
-          trustDirectories: ["~/work", "~/proj"],
-          filesystem: { denyWrite: ["*.pem"] },
+          trustDirectories: ["~/proj"],
+          filesystem: { denyWrite: ["*.pem"], writableRoots: ["~/data"] },
           network: { allowedDomains: ["github.com"] },
           rules: { allow: ["Bash(npm test)"] },
         },
       }),
     );
     const { config, warnings } = loadSandboxConfig(globalPath, projectPath);
-    // 标量：项目覆盖全局（level），项目未配置时保留全局（approval、bash.timeoutMs）
-    expect(config.level).toBe("workspace-write");
+    // 放宽类标量：项目 workspace-write 比全局 read-only 宽松 → 忽略
+    expect(config.level).toBe("read-only");
+    // 放宽类数组：信任目录 / 可写根 / 网络白名单仅可由全局提供 → 项目项忽略
+    expect(config.trustDirectories).toEqual(["~/work"]);
+    expect(config.filesystem.writableRoots).toEqual([]);
+    expect(config.network.allowedDomains).toEqual(["npmjs.com"]);
+    // 收紧类数组：denyWrite 并集、rules.allow 并集（承载会话授权落盘）
+    expect(config.filesystem.denyWrite).toEqual(["*.key", "*.pem"]);
+    expect(config.rules.allow).toEqual(["Bash(git status)", "Bash(npm test)"]);
+    // 未受项目影响的字段保留全局值
     expect(config.approval).toBe("never");
     expect(config.bash.timeoutMs).toBe(30_000);
-    // 数组：并集去重，全局在前、项目在后
-    expect(config.trustDirectories).toEqual(["~/work", "~/proj"]);
-    expect(config.filesystem.denyWrite).toEqual(["*.key", "*.pem"]);
-    expect(config.network.allowedDomains).toEqual(["npmjs.com", "github.com"]);
-    expect(config.rules.allow).toEqual(["Bash(git status)", "Bash(npm test)"]);
     expect(config.rules.deny).toEqual(["Bash(rm:*)"]);
+    // 每个被忽略的放宽项均有对应警告
+    expect(
+      warnings.some((w) => w.includes("sandbox.level") && w.includes("更宽松")),
+    ).toBe(true);
+    expect(warnings.some((w) => w.includes("sandbox.trustDirectories"))).toBe(
+      true,
+    );
+    expect(warnings.some((w) => w.includes("writableRoots"))).toBe(true);
+    expect(warnings.some((w) => w.includes("allowedDomains"))).toBe(true);
     expect(warnings.some((w) => w.includes("已加载项目配置"))).toBe(true);
+  });
+
+  it("项目配置更严格时逐项生效且无忽略警告", () => {
+    const globalPath = writeConfig({
+      sandbox: {
+        level: "workspace-write",
+        approval: "never",
+        provider: "srt",
+        builtinDangerRules: false,
+        audit: false,
+        bash: { enabled: true, timeoutMs: 30_000 },
+      },
+    });
+    const projectPath = join(dir, "project-config.json");
+    writeFileSync(
+      projectPath,
+      JSON.stringify({
+        sandbox: {
+          level: "read-only",
+          approval: "always-ask",
+          provider: "noop",
+          builtinDangerRules: true,
+          audit: true,
+          bash: { enabled: false, timeoutMs: 60_000 },
+        },
+      }),
+    );
+    const { config, warnings } = loadSandboxConfig(globalPath, projectPath);
+    expect(config.level).toBe("read-only");
+    expect(config.approval).toBe("always-ask");
+    expect(config.provider).toBe("noop");
+    expect(config.builtinDangerRules).toBe(true);
+    expect(config.audit).toBe(true);
+    expect(config.bash.enabled).toBe(false);
+    expect(config.bash.timeoutMs).toBe(60_000);
+    expect(warnings.some((w) => w.includes("已忽略"))).toBe(false);
+  });
+
+  it("放宽类标量逐项忽略并各自警告", () => {
+    const globalPath = writeConfig({
+      sandbox: {
+        enabled: true,
+        builtinDangerRules: true,
+        audit: true,
+        bash: { enabled: false },
+      },
+    });
+    const projectPath = join(dir, "project-config.json");
+    writeFileSync(
+      projectPath,
+      JSON.stringify({
+        sandbox: {
+          enabled: false,
+          builtinDangerRules: false,
+          audit: false,
+          bash: { enabled: true },
+        },
+      }),
+    );
+    const { config, warnings } = loadSandboxConfig(globalPath, projectPath);
+    expect(config.enabled).toBe(true);
+    expect(config.builtinDangerRules).toBe(true);
+    expect(config.audit).toBe(true);
+    expect(config.bash.enabled).toBe(false);
+    const ignored = warnings.filter((w) => w.includes("已忽略项目配置的"));
+    expect(ignored.length).toBe(4);
+    expect(warnings.some((w) => w.includes("sandbox.enabled"))).toBe(true);
+    expect(warnings.some((w) => w.includes("sandbox.builtinDangerRules"))).toBe(
+      true,
+    );
+    expect(warnings.some((w) => w.includes("sandbox.audit"))).toBe(true);
+    expect(warnings.some((w) => w.includes("sandbox.bash.enabled"))).toBe(true);
   });
 
   it("项目配置文件缺失时跳过项目层且无项目加载告警", () => {

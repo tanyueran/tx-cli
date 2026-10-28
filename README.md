@@ -273,7 +273,7 @@ tx-cli chat --think low
 | `--no-bash` | 本次任务禁用 bash 工具 |
 | `--sandbox-missing <action>` | 沙箱在当前环境不可用时的处置：`deny`（默认，失败关闭）\| `allow`（降级为无隔离执行，规则与审批仍生效） |
 
-沙箱档位与审批策略的优先级均为：命令行 > 项目配置 `sandbox` 段 > 全局配置 `sandbox` 段 > 内置默认（标量字段项目覆盖全局，数组字段两层合并去重），也可写入 `~/.tx-cli/config.json` 或 `<cwd>/.tx-cli/config.json` 的 `sandbox` 段持久化（档位、审批、文件系统边界、权限规则等）。
+沙箱档位与审批策略的优先级均为：命令行 > 项目配置 `sandbox` 段 > 全局配置 `sandbox` 段 > 内置默认（能力感知合并：项目配置仅可收紧沙箱能力，放宽类字段被忽略并告警，收紧类数组并集叠加，详见下方「项目沙箱配置」），也可写入 `~/.tx-cli/config.json` 或 `<cwd>/.tx-cli/config.json` 的 `sandbox` 段持久化（档位、审批、文件系统边界、权限规则等）。
 
 **`sandbox` 段完整字段**（全部可选，未配置取内置默认）：
 
@@ -283,7 +283,7 @@ tx-cli chat --think low
 | `level` | 默认沙箱档位：`read-only` \| `workspace-write` \| `danger-full-access` | `read-only` |
 | `approval` | 默认审批策略：`always-ask` \| `on-failure` \| `never` | `on-failure` |
 | `provider` | 沙箱 Provider 名称（`srt` 为内置沙箱实现） | `srt` |
-| `trustDirectories` | 信任目录列表（支持 `~`），见下方「信任目录」说明 | `[]` |
+| `trustDirectories` | 信任目录列表（支持 `~`，仅全局配置生效，项目配置中忽略），见下方「信任目录」说明 | `[]` |
 | `builtinDangerRules` | 内置危险命令类目拦截开关（如 `rm -rf /`），`false` 时关闭该层 | `true` |
 | `filesystem.denyRead` | 追加的禁读路径模式（在档位默认之上叠加） | `[]` |
 | `filesystem.denyWrite` | 追加的禁写路径模式（在档位默认之上叠加） | `[]` |
@@ -346,8 +346,14 @@ tx-cli chat --think low
 
 **信任目录（trustDirectories）：**
 
-- 来自配置文件的 `danger-full-access` 档与 `never` 审批策略，仅在当前工作目录位于任一信任目录内（含其子目录）时生效，否则自动降级（full → `workspace-write`、never → `on-failure`）并黄字告警，防止误配置放大权限
+- 来自配置文件的 `danger-full-access` 档与 `never` 审批策略，仅在当前工作目录位于任一信任目录内（含其子目录）时生效；否则交互启动时会先询问是否信任当前目录——确认后写入全局配置的 `trustDirectories`（同目录后续启动不再询问），拒绝或非交互环境则自动降级（full → `workspace-write`、never → `on-failure`）并黄字告警，防止 clone 下来的仓库借自带配置自证信任、获得无审批执行权限
 - 命令行显式指定（`--sandbox danger-full-access`、`--approval never`）不受信任目录限制
+- 信任目录仅可由全局 `~/.tx-cli/config.json` 提供：项目配置中的 `trustDirectories` 会被忽略并告警
+
+**项目沙箱配置（能力感知合并）：**
+
+- 项目 `<cwd>/.tx-cli/config.json` 的 sandbox 段仅可收紧沙箱能力、不可放宽：放宽档位/审批、关闭沙箱/内置危险规则/审计、开启 bash，以及 `trustDirectories`、`filesystem.writableRoots`、`network.allowedDomains` 等放宽类字段来自项目配置时会被忽略并告警
+- 收紧类字段正常生效：`filesystem.denyRead` / `denyWrite`、`rules.ask` / `deny` 并集叠加，`rules.allow` 保持并集（承载会话中「始终允许」授权的落盘），`provider` / `bash.timeoutMs` 等中性选项项目覆盖全局
 
 **审计日志（audit）：**
 
