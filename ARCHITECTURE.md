@@ -116,7 +116,7 @@ flowchart LR
 命令行 --think  >  配置文件 llm.thinkingLevel  >  内置默认 medium
 ```
 
-- `chat` 命令为轻量只读问答：深度思考默认 `low`，`--think` 按次覆盖，不读取配置与环境变量档位；`agent` 命令走上述完整优先级。
+- `chat` 命令为轻量只读问答：兜底档位比 `agent` 更轻（`low`，`agent` 为 `medium`），其余优先级与 `agent` 一致（`--think` > 配置文件 `llm.thinkingLevel`，项目 > 全局）。
 - 档位校验前置（`parseThinkingLevel`）：非法值在对话开始前报错退出，不带着错误配置发请求。
 - REPL 中可用 `/think` 内联命令会话内切换（无参查看、带参下一轮生效）。
 

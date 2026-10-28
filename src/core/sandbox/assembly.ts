@@ -21,7 +21,7 @@ import { detectInteractive, interactiveApprover } from "./runtime/approver";
 export interface SandboxCliOptions {
   /** --no-bash 显式关闭 bash 工具；undefined 表示未指定 */
   bashEnabled?: boolean;
-  /** --sandbox 指定的档位 */
+  /** --sandbox 指定的档位（显式传入时同时启用沙箱，覆盖配置 sandbox.enabled=false） */
   level?: SandboxLevel;
   /** --approval 指定的审批策略 */
   approval?: ApprovalPolicy;
@@ -106,7 +106,9 @@ export interface SandboxAssembly {
  * 构建 SandboxContext；
  * bash 装配开关与沙箱上下文解耦：上下文承担只读工具的 fs 门卫，
  * --no-bash 只移除 bash 工具，不再连带关闭门卫；
- * bashForcedOff（chat 等强制无 bash 的模式）时跳过 Provider 装载并抑制 bash 相关警告
+ * bashForcedOff（chat 等强制无 bash 的模式）时跳过 Provider 装载并抑制 bash 相关警告；
+ * --sandbox <level> 显式传入时同时启用沙箱（覆盖配置 sandbox.enabled=false），
+ * 沙箱被配置禁用且未传 --sandbox 时，--approval / --sandbox-missing 不生效并输出警告
  * @param {SandboxCliOptions} cliOptions - 命令行选项
  * @param {CreateSandboxContextOptions} contextOptions - 调用方上下文选项（bashForcedOff 说明见接口定义）
  * @returns {Promise<SandboxAssembly>} 沙箱上下文与 bash 装配开关
@@ -126,7 +128,18 @@ export async function createSandboxContext(
   const bashEnabled = bashForcedOff
     ? false
     : (cliOptions.bashEnabled ?? sandboxConfig.bash.enabled);
-  if (!sandboxConfig.enabled) {
+  // --sandbox <level> 显式传入视为要求本次启用沙箱：否则配置关闭沙箱时 CLI 档位会被静默忽略，
+  // 与「命令行 > 配置文件」的优先级宣称矛盾（审批/missing 选项无法重新启用沙箱，只有档位可以）
+  const cliForcesEnabled = cliOptions.level !== undefined;
+  if (!sandboxConfig.enabled && !cliForcesEnabled) {
+    if (
+      cliOptions.approval !== undefined ||
+      cliOptions.missingAction !== undefined
+    ) {
+      warnings.push(
+        "沙箱已被配置禁用（sandbox.enabled=false），--approval / --sandbox-missing 不生效；如需本次启用可传 --sandbox <level>",
+      );
+    }
     return { sandbox: undefined, bashEnabled: false, warnings };
   }
 
@@ -192,7 +205,7 @@ export async function createSandboxContext(
       if (!isProviderAvailable) {
         if (resolvedOptions.missingAction === "allow") {
           warnings.push(
-            `沙箱 Provider ${provider.name} 在当前环境不可用，已按 --sandbox-missing allow 降级为无隔离执行（规则与审批仍生效）`,
+            `沙箱 Provider ${provider.name} 在当前环境不可用，已按 --sandbox-missing allow 降级为无隔离执行（规则与审批仍生效，read-only 档的写入隔离同样失效）`,
           );
           provider = getProvider("noop");
         } else {
