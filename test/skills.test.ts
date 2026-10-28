@@ -145,13 +145,15 @@ describe("discoverSkills", () => {
 });
 
 describe("SkillCatalog", () => {
-  it("readBody 返回 frontmatter 之后的正文", async () => {
+  it("readBody 返回带技能目录标注的正文", async () => {
     writeSkill(userDir, "vue", skillContent("vue", "Vue 规范", "# 步骤\n1. 先做这个"));
     const catalog = new SkillCatalog(discoverSkills(cwd, userDir).skills);
 
     const body = await catalog.readBody("vue");
 
-    expect(body).toBe("# 步骤\n1. 先做这个");
+    expect(body).toBe(
+      `技能目录：${join(userDir, "vue")}\n\n# 步骤\n1. 先做这个`,
+    );
   });
 
   it("readBody 对未知名返回 undefined", async () => {
@@ -168,13 +170,14 @@ describe("SkillCatalog", () => {
     writeFileSync(file, skillContent("cached", "缓存", "新正文"));
     const second = await catalog.readBody("cached");
 
-    expect(first).toBe("旧正文");
-    expect(second).toBe("旧正文");
+    const expected = `技能目录：${join(userDir, "cached")}\n\n旧正文`;
+    expect(first).toBe(expected);
+    expect(second).toBe(expected);
   });
 });
 
 describe("createLoadSkillTool", () => {
-  it("加载存在的技能返回正文", async () => {
+  it("加载存在的技能返回带目录标注的正文", async () => {
     writeSkill(userDir, "vue", skillContent("vue", "Vue 规范", "# 规范正文"));
     const catalog = new SkillCatalog(discoverSkills(cwd, userDir).skills);
     const tool = createLoadSkillTool(catalog);
@@ -182,7 +185,9 @@ describe("createLoadSkillTool", () => {
     const result = await tool.execute({ name: "vue" });
 
     expect(result.ok).toBe(true);
-    expect(result.output).toBe("# 规范正文");
+    expect(result.output).toBe(
+      `技能目录：${join(userDir, "vue")}\n\n# 规范正文`,
+    );
   });
 
   it("技能不存在时返回失败并列出可用技能", async () => {

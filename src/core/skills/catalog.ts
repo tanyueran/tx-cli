@@ -1,6 +1,16 @@
 import { readFile } from "node:fs/promises";
+import { dirname } from "node:path";
 import { extractSkillBody } from "./discovery";
 import type { SkillMeta } from "./discovery";
+
+/**
+ * 拼装技能目录头部标注：告知模型技能所在目录，
+ * @param {SkillMeta} meta - 技能元数据（path 为 SKILL.md 绝对路径）
+ * @returns {string} 头部标注行
+ */
+function buildSkillDirHeader(meta: SkillMeta): string {
+  return `技能目录：${dirname(meta.path)}`;
+}
 
 /**
  * 技能目录：按名查找元数据、按需读取正文
@@ -45,9 +55,9 @@ export class SkillCatalog {
   }
 
   /**
-   * 读取技能正文（frontmatter 之后的 Markdown 部分），首次读取后缓存
+   * 读取技能正文（frontmatter 之后的 Markdown 部分），首部附带技能目录标注，首次读取后缓存
    * @param {string} name - 技能名
-   * @returns {Promise<string | undefined>} 技能正文；技能不存在时为 undefined
+   * @returns {Promise<string | undefined>} 带目录标注的技能正文；技能不存在时为 undefined
    * @throws 文件读取失败时抛出，由调用方转为失败输出回传模型
    */
   async readBody(name: string): Promise<string | undefined> {
@@ -60,7 +70,8 @@ export class SkillCatalog {
       return cachedBody;
     }
     const body = extractSkillBody(await readFile(meta.path, "utf-8"));
-    this.bodyCache.set(name, body);
-    return body;
+    const annotatedBody = `${buildSkillDirHeader(meta)}\n\n${body}`;
+    this.bodyCache.set(name, annotatedBody);
+    return annotatedBody;
   }
 }
