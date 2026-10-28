@@ -189,12 +189,14 @@ interface Tool extends ToolDefinition {
 
 ```mermaid
 flowchart TD
-    L1["L1 装配（assembly.ts）<br/>CLI > env(TX_SANDBOX_*) > 配置文件<br/>信任目录降级 / Provider 可用性探测"]
+    L1["L1 装配（assembly.ts）<br/>CLI > env(TX_SANDBOX_*) > 配置文件（项目配置仅可收紧）<br/>目录信任确认（写入全局配置缓存）/ 降级 / Provider 可用性探测"]
     L2["L2 规则（policy/evaluate.ts）<br/>deny（含内置危险类目）> ask > allow > 档位默认<br/>复合命令逐段判定，包装穿透"]
     L3["L3 审批（runtime/context.ts）<br/>一次 / 本会话 / 始终（MCP 为服务器级：mcp__server__*）<br/>授权落项目 .tx-cli/config.json；非 TTY 时 ask→deny；JSONL 审计"]
     L4["L4 执行（bash.ts + Provider）<br/>wrapCommand → spawn → 违规标注回传<br/>on-failure 升级重跑"]
     L1 --> L2 --> L3 --> L4
 ```
+
+- **信任模型（防自证信任）**：项目 `.tx-cli/config.json` 随仓库分发，不可作为权限放大的凭据——两级合并为能力感知语义（项目配置仅可收紧：放宽档位/审批、关沙箱/内置危险规则/审计、开 bash 及 `trustDirectories` / `writableRoots` / `allowedDomains` 等放宽项被忽略并告警；`rules.allow` 保持并集以承载会话授权落盘）；信任目录仅全局配置可提供，配置文件来源的 `danger-full-access` / `never` 在非信任目录时先交互确认信任（确认写入全局 `trustDirectories` 缓存），未确认则降级（full → workspace-write、never → on-failure）；CLI 显式传入的危险值视为用户本人意图，不降级不询问。
 
 - **Provider 插拔**（核心解耦）：`SandboxProvider` 接口（`isAvailable` / `initialize` / `wrapCommand` / `annotateStderr` / `dispose`），注册表编译期固定。`providers/backends/srt.ts` 是全库唯一 import `@anthropic-ai/sandbox-runtime` 的文件；`providers/backends/landlock.ts` 走外部 helper 方案（Node 无法直接发起 Landlock syscall，用户自装 `landlock-exec` 到 PATH 或 `~/.tx-cli/bin`，或经 `TX_SANDBOX_LANDLOCK_HELPER` 指定路径；denyRead 子树排除由应用层兜底）——新增沙箱实现只需实现 Provider 并注册，上层无感知。
 - **Provider 不可用**：默认 fail-closed（bash 返回失败 + 提示），`--sandbox-missing allow` 显式降级为无隔离执行（规则与审批仍生效）。
