@@ -52,6 +52,21 @@ function killTree(child: ChildProcess): void {
 }
 
 /**
+ * 构造子进程环境变量：让 Node 生态也遵循代理环境变量
+ * 沙箱 Provider 会给被包裹的命令注入 HTTP_PROXY/HTTPS_PROXY 指向其过滤代理，
+ * curl 会读取这些变量，而 Node 的 fetch/undici 默认忽略，
+ * 导致同一条命令里 curl 通、node 脚本 fetch failed；补 NODE_USE_ENV_PROXY=1 消除这一差异。
+ * 用户显式设置该变量时不覆盖。
+ * @returns {NodeJS.ProcessEnv} 子进程环境变量
+ */
+function buildChildEnv(): NodeJS.ProcessEnv {
+  if (process.env.NODE_USE_ENV_PROXY !== undefined) {
+    return process.env;
+  }
+  return { ...process.env, NODE_USE_ENV_PROXY: "1" };
+}
+
+/**
  * 在 shell 中执行命令并收集输出（带超时强杀）
  * @param {string} command - 待执行的命令文本（含 shell 包装时为包装后的形态）
  * @param {number} timeoutMs - 超时毫秒数，超时后 SIGKILL
@@ -63,6 +78,7 @@ function spawnShell(command: string, timeoutMs: number): Promise<SpawnResult> {
     const child = spawn(command, {
       shell: true,
       detached: process.platform !== "win32",
+      env: buildChildEnv(),
     });
     let stdout = "";
     let stderr = "";

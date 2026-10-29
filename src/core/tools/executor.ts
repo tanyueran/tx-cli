@@ -10,7 +10,7 @@ const TOOL_TIMEOUT_MS = 30_000;
 const MAX_OUTPUT_CHARS = 8 * 1024;
 
 /**
- * 截断超长输出：超限时保留前段并附加说明，让模型知晓内容不完整
+ * 截断超长输出：超限时保留前段并附加说明，让模型知晓内容不完整并按提示续读
  * @param {string} output - 原始输出
  * @returns {string} 截断后的输出
  */
@@ -18,7 +18,7 @@ function truncateOutput(output: string): string {
   if (output.length <= MAX_OUTPUT_CHARS) {
     return output;
   }
-  return `${output.slice(0, MAX_OUTPUT_CHARS)}\n...（输出过长已截断，原文共 ${output.length} 字符）`;
+  return `${output.slice(0, MAX_OUTPUT_CHARS)}\n...（输出过长已截断，仅返回前 ${MAX_OUTPUT_CHARS} 字符，原文共 ${output.length} 字符；可按行分段续读：read_file 用 offset/limit，load_skill 用 offset，或缩小命令输出范围）`;
 }
 
 /**

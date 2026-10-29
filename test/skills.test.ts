@@ -142,6 +142,35 @@ describe("discoverSkills", () => {
       "技能 broken 的 SKILL.md 缺少 frontmatter，已跳过",
     ]);
   });
+
+  it("requires 支持逗号与方括号写法，并剔除不存在的依赖", () => {
+    writeSkill(
+      userDir,
+      "a",
+      `---\nname: a\ndescription: 甲\nrequires: b, c\n---\n\n正文\n`,
+    );
+    writeSkill(
+      userDir,
+      "b",
+      `---\nname: b\ndescription: 乙\n---\n\n正文\n`,
+    );
+    writeSkill(
+      userDir,
+      "c",
+      `---\nname: c\ndescription: 丙\nrequires: [a, missing]\n---\n\n正文\n`,
+    );
+
+    const { skills, warnings } = discoverSkills(cwd, userDir);
+
+    expect(skills.find((skill) => skill.name === "a")?.requires).toEqual([
+      "b",
+      "c",
+    ]);
+    expect(skills.find((skill) => skill.name === "c")?.requires).toEqual(["a"]);
+    expect(warnings).toEqual([
+      "技能 c 声明的依赖技能 missing 不存在，已忽略",
+    ]);
+  });
 });
 
 describe("SkillCatalog", () => {
@@ -211,5 +240,56 @@ describe("createLoadSkillTool", () => {
       ok: false,
       output: "缺少必填参数 name（技能名称）",
     });
+  });
+
+  it("正文超长时按字符预算分页，并给出可续读的 offset", async () => {
+    const body = Array.from(
+      { length: 400 },
+      (_, index) => `第 ${index + 1} 行 ${"x".repeat(30)}`,
+    ).join("\n");
+    writeSkill(userDir, "long", skillContent("long", "长技能", body));
+    const catalog = new SkillCatalog(discoverSkills(cwd, userDir).skills);
+    const tool = createLoadSkillTool(catalog);
+
+    const first = await tool.execute({ name: "long" });
+    expect(first.ok).toBe(true);
+    expect(first.output).toContain("技能正文共 400 行");
+    expect(first.output).toContain('续读请调用 load_skill(name="long", offset=');
+    const offsetMatch = /offset=(\d+)\)/.exec(first.output);
+    expect(offsetMatch).not.toBeNull();
+    const nextOffset = Number(offsetMatch?.[1]);
+
+    const second = await tool.execute({ name: "long", offset: nextOffset });
+    expect(second.ok).toBe(true);
+    expect(second.output).toContain(`已返回第 ${nextOffset}-`);
+  });
+
+  it("offset 超出正文行数时返回失败并说明总行数", async () => {
+    writeSkill(userDir, "short", skillContent("short", "短技能", "a\nb"));
+    const catalog = new SkillCatalog(discoverSkills(cwd, userDir).skills);
+    const tool = createLoadSkillTool(catalog);
+
+    const result = await tool.execute({ name: "short", offset: 10 });
+
+    expect(result.ok).toBe(false);
+    expect(result.output).toContain("共 2 行");
+  });
+
+  it("加载技能时附带 requires 声明的依赖技能元数据", async () => {
+    writeSkill(userDir, "base", skillContent("base", "基础技能", "基础正文"));
+    writeSkill(
+      userDir,
+      "main",
+      `---\nname: main\ndescription: 主技能\nrequires: base\n---\n\n主正文\n`,
+    );
+    const catalog = new SkillCatalog(discoverSkills(cwd, userDir).skills);
+    const tool = createLoadSkillTool(catalog);
+
+    const result = await tool.execute({ name: "main" });
+
+    expect(result.ok).toBe(true);
+    expect(result.output).toContain("依赖技能");
+    expect(result.output).toContain("base：基础技能");
+    expect(result.output).toContain(join(userDir, "base", "SKILL.md"));
   });
 });
