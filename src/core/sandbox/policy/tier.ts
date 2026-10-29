@@ -1,3 +1,4 @@
+import { realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import type { SandboxLevel, TierConfig } from "../types";
 import type { SandboxFileConfig } from "../config/schema";
@@ -14,9 +15,40 @@ export const DEFAULT_DENY_READ: readonly string[] = [
 export const DEFAULT_DENY_WRITE: readonly string[] = [".env", "*.pem"];
 
 /**
+ * 收集系统共享临时目录的可写路径
+ * 脚本习惯写 /tmp，而 os.tmpdir() 在 macOS 上指向 /var/folders/...，两者不重合；
+ * 且 /tmp 在 macOS 是指向 /private/tmp 的软链接，真实路径需一并放行
+ * @returns {string[]} 需要额外放行的临时目录（Windows 由 os.tmpdir() 覆盖，返回空）
+ */
+function sharedTempRoots(): string[] {
+  if (process.platform === "win32") {
+    return [];
+  }
+  const roots = ["/tmp"];
+  try {
+    const real = realpathSync("/tmp");
+    if (real !== "/tmp") {
+      roots.push(real);
+    }
+  } catch {
+    // /tmp 不存在或不可解析（极少见）时忽略，不影响其他可写根
+  }
+  return roots;
+}
+
+/**
+ * 按原顺序去重路径列表
+ * @param {string[]} paths - 候选路径
+ * @returns {string[]} 去重后的路径
+ */
+function uniquePaths(paths: string[]): string[] {
+  return [...new Set(paths)];
+}
+
+/**
  * 按档位生成 TierConfig：三档沙箱的标准隔离参数
  * read-only：全禁写、全禁网，读侧禁凭据目录；
- * workspace-write：可写 cwd 与临时目录，禁写敏感文件，网络按用户配置；
+ * workspace-write：可写 cwd 与临时目录（os.tmpdir() 及系统 /tmp），禁写敏感文件，网络按用户配置；
  * danger-full-access：无隔离（调用方不装配真实沙箱，此档返回值仅作展示）
  * @param {SandboxLevel} level - 沙箱档位
  * @param {SandboxFileConfig} sandboxConfig - 用户沙箱配置（扩展限制合并进档位默认）
@@ -45,7 +77,12 @@ export function buildTierConfig(
   return {
     level,
     denyRead,
-    allowWrite: [cwd, tmpdir(), ...sandboxConfig.filesystem.writableRoots.map(expandHome)],
+    allowWrite: uniquePaths([
+      cwd,
+      tmpdir(),
+      ...sharedTempRoots(),
+      ...sandboxConfig.filesystem.writableRoots.map(expandHome),
+    ]),
     denyWrite: [...DEFAULT_DENY_WRITE, ...sandboxConfig.filesystem.denyWrite.map(expandHome)],
     allowedDomains: [...sandboxConfig.network.allowedDomains],
     deniedDomains: [],

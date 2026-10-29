@@ -254,6 +254,29 @@ describe("fs 工具的权限门卫包装", () => {
     expect(result.output).toBe("hello");
   });
 
+  it("read_file 支持 offset/limit 按行分段读取并提示续读位置", async () => {
+    const target = join(dir, "lines.txt");
+    writeFileSync(target, "l1\nl2\nl3\nl4\nl5\n");
+    const result = await readFileTool.execute({
+      path: target,
+      offset: 2,
+      limit: 2,
+    });
+    expect(result.ok).toBe(true);
+    expect(result.output).toContain("l2\nl3");
+    expect(result.output).toContain("第 2-3 行，共 6 行");
+    expect(result.output).toContain("offset=4");
+  });
+
+  it("read_file 的 offset 超出文件行数时失败并说明总行数", async () => {
+    const target = join(dir, "lines.txt");
+    writeFileSync(target, "a\nb");
+    const result = await readFileTool.execute({ path: target, offset: 9 });
+    expect(result.ok).toBe(false);
+    expect(result.output).toContain("超出文件行数");
+    expect(result.output).toContain("共 2 行");
+  });
+
   it("web_search 的 deny 规则在执行前拦截（不发起网络请求）", async () => {
     const config: SandboxFileConfig = {
       ...DEFAULT_SANDBOX_CONFIG,

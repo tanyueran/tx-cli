@@ -247,6 +247,42 @@ describe("bash 工具执行", () => {
     expect(result.output).toContain("command");
   });
 
+  it("子进程默认注入 NODE_USE_ENV_PROXY，让 Node 脚本也遵循代理环境变量", async () => {
+    const saved = process.env.NODE_USE_ENV_PROXY;
+    delete process.env.NODE_USE_ENV_PROXY;
+    try {
+      const context = makeContext({ level: "danger-full-access" });
+      const tool = createBashTool(context);
+      const result = await tool.execute({
+        command: "printenv NODE_USE_ENV_PROXY || echo unset",
+      });
+      expect(result.output.trim()).toBe("1");
+    } finally {
+      if (saved !== undefined) {
+        process.env.NODE_USE_ENV_PROXY = saved;
+      }
+    }
+  });
+
+  it("用户显式设置 NODE_USE_ENV_PROXY 时不覆盖", async () => {
+    const saved = process.env.NODE_USE_ENV_PROXY;
+    process.env.NODE_USE_ENV_PROXY = "0";
+    try {
+      const context = makeContext({ level: "danger-full-access" });
+      const tool = createBashTool(context);
+      const result = await tool.execute({
+        command: "printenv NODE_USE_ENV_PROXY",
+      });
+      expect(result.output.trim()).toBe("0");
+    } finally {
+      if (saved === undefined) {
+        delete process.env.NODE_USE_ENV_PROXY;
+      } else {
+        process.env.NODE_USE_ENV_PROXY = saved;
+      }
+    }
+  });
+
   it("超时被终止并返回超时说明", async () => {
     const context = makeContext({ level: "danger-full-access" });
     const tool = createBashTool(context);

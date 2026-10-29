@@ -18,7 +18,7 @@ function buildSkillDirHeader(meta: SkillMeta): string {
  */
 export class SkillCatalog {
   private readonly skills = new Map<string, SkillMeta>();
-  private readonly bodyCache = new Map<string, string>();
+  private readonly rawBodyCache = new Map<string, string>();
 
   /**
    * @param {SkillMeta[]} skills - discoverSkills 扫描得到的技能列表
@@ -55,6 +55,27 @@ export class SkillCatalog {
   }
 
   /**
+   * 读取技能正文原文（frontmatter 之后的 Markdown 部分），首次读取后缓存
+   * 供 load_skill 按行分页返回；正文按行切分时行号与缓存内容一致
+   * @param {string} name - 技能名
+   * @returns {Promise<string | undefined>} 技能正文；技能不存在时为 undefined
+   * @throws 文件读取失败时抛出，由调用方转为失败输出回传模型
+   */
+  async readRawBody(name: string): Promise<string | undefined> {
+    const meta = this.skills.get(name);
+    if (!meta) {
+      return undefined;
+    }
+    const cached = this.rawBodyCache.get(name);
+    if (cached !== undefined) {
+      return cached;
+    }
+    const body = extractSkillBody(await readFile(meta.path, "utf-8"));
+    this.rawBodyCache.set(name, body);
+    return body;
+  }
+
+  /**
    * 读取技能正文（frontmatter 之后的 Markdown 部分），首部附带技能目录标注，首次读取后缓存
    * @param {string} name - 技能名
    * @returns {Promise<string | undefined>} 带目录标注的技能正文；技能不存在时为 undefined
@@ -65,13 +86,7 @@ export class SkillCatalog {
     if (!meta) {
       return undefined;
     }
-    const cachedBody = this.bodyCache.get(name);
-    if (cachedBody !== undefined) {
-      return cachedBody;
-    }
-    const body = extractSkillBody(await readFile(meta.path, "utf-8"));
-    const annotatedBody = `${buildSkillDirHeader(meta)}\n\n${body}`;
-    this.bodyCache.set(name, annotatedBody);
-    return annotatedBody;
+    const body = await this.readRawBody(name);
+    return `${buildSkillDirHeader(meta)}\n\n${body}`;
   }
 }

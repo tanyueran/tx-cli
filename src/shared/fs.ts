@@ -62,6 +62,49 @@ export async function readTextFile(
   return content;
 }
 
+/** 按行截取文本的结果 */
+export interface LineSlice {
+  /** 截取出的文本 */
+  text: string;
+  /** 起始行号（1 基，已收敛到有效范围） */
+  startLine: number;
+  /** 结束行号（1 基，含） */
+  endLine: number;
+  /** 原文总行数 */
+  totalLines: number;
+}
+
+/**
+ * 按行截取文本：offset 从 1 开始计数，limit 为最多返回的行数
+ * 越界时把区间收敛到有效范围而不是抛错，便于模型用 offset 逐段续读
+ * @param {string} text - 原始文本
+ * @param {number} [offset] - 起始行号，缺省 1
+ * @param {number} [limit] - 最多返回的行数，缺省直到文末
+ * @returns {LineSlice} 截取结果
+ */
+export function sliceLines(
+  text: string,
+  offset: number = 1,
+  limit?: number
+): LineSlice {
+  const lines = text.split("\n");
+  const totalLines = lines.length;
+  const startLine = Math.min(Math.max(Math.floor(offset), 1), totalLines);
+  const endLine =
+    limit === undefined
+      ? totalLines
+      : Math.min(
+          startLine + Math.max(Math.floor(limit), 1) - 1,
+          totalLines
+        );
+  return {
+    text: lines.slice(startLine - 1, endLine).join("\n"),
+    startLine,
+    endLine,
+    totalLines,
+  };
+}
+
 /** 默认忽略的目录名：避免扫描依赖与版本库等无关目录 */
 export const DEFAULT_IGNORED_DIRS = new Set(["node_modules", ".git"]);
 

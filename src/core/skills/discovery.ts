@@ -24,6 +24,11 @@ export interface SkillMeta {
   source: SkillSource;
   /** SKILL.md 的绝对路径 */
   path: string;
+  /**
+   * 声明依赖的技能名（frontmatter requires 字段）
+   * 加载本技能时一并告知依赖技能的元数据，免去模型自行探查目录
+   */
+  requires: string[];
 }
 
 /** 技能目录扫描结果：成功解析的技能与各非法项的跳过原因 */
@@ -49,6 +54,52 @@ export function resolveUserSkillsDir(): string {
  */
 export function resolveProjectSkillsDir(cwd: string): string {
   return join(cwd, ".tx-cli", "skills");
+}
+
+/**
+ * 解析 frontmatter 的 requires 字段：支持 `a, b` 与 `[a, b]` 两种单行写法
+ * @param {string | undefined} raw - 原始字段值
+ * @returns {string[]} 依赖技能名列表（去重、保持书写顺序）
+ */
+function parseRequires(raw: string | undefined): string[] {
+  if (!raw) {
+    return [];
+  }
+  const inner = raw.trim().replace(/^\[/, "").replace(/\]$/, "");
+  const names = inner
+    .split(/[,，、\s]+/)
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+  return [...new Set(names)];
+}
+
+/**
+ * 校验依赖声明：剔除不存在的依赖与自依赖，并收集警告
+ * @param {SkillMeta[]} skills - 已发现的技能列表（就地修改 requires）
+ * @param {Map<string, SkillMeta>} skillsByName - 按名索引的技能集合
+ * @param {string[]} warnings - 警告收集器（就地追加）
+ * @returns {void}
+ */
+function pruneRequires(
+  skills: SkillMeta[],
+  skillsByName: Map<string, SkillMeta>,
+  warnings: string[],
+): void {
+  for (const skill of skills) {
+    const kept: string[] = [];
+    for (const dep of skill.requires) {
+      if (dep === skill.name) {
+        warnings.push(`技能 ${skill.name} 的 requires 包含自身，已忽略`);
+        continue;
+      }
+      if (!skillsByName.has(dep)) {
+        warnings.push(`技能 ${skill.name} 声明的依赖技能 ${dep} 不存在，已忽略`);
+        continue;
+      }
+      kept.push(dep);
+    }
+    skill.requires = kept;
+  }
 }
 
 /**
@@ -152,6 +203,7 @@ function parseSkillFile(
     description: truncatedDescription,
     source,
     path: skillFile,
+    requires: parseRequires(frontmatter.fields.requires),
   };
 }
 
@@ -206,15 +258,16 @@ export function discoverSkills(
   for (const meta of scanSkillDir(projectDir, "project", warnings)) {
     skillsByName.set(meta.name, meta);
   }
-  if (isSameDir) {
-    return { skills: [...skillsByName.values()], warnings };
-  }
-  for (const meta of scanSkillDir(userDir, "user", warnings)) {
-    if (skillsByName.has(meta.name)) {
-      warnings.push(`用户级技能 ${meta.name} 与项目级重名，已忽略用户级`);
-      continue;
+  if (!isSameDir) {
+    for (const meta of scanSkillDir(userDir, "user", warnings)) {
+      if (skillsByName.has(meta.name)) {
+        warnings.push(`用户级技能 ${meta.name} 与项目级重名，已忽略用户级`);
+        continue;
+      }
+      skillsByName.set(meta.name, meta);
     }
-    skillsByName.set(meta.name, meta);
   }
-  return { skills: [...skillsByName.values()], warnings };
+  const skills = [...skillsByName.values()];
+  pruneRequires(skills, skillsByName, warnings);
+  return { skills, warnings };
 }

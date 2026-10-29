@@ -392,6 +392,23 @@ describe("buildTierConfig", () => {
     expect(tier.denyWrite).toContain("*.pem");
   });
 
+  it("workspace-write 档放行系统共享临时目录 /tmp（os.tmpdir 在 macOS 不覆盖它）", () => {
+    if (process.platform === "win32") {
+      return;
+    }
+    const tier = buildTierConfig(
+      "workspace-write",
+      DEFAULT_SANDBOX_CONFIG,
+      "/work/proj",
+    );
+    expect(tier.allowWrite).toContain(tmpdir());
+    expect(tier.allowWrite).toContain("/tmp");
+    // macOS 上 /tmp 是指向 /private/tmp 的软链接，真实路径也要放行
+    if (process.platform === "darwin") {
+      expect(tier.allowWrite).toContain("/private/tmp");
+    }
+  });
+
   it("用户扩展限制合并进档位默认", () => {
     const config = {
       ...DEFAULT_SANDBOX_CONFIG,

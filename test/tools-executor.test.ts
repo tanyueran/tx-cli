@@ -97,9 +97,9 @@ describe("executeToolCall", () => {
 
     expect(result.output.startsWith("a".repeat(MAX_OUTPUT_CHARS))).toBe(true);
     expect(result.output).toContain(
-      `...（输出过长已截断，原文共 ${long.length} 字符）`
+      `...（输出过长已截断，仅返回前 ${MAX_OUTPUT_CHARS} 字符，原文共 ${long.length} 字符`
     );
-    expect(result.output.length).toBeLessThan(long.length + 40);
+    expect(result.output.length).toBeLessThan(long.length + 200);
   });
 
   it("输出未超限时保持原样", async () => {

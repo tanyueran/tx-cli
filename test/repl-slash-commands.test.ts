@@ -99,7 +99,13 @@ describe("filterSuggestions", () => {
   const chatCommands = buildSlashCommands(makeDeps(new SkillCatalog([])));
   // 模拟 agent 模式：装配任务清单 + 有可用技能
   const agentCatalog = new SkillCatalog([
-    { name: "review", description: "评审", source: "project", path: "review.md" },
+    {
+      name: "review",
+      description: "评审",
+      source: "project",
+      path: "review.md",
+      requires: [],
+    },
   ]);
   const agentCommands = buildSlashCommands(
     makeDeps(agentCatalog, { todoHandle: {} as TodoToolHandle }),
@@ -236,8 +242,20 @@ describe("buildCommandSuggestions / buildSkillSuggestions", () => {
 
   it("技能建议描述含来源标注", () => {
     const catalog = new SkillCatalog([
-      { name: "a", description: "技能A", source: "project", path: "a.md" },
-      { name: "b", description: "技能B", source: "user", path: "b.md" },
+      {
+        name: "a",
+        description: "技能A",
+        source: "project",
+        path: "a.md",
+        requires: [],
+      },
+      {
+        name: "b",
+        description: "技能B",
+        source: "user",
+        path: "b.md",
+        requires: [],
+      },
     ]);
     const suggestions = buildSkillSuggestions(catalog);
     expect(suggestions[0]).toMatchObject({
@@ -301,7 +319,13 @@ describe("buildSlashCommands 执行体", () => {
       const skillPath = join(dir, "review.md");
       await writeFile(skillPath, "---\nname: review\ndescription: 评审\n---\n# 评审手册正文");
       const catalog = new SkillCatalog([
-        { name: "review", description: "评审", source: "project", path: skillPath },
+        {
+          name: "review",
+          description: "评审",
+          source: "project",
+          path: skillPath,
+          requires: [],
+        },
       ]);
       const commands = buildSlashCommands(makeDeps(catalog));
       const result = (await commands
@@ -350,7 +374,13 @@ describe("buildSlashCommands 执行体", () => {
 
   it("/help 附带技能统计行", async () => {
     const catalog = new SkillCatalog([
-      { name: "a", description: "技能A", source: "user", path: "a.md" },
+      {
+        name: "a",
+        description: "技能A",
+        source: "user",
+        path: "a.md",
+        requires: [],
+      },
     ]);
     const commands = buildSlashCommands(makeDeps(catalog));
     await commands.find((command) => command.name === "/help")!.execute("/help");
@@ -361,7 +391,13 @@ describe("buildSlashCommands 执行体", () => {
 describe("printHelp", () => {
   it("标签按显示宽度对齐，含参数占位的命令完整展示", () => {
     const catalog = new SkillCatalog([
-      { name: "review", description: "评审", source: "project", path: "review.md" },
+      {
+        name: "review",
+        description: "评审",
+        source: "project",
+        path: "review.md",
+        requires: [],
+      },
     ]);
     const commands = buildSlashCommands(makeDeps(catalog));
     printHelp(commands, catalog);
