@@ -296,6 +296,16 @@ describe("bash 工具执行", () => {
 });
 
 describe("bash 工具权限包装", () => {
+  it("临时目录内的明确目标可实际递归清理", async () => {
+    const target = join(dir, "cache-to-remove");
+    const context = makeContext({ level: "workspace-write" });
+    const wrapped = wrapToolWithPermission(createBashTool(context), context);
+    const result = await wrapped.execute({
+      command: `mkdir -p ${target} && rm -rf -- ${target} && test ! -e ${target}`,
+    });
+    expect(result.ok).toBe(true);
+  });
+
   it("deny 规则命中时不执行命令直接拒绝", async () => {
     const context = makeContext({
       level: "danger-full-access",

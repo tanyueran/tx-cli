@@ -112,7 +112,7 @@ describe("stripWrappers", () => {
 describe("evaluateCommand", () => {
   it("危险类目命中直接拒绝（含包装穿透）", () => {
     const result = evaluateCommand(
-      "FOO=1 rm -rf /tmp/x",
+      "FOO=1 rm -rf /",
       noRules,
       BUILTIN_DANGER_RULES,
       "read-only",
@@ -120,6 +120,72 @@ describe("evaluateCommand", () => {
     );
     expect(result.decision).toBe("deny");
     expect(result.matchedRule).toBe("rm-recursive");
+  });
+
+  it("工作区与临时目录内的明确目标允许递归清理", () => {
+    const commands = [
+      "rm -rf /tmp/tx-cli-test",
+      "rm -rf '/tmp/tx-cli-test'",
+      "rm -rf -- ./test-project/.npm-cache",
+      `rm -rf ${process.cwd()}/.tx-cli-cache`,
+    ];
+    for (const command of commands) {
+      const result = evaluateCommand(
+        command,
+        noRules,
+        BUILTIN_DANGER_RULES,
+        "workspace-write",
+        "on-failure",
+      );
+      expect(result.decision, command).toBe("allow");
+    }
+  });
+
+  it("danger-full-access 档不应用受限递归清理豁免", () => {
+    const result = evaluateCommand(
+      "cd / && rm -rf ./etc",
+      noRules,
+      BUILTIN_DANGER_RULES,
+      "danger-full-access",
+      "on-failure",
+    );
+    expect(result.decision).toBe("deny");
+    expect(result.matchedRule).toBe("rm-recursive");
+  });
+
+  it("根目录、越界、动态路径及混合高风险目标仍拒绝递归清理", () => {
+    const commands = [
+      "rm -rf /",
+      "rm -rf /tmp",
+      "rm -rf /tmp/*",
+      "rm -rf ../outside",
+      "rm -rf ./",
+      "rm -rf /tmp/safe /etc",
+      "rm -rf $HOME/cache",
+    ];
+    for (const command of commands) {
+      const result = evaluateCommand(
+        command,
+        noRules,
+        BUILTIN_DANGER_RULES,
+        "workspace-write",
+        "on-failure",
+      );
+      expect(result.decision, command).toBe("deny");
+      expect(result.matchedRule, command).toBe("rm-recursive");
+    }
+  });
+
+  it("受限递归清理仍受保护路径规则约束", () => {
+    const result = evaluateCommand(
+      "rm -rf ./config/.env",
+      noRules,
+      BUILTIN_DANGER_RULES,
+      "workspace-write",
+      "on-failure",
+    );
+    expect(result.decision).toBe("deny");
+    expect(result.matchedRule).toBe("protected-paths");
   });
 
   it("sudo 提权被危险类目拒绝", () => {
