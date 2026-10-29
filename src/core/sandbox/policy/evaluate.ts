@@ -5,15 +5,13 @@ import type {
 } from "../types";
 import type { SandboxRulesConfig } from "../config/schema";
 import { matchDangerRule, type DangerRule } from "./danger";
+import { matchSpec, parseRule, type ParsedRule } from "./syntax";
 import {
-  compileGlob,
-  matchSpec,
   normalizeCommand,
-  parseRule,
   splitTopLevel,
   stripWrappers,
-  type ParsedRule,
-} from "./syntax";
+} from "../utils/command";
+import { compileGlob } from "../utils/glob";
 
 /** 规则判定结果：判定 + 命中来源 + 中文说明 */
 export interface RuleEvaluation {

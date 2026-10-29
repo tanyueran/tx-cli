@@ -1,4 +1,3 @@
-import { access, constants } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type {
@@ -6,6 +5,8 @@ import type {
   SandboxViolationInfo,
   TierConfig,
 } from "../../types";
+import { isExecutable } from "../../../../shared/fs";
+import { shellQuote } from "../../utils/shell";
 
 /** 外部 helper 的可执行文件名（PATH 或 ~/.tx-cli/bin 下探测） */
 const HELPER_BIN = "landlock-exec";
@@ -18,20 +19,6 @@ const USER_BIN_DIR = join(homedir(), ".tx-cli", "bin");
 
 /** helper 初始化后的档位配置（wrapCommand 映射参数用） */
 let tier: TierConfig | undefined;
-
-/**
- * 判断文件是否可执行（存在且有执行权限）
- * @param {string} path - 候选路径
- * @returns {Promise<boolean>} 可执行时为 true
- */
-async function isExecutable(path: string): Promise<boolean> {
-  try {
-    await access(path, constants.X_OK);
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 /**
  * 探测外部 helper 的安装位置
@@ -57,15 +44,6 @@ async function resolveHelperPath(): Promise<string | null> {
     }
   }
   return null;
-}
-
-/**
- * 引号包裹路径参数（shell 安全）：已含引号的路径用单引号包裹并转义内部单引号
- * @param {string} path - 原始路径
- * @returns {string} shell 安全的带引号形态
- */
-function shellQuote(path: string): string {
-  return `'${path.replace(/'/g, `'\\''`)}'`;
 }
 
 /**

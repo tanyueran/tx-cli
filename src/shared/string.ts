@@ -76,3 +76,14 @@ export function truncateToWidth(text: string, maxWidth: number): string {
   }
   return `${result}…`;
 }
+
+/**
+ * 判断值是否为字符串数组
+ * @param {unknown} value - 待判断的值
+ * @returns {boolean} 是字符串数组时为 true
+ */
+export function isStringArray(value: unknown): value is string[] {
+  return (
+    Array.isArray(value) && value.every((item) => typeof item === "string")
+  );
+}

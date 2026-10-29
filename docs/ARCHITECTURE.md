@@ -63,9 +63,10 @@ src/
 │   │                          #   工厂创建）/ bash（工厂创建，按需拼入）
 │   ├── sandbox/               # 沙箱与权限（四层模型，见下文）
 │   │   ├── config/            #   配置 schema / 加载校验 / 项目授权读写
-│   │   ├── policy/            #   L2 纯策略：规则语法、危险类目、判定引擎、档位与路径匹配
-│   │   ├── runtime/           #   L3 运行时：SandboxContext、fs 边界、审批器、串行队列
+│   │   ├── policy/            #   L2 纯策略：规则语法、危险类目、判定引擎、档位配置
+│   │   ├── runtime/           #   L3 运行时：SandboxContext、fs 边界、审批器
 │   │   ├── providers/         #   Provider 注册表 + backends/（srt / noop / landlock）
+│   │   ├── utils/             #   与业务无关的工具：glob 编译、路径匹配、命令切分、shell 引号
 │   │   ├── assembly.ts        #   L1 装配（createSandboxContext）
 │   │   ├── audit.ts           #   审计日志（JSONL）
 │   │   └── types.ts           #   领域类型与 Provider / Approver 接口
@@ -77,7 +78,8 @@ src/
 │   ├── server/                # server 命令的静态文件服务
 │   └── commit-fix/            # commit-fix 命令的 ONES 消息转换
 └── shared/                    # 共享层：fs / paths / interactive-prompt（交互问答封装）/
-                               # errors / user-config / warnings / string / text
+                               # errors / user-config / warnings / string / text /
+                               # serial-queue（串行执行队列）
 ```
 
 ## 对话链路（chat / agent 命令）

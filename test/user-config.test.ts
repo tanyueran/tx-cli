@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
-  readUserConfig,
+  readGlobalConfig,
   updateConfigSection,
 } from "../src/shared/user-config";
 
@@ -20,7 +20,7 @@ afterEach(() => {
 
 describe("readUserConfig", () => {
   it("文件不存在时返回空对象且不产生警告", () => {
-    const { configData, warnings } = readUserConfig(join(dir, "none.json"));
+    const { configData, warnings } = readGlobalConfig(join(dir, "none.json"));
 
     expect(configData).toEqual({});
     expect(warnings).toEqual([]);
@@ -29,10 +29,10 @@ describe("readUserConfig", () => {
   it("同一进程内同一路径只读一次磁盘，后续读取返回缓存内容", () => {
     const path = join(dir, "config.json");
     writeFileSync(path, JSON.stringify({ mcpServers: { a: 1 } }));
-    const first = readUserConfig(path);
+    const first = readGlobalConfig(path);
     // 读取之后修改磁盘内容，缓存应不受影响
     writeFileSync(path, JSON.stringify({ mcpServers: { b: 2 } }));
-    const second = readUserConfig(path);
+    const second = readGlobalConfig(path);
 
     expect(first.configData).toEqual({ mcpServers: { a: 1 } });
     expect(second.configData).toEqual({ mcpServers: { a: 1 } });
@@ -41,8 +41,8 @@ describe("readUserConfig", () => {
   it("JSON 损坏时返回空对象并告警，重复读取不再告警", () => {
     const path = join(dir, "broken.json");
     writeFileSync(path, "{ not valid json");
-    const first = readUserConfig(path);
-    const second = readUserConfig(path);
+    const first = readGlobalConfig(path);
+    const second = readGlobalConfig(path);
 
     expect(first.configData).toEqual({});
     expect(first.warnings).toHaveLength(1);
@@ -54,7 +54,7 @@ describe("readUserConfig", () => {
   it("顶层不是对象时按空配置处理且不告警", () => {
     const path = join(dir, "array.json");
     writeFileSync(path, JSON.stringify(["a", "b"]));
-    const { configData, warnings } = readUserConfig(path);
+    const { configData, warnings } = readGlobalConfig(path);
 
     expect(configData).toEqual({});
     expect(warnings).toEqual([]);
@@ -79,10 +79,10 @@ describe("updateConfigSection", () => {
   it("写盘后缓存同步刷新，后续读取立即可见新值", () => {
     const path = join(dir, "config.json");
     writeFileSync(path, JSON.stringify({ mcpServers: { a: 1 } }));
-    readUserConfig(path);
+    readGlobalConfig(path);
 
     updateConfigSection("llm", { apiKey: "sk" }, path);
-    const { configData } = readUserConfig(path);
+    const { configData } = readGlobalConfig(path);
 
     expect(configData).toEqual({
       mcpServers: { a: 1 },
@@ -94,7 +94,7 @@ describe("updateConfigSection", () => {
     const path = join(dir, "fresh.json");
 
     updateConfigSection("llm", { apiKey: "sk" }, path);
-    const { configData } = readUserConfig(path);
+    const { configData } = readGlobalConfig(path);
 
     expect(configData).toEqual({ llm: { apiKey: "sk" } });
   });

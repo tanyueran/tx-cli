@@ -2,8 +2,8 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
-/** 用户级配置文件读取结果：解析后的全文与读取过程中的警告 */
-export interface UserConfigResult {
+/** 全局配置文件读取结果：解析后的全文与读取过程中的警告 */
+export interface GlobalConfigResult {
   /** 配置全文（顶层各段原样保留，llm/mcpServers 等由调用方各自取用） */
   configData: Record<string, unknown>;
   /** 读取警告（文件损坏等），由调用方决定如何提示 */
@@ -14,10 +14,11 @@ export interface UserConfigResult {
 const cache = new Map<string, Record<string, unknown>>();
 
 /**
- * 解析用户级配置文件路径：~/.tx-cli/config.json
+ * 解析全局配置文件路径：~/.tx-cli/config.json
+ * 位于用户主目录，对所有项目生效，与项目级配置合并时同名以项目为准
  * @returns {string} 配置文件的绝对路径
  */
-export function resolveUserConfigPath(): string {
+export function resolveGlobalConfigPath(): string {
   return join(homedir(), ".tx-cli", "config.json");
 }
 
@@ -32,16 +33,16 @@ export function resolveProjectConfigPath(cwd: string): string {
 }
 
 /**
- * 读取用户级配置文件（带缓存）：首次读磁盘并缓存，后续直接返回缓存内容
+ * 读取全局配置文件（带缓存）：首次读磁盘并缓存，后续直接返回缓存内容
  * 仅负责文件 IO 与 JSON 解析，不做任何输出；各段（llm、mcpServers 等）的校验由对应模块完成
  * 文件不存在时不缓存（存在性检查开销极小，保证进程运行期间新建的文件仍可被发现）；
  * 文件损坏时缓存空对象（进程内不再重复读、不再重复告警）
  * @param {string} configPath - 配置文件路径（缺省 ~/.tx-cli/config.json，测试可注入）
- * @returns {UserConfigResult} 配置全文与读取警告（命中缓存时警告恒为空）
+ * @returns {GlobalConfigResult} 配置全文与读取警告（命中缓存时警告恒为空）
  */
-export function readUserConfig(
-  configPath: string = resolveUserConfigPath(),
-): UserConfigResult {
+export function readGlobalConfig(
+  configPath: string = resolveGlobalConfigPath(),
+): GlobalConfigResult {
   const cached = cache.get(configPath);
   if (cached) {
     return { configData: cached, warnings: [] };
@@ -88,9 +89,9 @@ export function readUserConfig(
 export function updateConfigSection(
   section: string,
   value: unknown,
-  configPath: string = resolveUserConfigPath(),
+  configPath: string = resolveGlobalConfigPath(),
 ): void {
-  const { configData } = readUserConfig(configPath);
+  const { configData } = readGlobalConfig(configPath);
   const merged = { ...configData, [section]: value };
   mkdirSync(dirname(configPath), { recursive: true });
   // 0o600：文件可能含密钥（llm.apiKey 等），仅允许当前用户读写

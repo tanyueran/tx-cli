@@ -1,8 +1,8 @@
 import pico from "picocolors";
 import {
-  readUserConfig,
+  readGlobalConfig,
+  resolveGlobalConfigPath,
   resolveProjectConfigPath,
-  resolveUserConfigPath,
   updateConfigSection,
 } from "../../shared/user-config";
 import { mergeRecords } from "../../shared/config-merge";
@@ -21,7 +21,7 @@ interface LlmFileConfig {
  * @returns {LlmFileConfig} llm 段内容（文件不存在或损坏时为空对象）
  */
 function readLlmFileConfig(configPath: string): LlmFileConfig {
-  const { configData: fileConfig, warnings } = readUserConfig(configPath);
+  const { configData: fileConfig, warnings } = readGlobalConfig(configPath);
   for (const warning of warnings) {
     console.warn(pico.yellow(warning));
   }
@@ -90,7 +90,7 @@ function resolveConfigFromSources(
  */
 function saveConfigFile(llmConfig: LlmConfig): void {
   updateConfigSection("llm", llmConfig);
-  console.log(pico.green(`配置已保存到 ${resolveUserConfigPath()}`));
+  console.log(pico.green(`配置已保存到 ${resolveGlobalConfigPath()}`));
 }
 
 /**
@@ -103,7 +103,7 @@ function saveConfigFile(llmConfig: LlmConfig): void {
  * @throws {CliError} 思考档位或风格配置非法时抛出
  */
 export async function loadLlmConfig(
-  globalPath: string = resolveUserConfigPath(),
+  globalPath: string = resolveGlobalConfigPath(),
   projectPath: string = resolveProjectConfigPath(process.cwd()),
 ): Promise<LlmConfig> {
   const partialLlmConfig = resolveConfigFromSources(globalPath, projectPath);

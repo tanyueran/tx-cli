@@ -28,14 +28,13 @@ export type {
 } from "./config/schema";
 export { loadSandboxConfig } from "./config/load";
 export { appendProjectGrant } from "./config/grants";
+export { parseRule, matchSpec } from "./policy/syntax";
+export type { ParsedRule } from "./policy/syntax";
 export {
-  parseRule,
-  matchSpec,
   splitTopLevel,
   stripWrappers,
   normalizeCommand,
-} from "./policy/syntax";
-export type { ParsedRule } from "./policy/syntax";
+} from "./utils/command";
 export { evaluateCommand, evaluateRuleKey } from "./policy/evaluate";
 export type { RuleEvaluation } from "./policy/evaluate";
 export { BUILTIN_DANGER_RULES, matchDangerRule } from "./policy/danger";
@@ -45,7 +44,8 @@ export {
   DEFAULT_DENY_READ,
   DEFAULT_DENY_WRITE,
 } from "./policy/tier";
-export { expandHome, matchPathPattern } from "./policy/path-match";
+export { matchPathPattern } from "./utils/path";
+export { expandHome } from "../../shared/paths";
 export { appendAudit } from "./audit";
 export type { AuditEntry } from "./audit";
 export { getProvider, listProviderNames } from "./providers/registry";

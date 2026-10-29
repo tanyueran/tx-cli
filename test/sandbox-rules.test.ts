@@ -1,10 +1,9 @@
 import { describe, it, expect } from "vitest";
+import { parseRule, matchSpec } from "../src/core/sandbox/policy/syntax";
 import {
-  parseRule,
-  matchSpec,
   splitTopLevel,
   stripWrappers,
-} from "../src/core/sandbox/policy/syntax";
+} from "../src/core/sandbox/utils/command";
 import {
   evaluateCommand,
   evaluateRuleKey,

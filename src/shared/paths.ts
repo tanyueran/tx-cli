@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
 let cachedRoot: string | undefined;
@@ -72,4 +73,31 @@ export function resolveFromCwd(
     return fallback;
   }
   return resolve(raw);
+}
+
+/**
+ * 展开路径中的 ~ 前缀为家目录绝对路径
+ * @param {string} path - 原始路径（以 ~ 或 ~/ 开头时展开）
+ * @returns {string} 展开后的路径
+ */
+export function expandHome(path: string): string {
+  if (path === "~") {
+    return homedir();
+  }
+  if (path.startsWith("~/")) {
+    return `${homedir()}${path.slice(1)}`;
+  }
+  return path;
+}
+
+/**
+ * 判断路径是否落在指定根目录之下（含根目录自身）
+ * 按词法前缀比较并补足 / 分隔符，避免 /a/bc 被误判为 /a/b 的子路径
+ * @param {string} root - 根目录绝对路径
+ * @param {string} path - 待判断的绝对路径
+ * @returns {boolean} 位于根目录内（含自身）时为 true
+ */
+export function isPathWithin(root: string, path: string): boolean {
+  const normalizedRoot = root.endsWith("/") ? root.slice(0, -1) : root;
+  return path === normalizedRoot || path.startsWith(`${normalizedRoot}/`);
 }

@@ -1,15 +1,11 @@
 import {
-  readUserConfig,
-  resolveUserConfigPath,
+  readGlobalConfig,
+  resolveGlobalConfigPath,
 } from "../../shared/user-config";
-import type {
-  HttpServerConfig,
-  McpServerConfig,
-  StdioServerConfig,
-} from "./types";
-
-/** ${VAR} 形式的环境变量引用 */
-const ENV_VAR_RE = /\$\{([^}]+)\}/g;
+import { parseHttpServer } from "./http";
+import { inferType } from "./shared";
+import { parseStdioServer } from "./stdio";
+import type { McpServerConfig } from "./types";
 
 /** MCP 服务器加载结果：合法配置与各非法项的跳过原因 */
 export interface McpServersResult {
@@ -17,133 +13,6 @@ export interface McpServersResult {
   servers: Map<string, McpServerConfig>;
   /** 加载过程中的警告（文件损坏、非法项跳过原因等） */
   warnings: string[];
-}
-
-/**
- * 展开字符串中的 ${VAR} 环境变量引用
- * 未定义的变量展开为空串（与常见 shell 行为一致），不报错
- * @param {string} rawValue - 待展开的字符串
- * @returns {string} 展开后的字符串
- */
-function expandVars(rawValue: string): string {
-  return rawValue.replace(ENV_VAR_RE, (_, name) => process.env[name] ?? "");
-}
-
-/**
- * 展开记录中所有字符串值的 ${VAR} 引用
- * @param {Record<string, string>} record - 待展开的键值对
- * @returns {Record<string, string>} 展开后的新记录
- */
-function expandRecord(record: Record<string, string>): Record<string, string> {
-  const expanded: Record<string, string> = {};
-  for (const [key, value] of Object.entries(record)) {
-    expanded[key] = expandVars(value);
-  }
-  return expanded;
-}
-
-/**
- * 判断值是否为「字符串键 → 字符串值」的普通对象
- * @param {unknown} value - 待判断的值
- * @returns {boolean} 是字符串记录时为 true
- */
-function isStringRecord(value: unknown): value is Record<string, string> {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    return false;
-  }
-  return Object.values(value).every(
-    (fieldValue) => typeof fieldValue === "string",
-  );
-}
-
-/**
- * 解析传输类型：显式 stdio/http 优先；缺省时按 command/url 字段推断（兼容 Claude Desktop 配置格式）
- * @param {Record<string, unknown>} record - 服务器配置的原始字段
- * @returns {"stdio" | "http" | undefined} 可识别的传输类型，无法识别时为 undefined
- */
-function inferType(
-  record: Record<string, unknown>,
-): "stdio" | "http" | undefined {
-  if (record.type === "stdio" || record.type === "http") {
-    return record.type;
-  }
-  if (record.type === undefined) {
-    if (typeof record.command === "string") {
-      return "stdio";
-    }
-    if (typeof record.url === "string") {
-      return "http";
-    }
-  }
-  return undefined;
-}
-
-/**
- * 解析单个 stdio 服务器配置：校验必填项并对字符串值做 ${VAR} 展开
- * @param {string} name - 服务器名
- * @param {Record<string, unknown>} record - 原始字段
- * @param {string[]} warnings - 警告收集器（就地追加）
- * @returns {StdioServerConfig | undefined} 合法时返回配置，否则为 undefined
- */
-function parseStdioServer(
-  name: string,
-  record: Record<string, unknown>,
-  warnings: string[],
-): StdioServerConfig | undefined {
-  const { command, args, env } = record;
-  if (typeof command !== "string" || !command.trim()) {
-    warnings.push(`MCP 服务器 ${name} 缺少非空 command，已跳过`);
-    return undefined;
-  }
-  if (
-    args !== undefined &&
-    (!Array.isArray(args) || args.some((arg) => typeof arg !== "string"))
-  ) {
-    warnings.push(`MCP 服务器 ${name} 的 args 必须是字符串数组，已跳过`);
-    return undefined;
-  }
-  if (env !== undefined && !isStringRecord(env)) {
-    warnings.push(
-      `MCP 服务器 ${name} 的 env 必须是字符串到字符串的对象，已跳过`,
-    );
-    return undefined;
-  }
-  return {
-    type: "stdio",
-    command: expandVars(command),
-    ...(args ? { args: (args as string[]).map(expandVars) } : {}),
-    ...(env ? { env: expandRecord(env) } : {}),
-  };
-}
-
-/**
- * 解析单个 http 服务器配置：校验必填项并对字符串值做 ${VAR} 展开
- * @param {string} name - 服务器名
- * @param {Record<string, unknown>} record - 原始字段
- * @param {string[]} warnings - 警告收集器（就地追加）
- * @returns {HttpServerConfig | undefined} 合法时返回配置，否则为 undefined
- */
-function parseHttpServer(
-  name: string,
-  record: Record<string, unknown>,
-  warnings: string[],
-): HttpServerConfig | undefined {
-  const { url, headers } = record;
-  if (typeof url !== "string" || !url.trim()) {
-    warnings.push(`MCP 服务器 ${name} 缺少非空 url，已跳过`);
-    return undefined;
-  }
-  if (headers !== undefined && !isStringRecord(headers)) {
-    warnings.push(
-      `MCP 服务器 ${name} 的 headers 必须是字符串到字符串的对象，已跳过`,
-    );
-    return undefined;
-  }
-  return {
-    type: "http",
-    url: expandVars(url),
-    ...(headers ? { headers: expandRecord(headers) } : {}),
-  };
 }
 
 /**
@@ -192,7 +61,7 @@ function loadServersFromFile(
   warnings: string[],
 ): Map<string, McpServerConfig> {
   const servers = new Map<string, McpServerConfig>();
-  const { configData, warnings: readWarnings } = readUserConfig(configPath);
+  const { configData, warnings: readWarnings } = readGlobalConfig(configPath);
   warnings.push(...readWarnings);
   const { mcpServers } = configData;
   if (mcpServers === undefined) {
@@ -221,26 +90,33 @@ function loadServersFromFile(
   return servers;
 }
 
+/** loadMcpServers 的入参 */
+export interface LoadMcpServersOptions {
+  /** 全局配置文件路径（缺省 ~/.tx-cli/config.json，测试可注入） */
+  globalConfigPath?: string;
+  /** 项目配置文件路径（缺省跳过项目层，生产由装配层传入，测试可注入） */
+  projectConfigPath?: string;
+}
+
 /**
  * 从配置文件加载 MCP 服务器：全局 ~/.tx-cli/config.json 与项目 <cwd>/.tx-cli/config.json 两级合并，
  * 按服务器名合并，同名时项目配置覆盖全局并告警（与技能「项目级优先」语义一致）
- * @param {string} configPath - 全局配置文件路径（缺省 ~/.tx-cli/config.json，测试可注入）
- * @param {string} projectPath - 项目配置文件路径（缺省跳过项目层，生产由装配层传入，测试可注入）
+ * @param {LoadMcpServersOptions} [options] - 全局/项目配置文件路径（均可注入以便测试）
  * @returns {McpServersResult} 服务器配置表与加载警告
  */
-export function loadMcpServers(
-  configPath: string = resolveUserConfigPath(),
-  projectPath?: string,
-): McpServersResult {
+export function loadMcpServers({
+  globalConfigPath = resolveGlobalConfigPath(),
+  projectConfigPath,
+}: LoadMcpServersOptions = {}): McpServersResult {
   const warnings: string[] = [];
-  const servers = loadServersFromFile(configPath, warnings);
-  if (projectPath === undefined) {
+  const servers = loadServersFromFile(globalConfigPath, warnings);
+  if (projectConfigPath === undefined) {
     return { servers, warnings };
   }
-  const projectServers = loadServersFromFile(projectPath, warnings);
+  const projectServers = loadServersFromFile(projectConfigPath, warnings);
   if (projectServers.size > 0) {
     warnings.push(
-      `已加载项目配置 ${projectPath} 的 mcpServers（${projectServers.size} 个，与全局同名时以项目为准）`,
+      `已加载项目配置 ${projectConfigPath} 的 mcpServers（${projectServers.size} 个，与全局同名时以项目为准）`,
     );
   }
   for (const [name, config] of projectServers) {

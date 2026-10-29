@@ -34,7 +34,9 @@ afterEach(() => {
 describe("loadSandboxConfig", () => {
   it("无 sandbox 段时返回默认配置", () => {
     writeConfig({ llm: { model: "x" } });
-    const { config, warnings } = loadSandboxConfig(join(dir, "config.json"));
+    const { config, warnings } = loadSandboxConfig({
+      globalConfigPath: join(dir, "config.json"),
+    });
     expect(config).toEqual(DEFAULT_SANDBOX_CONFIG);
     expect(warnings).toEqual([]);
   });
@@ -63,7 +65,7 @@ describe("loadSandboxConfig", () => {
         audit: false,
       },
     });
-    const { config, warnings } = loadSandboxConfig(path);
+    const { config, warnings } = loadSandboxConfig({ globalConfigPath: path });
     expect(warnings).toEqual([]);
     expect(config.level).toBe("workspace-write");
     expect(config.approval).toBe("never");
@@ -88,7 +90,9 @@ describe("loadSandboxConfig", () => {
         bash: { timeoutMs: 10 },
       },
     });
-    const { config, warnings } = loadSandboxConfig(path);
+    const { config, warnings } = loadSandboxConfig({
+      globalConfigPath: path,
+    });
     expect(config.level).toBe(DEFAULT_SANDBOX_CONFIG.level);
     expect(config.approval).toBe(DEFAULT_SANDBOX_CONFIG.approval);
     expect(config.filesystem.denyRead).toEqual([]);
@@ -98,7 +102,9 @@ describe("loadSandboxConfig", () => {
 
   it("sandbox 段不是对象时忽略整段", () => {
     writeConfig({ sandbox: [1, 2] });
-    const { config, warnings } = loadSandboxConfig(join(dir, "config.json"));
+    const { config, warnings } = loadSandboxConfig({
+      globalConfigPath: join(dir, "config.json"),
+    });
     expect(config).toEqual(DEFAULT_SANDBOX_CONFIG);
     expect(warnings[0]).toContain("必须是对象");
   });
@@ -106,7 +112,7 @@ describe("loadSandboxConfig", () => {
   it("配置文件损坏时透传读取警告", () => {
     const path = join(dir, "config.json");
     writeFileSync(path, "{broken");
-    const { warnings } = loadSandboxConfig(path);
+    const { warnings } = loadSandboxConfig({ globalConfigPath: path });
     expect(warnings[0]).toContain("解析失败");
   });
 
@@ -135,7 +141,10 @@ describe("loadSandboxConfig", () => {
         },
       }),
     );
-    const { config, warnings } = loadSandboxConfig(globalPath, projectPath);
+    const { config, warnings } = loadSandboxConfig({
+      globalConfigPath: globalPath,
+      projectConfigPath: projectPath,
+    });
     // 放宽类标量：项目 workspace-write 比全局 read-only 宽松 → 忽略
     expect(config.level).toBe("read-only");
     // 放宽类数组：信任目录 / 可写根 / 网络白名单仅可由全局提供 → 项目项忽略
@@ -186,7 +195,10 @@ describe("loadSandboxConfig", () => {
         },
       }),
     );
-    const { config, warnings } = loadSandboxConfig(globalPath, projectPath);
+    const { config, warnings } = loadSandboxConfig({
+      globalConfigPath: globalPath,
+      projectConfigPath: projectPath,
+    });
     expect(config.level).toBe("read-only");
     expect(config.approval).toBe("always-ask");
     expect(config.provider).toBe("noop");
@@ -218,7 +230,10 @@ describe("loadSandboxConfig", () => {
         },
       }),
     );
-    const { config, warnings } = loadSandboxConfig(globalPath, projectPath);
+    const { config, warnings } = loadSandboxConfig({
+      globalConfigPath: globalPath,
+      projectConfigPath: projectPath,
+    });
     expect(config.enabled).toBe(true);
     expect(config.builtinDangerRules).toBe(true);
     expect(config.audit).toBe(true);
@@ -235,10 +250,10 @@ describe("loadSandboxConfig", () => {
 
   it("项目配置文件缺失时跳过项目层且无项目加载告警", () => {
     const globalPath = writeConfig({ sandbox: { level: "read-only" } });
-    const { config, warnings } = loadSandboxConfig(
-      globalPath,
-      join(dir, "missing.json"),
-    );
+    const { config, warnings } = loadSandboxConfig({
+      globalConfigPath: globalPath,
+      projectConfigPath: join(dir, "missing.json"),
+    });
     expect(config.level).toBe("read-only");
     expect(warnings).toEqual([]);
   });
@@ -247,7 +262,10 @@ describe("loadSandboxConfig", () => {
     const globalPath = writeConfig({ sandbox: { level: "read-only" } });
     const projectPath = join(dir, "project-config.json");
     writeFileSync(projectPath, JSON.stringify({ llm: { model: "x" } }));
-    const { config, warnings } = loadSandboxConfig(globalPath, projectPath);
+    const { config, warnings } = loadSandboxConfig({
+      globalConfigPath: globalPath,
+      projectConfigPath: projectPath,
+    });
     expect(config.level).toBe("read-only");
     expect(warnings).toEqual([]);
   });
@@ -263,7 +281,7 @@ describe("mcp.rules 段", () => {
         },
       },
     });
-    const { config, warnings } = loadSandboxConfig(path);
+    const { config, warnings } = loadSandboxConfig({ globalConfigPath: path });
     expect(warnings).toEqual([]);
     expect(config.rules.allow).toEqual([
       "mcp__Chrome_DevTools_MCP__*",
@@ -277,7 +295,7 @@ describe("mcp.rules 段", () => {
       sandbox: { rules: { allow: ["Bash(git status)", "mcp__github__*"] } },
       mcp: { rules: { allow: ["mcp__github__*"] } },
     });
-    const { config, warnings } = loadSandboxConfig(path);
+    const { config, warnings } = loadSandboxConfig({ globalConfigPath: path });
     expect(warnings).toEqual([]);
     expect(config.rules.allow).toEqual(["Bash(git status)", "mcp__github__*"]);
   });
@@ -293,7 +311,10 @@ describe("mcp.rules 段", () => {
         mcp: { rules: { allow: ["mcp__b__*"], deny: ["mcp__evil__*"] } },
       }),
     );
-    const { config, warnings } = loadSandboxConfig(globalPath, projectPath);
+    const { config, warnings } = loadSandboxConfig({
+      globalConfigPath: globalPath,
+      projectConfigPath: projectPath,
+    });
     expect(config.rules.allow).toEqual(["mcp__a__*", "mcp__b__*"]);
     expect(config.rules.deny).toEqual(["mcp__evil__*"]);
     expect(warnings.some((w) => w.includes("已加载项目配置"))).toBe(true);
@@ -304,7 +325,7 @@ describe("mcp.rules 段", () => {
       sandbox: { level: "workspace-write" },
       mcp: { rules: { allow: "not-array", deny: [42] } },
     });
-    const { config, warnings } = loadSandboxConfig(path);
+    const { config, warnings } = loadSandboxConfig({ globalConfigPath: path });
     expect(config.level).toBe("workspace-write");
     expect(config.rules.allow).toEqual([]);
     expect(warnings.some((w) => w.includes("mcp.rules.allow 必须是字符串数组"))).toBe(true);
@@ -312,7 +333,7 @@ describe("mcp.rules 段", () => {
 
   it("mcp 段不是对象时忽略整段", () => {
     const path = writeConfig({ mcp: [1, 2] });
-    const { config, warnings } = loadSandboxConfig(path);
+    const { config, warnings } = loadSandboxConfig({ globalConfigPath: path });
     expect(config.rules).toEqual({ allow: [], ask: [], deny: [] });
     expect(warnings[0]).toContain("mcp 段必须是对象");
   });
