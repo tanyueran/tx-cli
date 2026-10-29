@@ -89,7 +89,7 @@ export async function runOneShotConversation({
       userInput,
       history,
       instructions: systemPrompt,
-      tools,
+      tools: runtime.skill.advertisedTools,
       extraBody: resolveResponsesThinkingFields({
         thinkingLevel: effectiveThinkingLevel,
         thinkingStyle,
