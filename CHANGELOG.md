@@ -1,3 +1,12 @@
+## [0.9.1](https://github.com/tanyueran/tx-cli/compare/v0.9.0...v0.9.1) (2026-10-29)
+
+### Bug Fixes
+
+* agent 模式工具调用轮数上限由 20 轮放宽至 40 轮 ([b00a99b](https://github.com/tanyueran/tx-cli/commit/b00a99b9636e80b14e009dacaf554d67f83ea149))
+
+### Documentation
+
+* 精简 README 并拆分详细文档至 docs/ ([1aaf0dc](https://github.com/tanyueran/tx-cli/commit/1aaf0dc6195f0d4ef30f7613930ad339819a7211))
 ## [0.9.0](https://github.com/tanyueran/tx-cli/compare/v0.8.1...v0.9.0) (2026-10-28)
 
 ### Features
