@@ -42,7 +42,6 @@ export interface OneShotConversationOptions {
 
 /**
  * 单次会话（chat、agent 命令共用的单次入口）：走 Responses API（无状态模式）+ agentic loop
- * store=false：服务端不留存会话，历史由本地维护，会话结束即丢弃；
  * 思考档位取值：命令行 > 配置文件（项目 > 全局）> 模式内置默认（chat low / agent medium），
  * 经 thinking 适配层翻译为协议扩展字段下发；
  * 服务不支持分档思考时先打印折算警告，避免用户误以为 high 等档位真实生效；
@@ -59,13 +58,17 @@ export async function runOneShotConversation({
   mcpEnabled = true,
   cliSandboxOptions,
 }: OneShotConversationOptions): Promise<void> {
+  // 获取最终生效的思考档位
   const effectiveThinkingLevel = resolveThinkingLevel({
     cliLevel: thinkingLevel,
     llmConfig: llmConfig,
     fallback: modeConfig.defaultThinkingLevel,
   });
+  // 获取最终生效的思考样式
   const thinkingStyle = resolveThinkingStyle(llmConfig);
+  // 打印折算思考配置最终生效的信息
   warnThinkingFallback(effectiveThinkingLevel, thinkingStyle);
+  // 创建流渲染器：处理正文与思考增量
   const renderer = createStreamRenderer();
   // 会话运行时（MCP 连接与沙箱）随会话创建，finally 中统一释放；bash 装配由模式决定
   const runtime = await createConversationRuntime(modeConfig.basePrompt, {

@@ -11,12 +11,15 @@ export function createStreamRenderer() {
   // 上一段输出的流类型：用于在思考块与正文之间插入换行分隔
   // undefined 表示光标已处于行首（初始状态或刚输出过换行）
   let lastStreamKind: "reasoning" | "content" | undefined;
+
+  // 结束思考块：在思考块结束时插入换行，重置流类型
   const endThinking = (): void => {
     if (lastStreamKind === "reasoning") {
       process.stdout.write("\n");
       lastStreamKind = undefined;
     }
   };
+
   return {
     onDelta: (text: string): void => {
       endThinking();
@@ -53,7 +56,11 @@ export function printToolCall(call: ToolCall, tool?: Tool): void {
   if (tool?.renderCall) {
     try {
       const parsedArgs = JSON.parse(call.arguments || "{}");
-      if (parsedArgs && typeof parsedArgs === "object" && !Array.isArray(parsedArgs)) {
+      if (
+        parsedArgs &&
+        typeof parsedArgs === "object" &&
+        !Array.isArray(parsedArgs)
+      ) {
         console.log(pico.cyan(`→ 调用 ${call.name}`));
         console.log(tool.renderCall(parsedArgs));
         return;
@@ -72,7 +79,7 @@ export function printToolCall(call: ToolCall, tool?: Tool): void {
  * @returns {(call: ToolCall, tool?: Tool) => void} 可传给 runAgentLoop 的 onToolCall 回调
  */
 export function createToolCallLogger(
-  renderer: ReturnType<typeof createStreamRenderer>
+  renderer: ReturnType<typeof createStreamRenderer>,
 ): (call: ToolCall, tool?: Tool) => void {
   return (call, tool) => {
     renderer.endThinking();
@@ -90,7 +97,7 @@ export function createToolCallLogger(
  */
 export function createSoftConvergeNotice(
   renderer: ReturnType<typeof createStreamRenderer>,
-  maxIterations: number
+  maxIterations: number,
 ): () => void {
   return () => {
     renderer.endThinking();

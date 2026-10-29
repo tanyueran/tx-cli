@@ -53,6 +53,7 @@ export async function createConversationRuntime(
   basePrompt: string,
   options: ConversationOptions,
 ): Promise<ConversationRuntime> {
+  // 创建沙箱上下文
   const {
     sandbox,
     bashEnabled,

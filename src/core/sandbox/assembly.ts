@@ -8,9 +8,9 @@ import type {
 } from "./types";
 import { loadSandboxConfig } from "./config/load";
 import {
-  readUserConfig,
+  readGlobalConfig,
+  resolveGlobalConfigPath,
   resolveProjectConfigPath,
-  resolveUserConfigPath,
   updateConfigSection,
 } from "../../shared/user-config";
 import { mergeStringArrays } from "../../shared/config-merge";
@@ -18,7 +18,7 @@ import { askConfirm } from "../../shared/interactive-prompt";
 import { CancelError } from "../../shared/errors";
 import type { SandboxFileConfig } from "./config/schema";
 import { buildTierConfig } from "./policy/tier";
-import { expandHome } from "./policy/path-match";
+import { expandHome, isPathWithin } from "../../shared/paths";
 import { getProvider } from "./providers/registry";
 import { SandboxContext } from "./runtime/context";
 import { detectInteractive, interactiveApprover } from "./runtime/approver";
@@ -133,9 +133,9 @@ async function defaultTrustPrompt(cwd: string): Promise<boolean> {
  */
 export function grantGlobalTrust(
   cwd: string,
-  configPath: string = resolveUserConfigPath(),
+  configPath: string = resolveGlobalConfigPath(),
 ): void {
-  const { configData } = readUserConfig(configPath);
+  const { configData } = readGlobalConfig(configPath);
   const sectionRaw = configData.sandbox;
   const section: Record<string, unknown> =
     typeof sectionRaw === "object" &&
@@ -236,10 +236,9 @@ function isTrusted(cwd: string, trustDirectories: string[]): boolean {
   if (trustDirectories.length === 0) {
     return false;
   }
-  return trustDirectories.some((dir) => {
-    const expandedDir = resolve(expandHome(dir));
-    return cwd === expandedDir || cwd.startsWith(`${expandedDir}/`);
-  });
+  return trustDirectories.some((dir) =>
+    isPathWithin(resolve(expandHome(dir)), cwd),
+  );
 }
 
 /** L1 装配结果：沙箱上下文、bash 工具装配开关与装载警告的组合 */
@@ -274,8 +273,10 @@ export async function createSandboxContext(
   const warnings: string[] = [];
   const cwd = process.cwd();
   const { config: sandboxConfig, warnings: configWarnings } = loadSandboxConfig(
-    resolveUserConfigPath(),
-    resolveProjectConfigPath(cwd),
+    {
+      globalConfigPath: resolveGlobalConfigPath(),
+      projectConfigPath: resolveProjectConfigPath(cwd),
+    },
   );
   warnings.push(...configWarnings);
   const bashEnabled = bashForcedOff

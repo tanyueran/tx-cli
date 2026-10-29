@@ -6,7 +6,7 @@ import type { ToolCall } from "../src/core/llm/types";
 import { CancelError } from "../src/shared/errors";
 import { markTurnCancelled } from "../src/shared/turn-cancel";
 import { wrapToolWithPermission } from "../src/core/tools/permission";
-import { SerialQueue } from "../src/core/sandbox/runtime/serial-queue";
+import { SerialQueue } from "../src/shared/serial-queue";
 import type { SandboxContext } from "../src/core/sandbox/runtime/context";
 
 /**

@@ -1,6 +1,6 @@
 import {
-  readUserConfig,
-  resolveUserConfigPath,
+  readGlobalConfig,
+  resolveGlobalConfigPath,
 } from "../../../shared/user-config";
 import { mergeStringArrays } from "../../../shared/config-merge";
 import type { ApprovalPolicy, SandboxLevel } from "../types";
@@ -13,17 +13,7 @@ import {
   type SandboxFileConfig,
   type SandboxRulesConfig,
 } from "./schema";
-
-/**
- * 判断值是否为字符串数组
- * @param {unknown} value - 待判断的值
- * @returns {boolean} 是字符串数组时为 true
- */
-function isStringArray(value: unknown): value is string[] {
-  return (
-    Array.isArray(value) && value.every((item) => typeof item === "string")
-  );
-}
+import { isStringArray } from "@/shared/string";
 
 /**
  * 解析字符串数组字段：非法时跳过并记录警告
@@ -666,6 +656,14 @@ function mergeProjectConfig(
   };
 }
 
+/** loadSandboxConfig 的入参 */
+export interface LoadSandboxConfigOptions {
+  /** 全局配置文件路径（缺省 ~/.tx-cli/config.json，测试可注入） */
+  globalConfigPath?: string;
+  /** 项目配置文件路径（缺省跳过项目层，生产由装配层传入，测试可注入） */
+  projectConfigPath?: string;
+}
+
 /**
  * 加载 sandbox 与 mcp.rules 配置：全局 ~/.tx-cli/config.json 与项目 <cwd>/.tx-cli/config.json 两级合并，
  * 优先级为 CLI（命令层处理）> 项目配置 > 全局配置 > 内置默认；
@@ -674,25 +672,25 @@ function mergeProjectConfig(
  * 防止仓库自带 .tx-cli/config.json 自证信任；rules.allow 保持并集（承载会话授权落盘）；
  * mcp.rules 段为 MCP 工具专属规则，与 sandbox.rules 同步解析并在文件内合并后参与两级合并；
  * 单个字段非法只跳过并记录警告，不影响其余字段与整个会话（失败隔离）
- * @param {string} configPath - 全局配置文件路径（缺省 ~/.tx-cli/config.json，测试可注入）
- * @param {string} projectPath - 项目配置文件路径（缺省跳过项目层，生产由装配层传入，测试可注入）
+ * @param {LoadSandboxConfigOptions} [options] - 全局/项目配置文件路径（均可注入以便测试）
  * @returns {SandboxConfigResult} 解析后的配置与警告
  */
-export function loadSandboxConfig(
-  configPath: string = resolveUserConfigPath(),
-  projectPath?: string,
-): SandboxConfigResult {
+export function loadSandboxConfig({
+  globalConfigPath = resolveGlobalConfigPath(),
+  projectConfigPath,
+}: LoadSandboxConfigOptions = {}): SandboxConfigResult {
   const warnings: string[] = [];
-  const { configData, warnings: readWarnings } = readUserConfig(configPath);
+  const { configData, warnings: readWarnings } =
+    readGlobalConfig(globalConfigPath);
   warnings.push(...readWarnings);
   const globalPartial = parseSandboxSection(configData.sandbox, warnings);
   mergeMcpRules(globalPartial, parseMcpRulesSection(configData.mcp, warnings));
   const config = applyToDefaults(globalPartial);
-  if (projectPath === undefined) {
+  if (projectConfigPath === undefined) {
     return { config, warnings };
   }
   const { configData: projectData, warnings: projectWarnings } =
-    readUserConfig(projectPath);
+    readGlobalConfig(projectConfigPath);
   warnings.push(...projectWarnings);
   const projectPartial = parseSandboxSection(projectData.sandbox, warnings);
   mergeMcpRules(
@@ -701,7 +699,7 @@ export function loadSandboxConfig(
   );
   if (projectData.sandbox !== undefined || projectData.mcp !== undefined) {
     warnings.push(
-      `已加载项目配置 ${projectPath} 的 sandbox 与 mcp 规则配置（项目配置仅可收紧沙箱能力，更宽松或涉及信任的配置项将被忽略）`,
+      `已加载项目配置 ${projectConfigPath} 的 sandbox 与 mcp 规则配置（项目配置仅可收紧沙箱能力，更宽松或涉及信任的配置项将被忽略）`,
     );
   }
   return {

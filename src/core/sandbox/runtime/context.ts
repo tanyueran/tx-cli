@@ -26,8 +26,8 @@ import {
   resumeToolTimeout,
 } from "../../../shared/timeout";
 import { throwIfTurnCancelled } from "../../../shared/turn-cancel";
+import { SerialQueue } from "../../../shared/serial-queue";
 import { checkFsRead, checkFsWrite, type FsBoundaryResult } from "./fs-boundary";
-import { SerialQueue } from "./serial-queue";
 
 /** 会话级沙箱上下文的构造参数 */
 export interface SandboxContextOptions {

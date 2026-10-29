@@ -2,9 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, rmSync, writeFileSync, chmodSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-  matchPathPattern,
-} from "../src/core/sandbox/policy/path-match";
+import { matchPathPattern } from "../src/core/sandbox/utils/path";
 import { SandboxContext } from "../src/core/sandbox/runtime/context";
 import { DEFAULT_SANDBOX_CONFIG } from "../src/core/sandbox/config/schema";
 import { noopProvider } from "../src/core/sandbox/providers/backends/noop";

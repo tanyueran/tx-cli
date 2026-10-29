@@ -1,6 +1,7 @@
 import { resolve } from "node:path";
 import type { SandboxLevel, TierConfig } from "../types";
-import { matchPathPattern } from "../policy/path-match";
+import { matchPathPattern } from "../utils/path";
+import { isPathWithin } from "../../../shared/paths";
 
 /** 应用层 fs 边界检查结果 */
 export interface FsBoundaryResult {
@@ -64,8 +65,8 @@ export function checkFsWrite(
       reason: `当前档位为 ${level}，禁止一切文件写入`,
     };
   }
-  const isWritable = tier.allowWrite.some(
-    (root) => resolvedPath === root || resolvedPath.startsWith(`${root}/`),
+  const isWritable = tier.allowWrite.some((root) =>
+    isPathWithin(root, resolvedPath),
   );
   if (!isWritable) {
     return {

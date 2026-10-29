@@ -1,7 +1,7 @@
 import type { Tool } from "../tools/types";
 import {
+  resolveGlobalConfigPath,
   resolveProjectConfigPath,
-  resolveUserConfigPath,
 } from "../../shared/user-config";
 import { loadMcpServers } from "./config";
 import type { McpRoot } from "./manager";
@@ -46,10 +46,11 @@ export async function connectMcpServers(
   if (!enabled) {
     return { manager: undefined, tools: [], summary: undefined, warnings: [] };
   }
-  const { servers, warnings } = loadMcpServers(
-    resolveUserConfigPath(),
-    resolveProjectConfigPath(process.cwd()),
-  );
+  // 加载 MCP 服务器
+  const { servers, warnings } = loadMcpServers({
+    globalConfigPath: resolveGlobalConfigPath(),
+    projectConfigPath: resolveProjectConfigPath(process.cwd()),
+  });
   if (servers.size === 0) {
     return { manager: undefined, tools: [], summary: undefined, warnings };
   }

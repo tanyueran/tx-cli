@@ -1,7 +1,21 @@
 import { basename, dirname, join } from "node:path";
-import { existsSync, readdirSync } from "node:fs";
+import { constants, existsSync, readdirSync } from "node:fs";
 import type { Dirent } from "node:fs";
-import { readFile, readdir, stat } from "node:fs/promises";
+import { access, readFile, readdir, stat } from "node:fs/promises";
+
+/**
+ * 判断文件是否可执行：文件存在且具备执行权限
+ * @param {string} path - 候选文件路径
+ * @returns {Promise<boolean>} 可执行时为 true
+ */
+export async function isExecutable(path: string): Promise<boolean> {
+  try {
+    await access(path, constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 /**
  * 严格区分大小写地判断文件是否存在

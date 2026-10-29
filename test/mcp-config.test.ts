@@ -29,14 +29,18 @@ function writeConfig(content: unknown): string {
 
 describe("loadMcpServers", () => {
   it("配置文件不存在时返回空结果且无警告", () => {
-    const { servers, warnings } = loadMcpServers(join(dir, "none.json"));
+    const { servers, warnings } = loadMcpServers({
+      globalConfigPath: join(dir, "none.json"),
+    });
 
     expect(servers.size).toBe(0);
     expect(warnings).toEqual([]);
   });
 
   it("无 mcpServers 段时返回空结果且无警告", () => {
-    const { servers, warnings } = loadMcpServers(writeConfig({ llm: {} }));
+    const { servers, warnings } = loadMcpServers({
+      globalConfigPath: writeConfig({ llm: {} }),
+    });
 
     expect(servers.size).toBe(0);
     expect(warnings).toEqual([]);
@@ -52,7 +56,7 @@ describe("loadMcpServers", () => {
       },
     });
 
-    const { servers, warnings } = loadMcpServers(path);
+    const { servers, warnings } = loadMcpServers({ globalConfigPath: path });
 
     expect(warnings).toEqual([]);
     expect(servers.get("explicit")).toEqual({
@@ -93,7 +97,7 @@ describe("loadMcpServers", () => {
       },
     });
 
-    const { servers, warnings } = loadMcpServers(path);
+    const { servers, warnings } = loadMcpServers({ globalConfigPath: path });
 
     expect(warnings).toEqual([]);
     expect(servers.get("stdio")).toEqual({
@@ -112,7 +116,7 @@ describe("loadMcpServers", () => {
   it("JSON 损坏时告警并忽略全部服务器", () => {
     const path = join(dir, "broken.json");
     writeFileSync(path, "{ not valid json");
-    const { servers, warnings } = loadMcpServers(path);
+    const { servers, warnings } = loadMcpServers({ globalConfigPath: path });
 
     expect(servers.size).toBe(0);
     expect(warnings).toHaveLength(1);
@@ -120,9 +124,9 @@ describe("loadMcpServers", () => {
   });
 
   it("mcpServers 不是对象时告警并忽略全部服务器", () => {
-    const { servers, warnings } = loadMcpServers(
-      writeConfig({ mcpServers: ["a", "b"] }),
-    );
+    const { servers, warnings } = loadMcpServers({
+      globalConfigPath: writeConfig({ mcpServers: ["a", "b"] }),
+    });
 
     expect(servers.size).toBe(0);
     expect(warnings).toHaveLength(1);
@@ -144,7 +148,7 @@ describe("loadMcpServers", () => {
       },
     });
 
-    const { servers, warnings } = loadMcpServers(path);
+    const { servers, warnings } = loadMcpServers({ globalConfigPath: path });
 
     expect(servers.size).toBe(1);
     expect(servers.get("good")).toEqual({ type: "stdio", command: "node" });
@@ -158,7 +162,7 @@ describe("loadMcpServers", () => {
       },
     });
 
-    const { servers, warnings } = loadMcpServers(path);
+    const { servers, warnings } = loadMcpServers({ globalConfigPath: path });
 
     expect(servers.size).toBe(0);
     expect(warnings.some((w) => w.includes("服务器名不能为空"))).toBe(true);
@@ -182,7 +186,10 @@ describe("loadMcpServers", () => {
       }),
     );
 
-    const { servers, warnings } = loadMcpServers(globalPath, projectPath);
+    const { servers, warnings } = loadMcpServers({
+      globalConfigPath: globalPath,
+      projectConfigPath: projectPath,
+    });
 
     expect(servers.size).toBe(3);
     // 同名服务器：项目配置覆盖全局
@@ -191,8 +198,14 @@ describe("loadMcpServers", () => {
       url: "https://project.example.com/mcp",
     });
     // 仅全局 / 仅项目定义的服务器均保留
-    expect(servers.get("onlyGlobal")).toEqual({ type: "stdio", command: "node" });
-    expect(servers.get("onlyProject")).toEqual({ type: "stdio", command: "node" });
+    expect(servers.get("onlyGlobal")).toEqual({
+      type: "stdio",
+      command: "node",
+    });
+    expect(servers.get("onlyProject")).toEqual({
+      type: "stdio",
+      command: "node",
+    });
     expect(warnings.some((w) => w.includes("已加载项目配置"))).toBe(true);
     expect(
       warnings.some((w) => w.includes("重复定义") && w.includes("shared")),
@@ -204,10 +217,10 @@ describe("loadMcpServers", () => {
       mcpServers: { local: { type: "stdio", command: "node" } },
     });
 
-    const { servers, warnings } = loadMcpServers(
-      globalPath,
-      join(dir, "missing.json"),
-    );
+    const { servers, warnings } = loadMcpServers({
+      globalConfigPath: globalPath,
+      projectConfigPath: join(dir, "missing.json"),
+    });
 
     expect(servers.size).toBe(1);
     expect(warnings).toEqual([]);

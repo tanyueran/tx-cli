@@ -1,7 +1,7 @@
 import { tmpdir } from "node:os";
 import type { SandboxLevel, TierConfig } from "../types";
 import type { SandboxFileConfig } from "../config/schema";
-import { expandHome } from "./path-match";
+import { expandHome } from "../../../shared/paths";
 
 /** read-only 档默认禁读的敏感目录（凭据与密钥存放处） */
 export const DEFAULT_DENY_READ: readonly string[] = [
