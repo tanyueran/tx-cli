@@ -47,8 +47,10 @@ interface ReplSession {
   thinkingStyle: ThinkingStyle;
   /** 组装后的 system 提示词（含技能元数据清单） */
   systemPrompt: string;
-  /** 本会话可用的工具列表（按模式装配：内置 + load_skill + write_todos + bash + MCP） */
+  /** 本会话可执行的工具列表（全量，含未激活的 MCP 工具） */
   tools: Tool[];
+  /** 下发给模型的工具清单（MCP 折叠时仅含 discover_mcp_tools 与已激活工具，与请求层共享引用） */
+  advertisedTools: Tool[];
   /** 任务清单工具句柄（agent 模式装配 write_todos 时存在，/todos 读取清单状态） */
   todoHandle?: TodoToolHandle;
   /** 工具调用轮数上限（按模式装配：chat 8 轮、agent 40 轮），超出后软收敛为直接作答 */
@@ -107,7 +109,7 @@ async function runReplTurn({
       thinkingStyle: session.thinkingStyle,
       thinkingEffortMap: session.llmConfig.thinkingEffortMap,
     }),
-    tools: session.tools,
+    tools: session.advertisedTools,
     onDelta: renderer.onDelta,
     onReasoningDelta: renderer.onReasoningDelta,
   });
@@ -217,7 +219,8 @@ export async function runConversationRepl(options: ReplOptions): Promise<void> {
   const { llmConfig, runtime, thinkingStyle } = options;
   // 档位由 /think 在会话内切换，仅本函数持有可变状态
   let currentLevel = options.initialThinkingLevel;
-  const { systemPrompt, tools, catalog, todoHandle } = runtime.skill;
+  const { systemPrompt, tools, advertisedTools, catalog, todoHandle } =
+    runtime.skill;
   const { sandbox } = runtime;
   // 斜杠命令注册表：补全面板、/help、就绪面板与分发共用；档位读写经闭包桥接本函数的 currentLevel
   const commands = buildSlashCommands({
@@ -242,6 +245,7 @@ export async function runConversationRepl(options: ReplOptions): Promise<void> {
     thinkingStyle,
     systemPrompt,
     tools,
+    advertisedTools,
     todoHandle,
     maxIterations: options.maxIterations,
   };

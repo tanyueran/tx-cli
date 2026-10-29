@@ -9,15 +9,24 @@ import type { TodoToolHandle } from "../../tools";
 import { createBashTool } from "../../tools/builtin/bash";
 import { wrapToolWithPermission } from "../../tools/permission";
 import type { SandboxContext } from "../../sandbox/runtime/context";
+import { createMcpDiscoveryTool } from "../../mcp/discovery-tool";
 import { buildSystemPrompt } from "./prompt";
 import { CliError } from "../../../shared/errors";
+
+/** MCP 工具内联下发阈值：超过该数量时折叠为 discover_mcp_tools 按需激活，避免每轮请求背负全部 schema */
+export const MCP_INLINE_TOOL_LIMIT = 8;
 
 /** 技能装配结果：system 提示词、工具列表、技能目录、扫描警告 */
 export interface SkillContext {
   /** 组装后的 system 提示词（含技能元数据清单） */
   systemPrompt: string;
-  /** 会话可用工具列表：内置工具 + load_skill（存在技能时）+ write_todos（agent 模式）+ bash（沙箱启用时）+ 外部工具（如 MCP） */
+  /** 会话可执行工具列表（全量，含未激活的 MCP 工具）：内置工具 + load_skill + write_todos + bash + 外部工具 */
   tools: Tool[];
+  /**
+   * 下发给模型的工具清单：MCP 工具数超过 MCP_INLINE_TOOL_LIMIT 时折叠为 discover_mcp_tools，
+   * 激活的工具被原地追加进本数组（与请求层共享引用），从下一轮起携带完整定义
+   */
+  advertisedTools: Tool[];
   /** 技能目录（/skills 内联命令展示用） */
   catalog: SkillCatalog;
   /** 扫描警告（启动时黄字提示） */
@@ -93,29 +102,44 @@ export function setupSkillContext({
     assembly?.writeToolsEnabled === false
       ? builtinTools.filter((tool) => !WRITE_TOOL_NAMES.has(tool.name))
       : builtinTools;
-  const tools: Tool[] = [...availableBuiltinTools];
+  const internalTools: Tool[] = [...availableBuiltinTools];
   if (skills.length > 0) {
-    tools.push(createLoadSkillTool(catalog));
+    internalTools.push(createLoadSkillTool(catalog));
   }
   // 任务清单工具（write_todos）：agent 模式装配，工具实例闭包持有会话级清单状态（/todos 读取）
   if (assembly?.todosEnabled) {
     todoHandle = createTodoTool();
-    tools.push(todoHandle.tool);
+    internalTools.push(todoHandle.tool);
   }
   // bash 依赖沙箱执行：无沙箱或显式关闭（chat 模式 / --no-bash）时不装配
   const bashAssembled = sandbox !== undefined && (assembly?.bashEnabled ?? true);
   if (bashAssembled) {
-    tools.push(createBashTool(sandbox));
+    internalTools.push(createBashTool(sandbox));
   }
-  tools.push(...extraTools);
-  ensureUniqueToolNames(tools);
-  // 声明了 permission 的工具（如 bash）经 L2 规则判定 + L3 审批门卫包装
-  const gatedTools = sandbox
-    ? tools.map((tool) => wrapToolWithPermission(tool, sandbox))
-    : tools;
+  ensureUniqueToolNames([...internalTools, ...extraTools]);
+  /** 按会话沙箱策略包装单个工具：声明了 permission 的工具经 L2 规则判定 + L3 审批门卫（无沙箱时原样返回） */
+  const gate = (tool: Tool): Tool =>
+    sandbox ? wrapToolWithPermission(tool, sandbox) : tool;
+  const gatedInternal = internalTools.map(gate);
+  const gatedExtra = extraTools.map(gate);
+  // 外部工具（MCP）超过阈值时折叠：常驻只下发 discover_mcp_tools，激活的工具经共享数组引用进入后续请求；
+  // 执行侧始终持有全量工具（含未激活项），权限门卫与审批链不变
+  const folded = gatedExtra.length > MCP_INLINE_TOOL_LIMIT;
+  const advertisedTools: Tool[] = [...gatedInternal];
+  if (folded) {
+    advertisedTools.push(createMcpDiscoveryTool(gatedExtra, advertisedTools));
+  } else {
+    advertisedTools.push(...gatedExtra);
+  }
+  const tools = folded ? [...advertisedTools, ...gatedExtra] : advertisedTools;
+  let systemPrompt = buildSystemPrompt(basePrompt, skills);
+  if (folded) {
+    systemPrompt += `\n\n外部 MCP 工具共 ${gatedExtra.length} 个，为节省上下文未全部展开定义；需要时先调用 discover_mcp_tools 检索目录并用 activate 激活目标工具，再按工具名调用。`;
+  }
   return {
-    systemPrompt: buildSystemPrompt(basePrompt, skills),
-    tools: gatedTools,
+    systemPrompt,
+    tools,
+    advertisedTools,
     catalog,
     scanWarnings: skillWarnings,
     bashEnabled: bashAssembled,
