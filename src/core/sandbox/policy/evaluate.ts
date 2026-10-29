@@ -222,7 +222,11 @@ export function evaluateCommand(
   for (const segment of segments) {
     // 内置危险类目与用户 deny 均走穿透匹配（allow 不穿透）
     const dangerHit = dangerRules
-      ? matchDangerRule(stripWrappers(segment), dangerRules)
+      ? matchDangerRule(
+          stripWrappers(segment),
+          dangerRules,
+          level !== "danger-full-access",
+        )
       : undefined;
     if (dangerHit) {
       return {
