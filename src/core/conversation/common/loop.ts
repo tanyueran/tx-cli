@@ -23,7 +23,7 @@ export type RunTurn = (
   toolsDisabled: boolean
 ) => Promise<TurnOutcome>;
 
-/** 工具调用轮数默认上限：模式未指定 maxIterations 时回退该值（chat 显式 8、agent 显式 20） */
+/** 工具调用轮数默认上限：模式未指定 maxIterations 时回退该值（chat 显式 8、agent 显式 40） */
 export const DEFAULT_MAX_ITERATIONS = 8;
 
 /** agentic 循环参数 */

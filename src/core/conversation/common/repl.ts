@@ -51,7 +51,7 @@ interface ReplSession {
   tools: Tool[];
   /** 任务清单工具句柄（agent 模式装配 write_todos 时存在，/todos 读取清单状态） */
   todoHandle?: TodoToolHandle;
-  /** 工具调用轮数上限（按模式装配：chat 8 轮、agent 20 轮），超出后软收敛为直接作答 */
+  /** 工具调用轮数上限（按模式装配：chat 8 轮、agent 40 轮），超出后软收敛为直接作答 */
   maxIterations: number;
 }
 
@@ -67,7 +67,7 @@ export interface ReplOptions {
   initialThinkingLevel: ThinkingLevel;
   /** 模式标签（就绪面板「模式」行展示，如「对话模式」「Agent 模式」） */
   modeLabel: string;
-  /** 工具调用轮数上限（来自模式配置，如 chat 8 轮、agent 20 轮） */
+  /** 工具调用轮数上限（来自模式配置，如 chat 8 轮、agent 40 轮） */
   maxIterations: number;
 }
 

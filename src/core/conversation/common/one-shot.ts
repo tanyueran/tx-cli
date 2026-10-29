@@ -96,7 +96,7 @@ export async function runOneShotConversation({
       onReasoningDelta: renderer.onReasoningDelta,
     });
     // 回答由 onDelta 流式输出；每次工具调用前结束思考块并打印一行提示，避免中间轮静默无输出
-    // 轮数上限由模式决定（chat 8 轮、agent 20 轮），未指定时回退 loop 默认值；进入软收敛轮时提示用户
+    // 轮数上限由模式决定（chat 8 轮、agent 40 轮），未指定时回退 loop 默认值；进入软收敛轮时提示用户
     const maxIterations = modeConfig.maxIterations ?? DEFAULT_MAX_ITERATIONS;
     await runAgentLoop({
       runTurn,

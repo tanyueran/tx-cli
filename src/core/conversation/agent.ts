@@ -17,11 +17,11 @@ export const SYSTEM_PROMPT =
   "（全量替换，同一时刻仅一项 in_progress），简单任务不必使用；" +
   "完成后简要汇报：做了什么、改了哪些文件、遗留什么风险。";
 
-/** agent 模式配置：任务执行人设，全量工具带（bash 跟随 cliSandboxOptions/配置装配，write_todos 开启），任务拆解步骤多故放宽到 20 轮 */
+/** agent 模式配置：任务执行人设，全量工具带（bash 跟随 cliSandboxOptions/配置装配，write_todos 开启），任务拆解步骤多故放宽到 40 轮 */
 export const AGENT_MODE_CONFIG: ConversationModeConfig = {
   basePrompt: SYSTEM_PROMPT,
   modeLabel: "Agent 模式",
-  maxIterations: 20,
+  maxIterations: 40,
   todosEnabled: true,
 };
 
