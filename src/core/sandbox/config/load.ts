@@ -324,8 +324,7 @@ function parseSandboxSection(
 }
 
 /**
- * 归一化 MCP 规则：mcp.rules 段为 MCP 工具专属，规则名可省略 mcp__ 前缀，统一补全
- * （带前缀的写法原样保留，兼容从 sandbox.rules 迁移过来的规则文本）
+ * 归一化 MCP 规则：规则名可省略 mcp__ 前缀，统一补全（带前缀的写法原样保留）
  * @param {string} rule - 规则原文，如 Chrome_DevTools_MCP__* 或 mcp__github__*
  * @returns {string} 归一化后的规则（统一以 mcp__ 开头）
  */
@@ -336,8 +335,7 @@ function normalizeMcpRule(rule: string): string {
 
 /**
  * 解析配置文件顶层 mcp 段的 rules 子段：MCP 工具专属的 allow/ask/deny 规则，
- * 与 sandbox.rules 分离存放，避免 MCP 规则混入沙箱配置造成误解；
- * 仅收录显式配置且合法的字段，单个字段非法只跳过并记录警告（失败隔离）
+ * 与 sandbox.rules 分离存放，避免 MCP 规则混入沙箱配置造成误解（解析行为同 parseSandboxSection）
  * @param {unknown} rawValue - 配置文件 mcp 段原始值
  * @param {string[]} warnings - 警告收集器（就地追加）
  * @returns {Partial<SandboxRulesConfig> | undefined} 归一化后的部分规则，段缺失时为 undefined
@@ -641,7 +639,6 @@ function mergeProjectConfig(
       timeoutMs: projectConfig.bash?.timeoutMs ?? globalConfig.bash.timeoutMs,
     },
     rules: {
-      // allow 保持并集：会话授权「始终允许」落盘项目配置，忽略会使既有授权失效；
       // ask / deny 为收紧类，保持并集
       allow: projectConfig.rules?.allow
         ? mergeStringArrays(globalConfig.rules.allow, projectConfig.rules.allow)
@@ -665,11 +662,9 @@ export interface LoadSandboxConfigOptions {
 }
 
 /**
- * 加载 sandbox 与 mcp.rules 配置：全局 ~/.tx-cli/config.json 与项目 <cwd>/.tx-cli/config.json 两级合并，
- * 优先级为 CLI（命令层处理）> 项目配置 > 全局配置 > 内置默认；
- * 合并为能力感知语义：项目配置仅可收紧沙箱能力，放宽类字段（放宽档位/审批、关沙箱/内置危险规则/审计、
- * 开 bash、trustDirectories、writableRoots、allowedDomains）来自项目配置时忽略并警告，
- * 防止仓库自带 .tx-cli/config.json 自证信任；rules.allow 保持并集（承载会话授权落盘）；
+ * 加载 sandbox 与 mcp.rules 配置：全局 ~/.tx-cli/config.json 与项目 <cwd>/.tx-cli/config.json
+ * 两级合并（项目配置仅可收紧沙箱能力，能力感知合并语义见 mergeProjectConfig），
+ * 含 CLI 在内的完整优先级链路见 bootstrap/options.ts；
  * mcp.rules 段为 MCP 工具专属规则，与 sandbox.rules 同步解析并在文件内合并后参与两级合并；
  * 单个字段非法只跳过并记录警告，不影响其余字段与整个会话（失败隔离）
  * @param {LoadSandboxConfigOptions} [options] - 全局/项目配置文件路径（均可注入以便测试）

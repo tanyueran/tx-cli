@@ -12,9 +12,9 @@ import {
   matchSlashCommand,
   parseSkillArgs,
   printHelp,
-} from "../src/core/conversation/common/slash-commands";
+} from "../src/core/conversation/common/repl/slash-commands";
 import { SkillCatalog } from "../src/core/skills";
-import type { SlashCommandDeps } from "../src/core/conversation/common/slash-commands";
+import type { SlashCommandDeps } from "../src/core/conversation/common/repl/slash-commands";
 import type { TodoToolHandle } from "../src/core/tools";
 
 /** 构造无沙箱、无任务清单、none 思考风格的最小依赖（档位经 lastLevel 观测），可按用例覆盖字段 */

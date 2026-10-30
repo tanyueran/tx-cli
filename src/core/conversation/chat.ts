@@ -3,7 +3,7 @@
  * 模式差异收敛为 CHAT_MODE_CONFIG 配置，单次/多轮机制复用 common
  */
 import { runOneShotConversation, runReplConversation } from "./common";
-import type { ConversationModeConfig } from "./common/mode";
+import type { ConversationModeConfig } from "./common/runtime/mode";
 import type { LlmConfig, ThinkingLevel } from "../llm/types";
 
 /** chat 命令的基础 system 提示词（人设），经 setupSkillContext 组装技能清单后下发 */
@@ -32,12 +32,9 @@ interface OneShotChatOptions {
 }
 
 /**
- * 单次问答（chat 命令的 Chat 模式入口）：只读问答，轻量工具带——固定不装配 bash 与 MCP，
- * 写侧工具（write_file / edit_file）在装配阶段剔除，只读语义不依赖沙箱档位配置；
- * 沙箱上下文仍创建（只读工具继续受 fs 边界管控），技能照常装配；
- * 思考档位链路：--think > 配置文件（项目 > 全局）> low（轻量兜底，由会话层解析）；
- * 具体流程复用 common 的 runOneShotConversation
- * @param {OneShotChatOptions} options - 入参对象（llmConfig/question/thinkingLevel 字段说明见接口定义）
+ * chat 命令的单次问答（Chat 模式入口），流程复用 common 的 runOneShotConversation
+ * 只读语义由模式配置强制：固定不装配 bash、MCP 与写侧工具，不依赖沙箱档位配置
+ * @param {OneShotChatOptions} options - 入参对象（字段说明见接口定义）
  * @returns {Promise<void>}
  */
 export async function runOneShotChat({
@@ -55,11 +52,8 @@ export async function runOneShotChat({
 }
 
 /**
- * 多轮对话模式（REPL，chat 命令的 Chat 模式入口）：只读问答，轻量工具带——固定不装配 bash 与 MCP，
- * 写侧工具（write_file / edit_file）在装配阶段剔除，只读语义不依赖沙箱档位配置；
- * 沙箱上下文仍创建（只读工具继续受 fs 边界管控），技能照常装配；
- * 思考档位链路同单次问答，会话内可用 /think 切换；
- * 会话循环复用 common 的 runReplConversation
+ * chat 命令的多轮对话模式（REPL 入口），会话循环复用 common 的 runReplConversation
+ * 只读语义同单次问答；会话内可用 /think 切换思考档位
  * @param {LlmConfig} llmConfig - LLM 接入配置
  * @param {ThinkingLevel | undefined} thinkingLevel - 初始思考档位，未指定时回退配置默认
  * @returns {Promise<void>}

@@ -4,10 +4,8 @@ import { resolveProjectConfigPath } from "../../../shared/user-config";
 
 /**
  * 追加一条「始终允许」授权到项目空间配置文件（不存在则创建，重复规则不重复写入）
- * 规则按前缀分流落盘：mcp__ 开头的 MCP 工具授权写入 mcp.rules.allow（MCP 专属段），
- * 其余（bash 命令、内置工具）写入 sandbox.rules.allow；
- * 保留文件中其余字段，仅更新对应 allow 数组；授权归属当前项目，不跨项目生效；
- * 读取侧由 loadSandboxConfig 按「项目 > 全局、数组合并」统一装载
+ * mcp__ 开头的授权写入 mcp.rules.allow（MCP 专属段），其余写入 sandbox.rules.allow；
+ * 授权归属当前项目，不跨项目生效；读取侧由 loadSandboxConfig 按「项目 > 全局、数组合并」统一装载
  * @param {string} cwd - 项目根目录（绝对路径）
  * @param {string} rule - 规则文本（格式同 rules.allow，如 bash(git status:*) 或 mcp__server__*）
  * @param {string} path - 项目配置文件路径（缺省 <cwd>/.tx-cli/config.json，测试可注入）

@@ -1,34 +1,28 @@
 import pico from "picocolors";
-import { createResponsesTurn } from "./responses-turn";
-import {
-  createStreamRenderer,
-  createToolCallLogger,
-  createSoftConvergeNotice,
-} from "./renderer";
-import { runAgentLoop, DEFAULT_MAX_ITERATIONS } from "./loop";
+import { executeConversationTurn } from "../turn/execute-turn";
+import { DEFAULT_MAX_ITERATIONS } from "../turn/loop";
 import {
   createConversationRuntime,
   disposeConversationRuntime,
-} from "./runtime";
-import type { ConversationRuntime } from "./runtime";
-import type { ConversationModeConfig } from "./mode";
-import type { SandboxCliOptions } from "../../sandbox";
-import type { TodoToolHandle, Tool } from "../../tools";
-import { CancelError, CliError } from "../../../shared/errors";
-import { printWarnings } from "../../../shared/warnings";
+} from "../runtime/runtime";
+import type { ConversationRuntime } from "../runtime/runtime";
+import type { ConversationModeConfig } from "../runtime/mode";
+import type { SandboxCliOptions } from "../../../sandbox";
+import type { TodoToolHandle, Tool } from "../../../tools";
+import { CancelError, CliError } from "../../../../shared/errors";
+import { printWarnings } from "../../../../shared/warnings";
 import {
   warnThinkingFallback,
-  resolveResponsesThinkingFields,
   resolveThinkingLevel,
   resolveThinkingStyle,
-} from "../../llm";
+} from "../../../llm";
 import type {
   LlmConfig,
   ResponseHistoryItem,
   ThinkingLevel,
   ThinkingStyle,
-} from "../../llm/types";
-import { displayWidth } from "../../../shared/string";
+} from "../../../llm/types";
+import { displayWidth } from "../../../../shared/string";
 import { askReplLine } from "./repl-input";
 import {
   buildSlashCommands,
@@ -86,9 +80,8 @@ interface ReplTurnOptions {
 }
 
 /**
- * 执行多轮对话的一轮：Responses API 无状态模式 + agentic loop，工具调用按会话装配的工具带开启
- * store=false：服务端不留存会话，历史由本地维护并每轮全量发送，跨轮经共享 history 数组衔接；
- * 深度思考内容以暗色流式输出（模型未返回时不输出），instructions 每轮重传
+ * 执行多轮对话的一轮：回合执行复用 executeConversationTurn，工具带按会话装配开启
+ * store=false：服务端不留存会话，历史由本地维护并每轮全量发送，跨轮经共享 history 数组衔接
  * @param {ReplTurnOptions} options - 入参对象（session/history/userInput/thinkingLevel 字段说明见接口定义）
  * @returns {Promise<void>}
  */
@@ -98,27 +91,16 @@ async function runReplTurn({
   userInput,
   thinkingLevel,
 }: ReplTurnOptions): Promise<void> {
-  const renderer = createStreamRenderer();
-  const runTurn = createResponsesTurn({
+  await executeConversationTurn({
     llmConfig: session.llmConfig,
-    userInput,
+    thinkingLevel,
+    thinkingStyle: session.thinkingStyle,
     history,
+    userInput,
     instructions: session.systemPrompt,
-    extraBody: resolveResponsesThinkingFields({
-      thinkingLevel,
-      thinkingStyle: session.thinkingStyle,
-      thinkingEffortMap: session.llmConfig.thinkingEffortMap,
-    }),
-    tools: session.advertisedTools,
-    onDelta: renderer.onDelta,
-    onReasoningDelta: renderer.onReasoningDelta,
-  });
-  await runAgentLoop({
-    runTurn,
     tools: session.tools,
+    advertisedTools: session.advertisedTools,
     maxIterations: session.maxIterations,
-    onToolCall: createToolCallLogger(renderer),
-    onSoftConverge: createSoftConvergeNotice(renderer, session.maxIterations),
   });
   process.stdout.write("\n\n");
 }
@@ -153,10 +135,10 @@ function formatElapsed(ms: number): string {
 }
 
 /**
- * 打印 REPL 启动就绪面板：信息分组行（模式/模型/技能/MCP）与命令提示行，
- * 命令提示行由斜杠命令注册表按 available 过滤生成，与补全面板、/help 单一事实来源；
- * 装配阶段警告（技能扫描、沙箱装载、MCP 连接）统一缩进展示在面板下方，
- * 替代原先分散的连接日志与长句欢迎语，默认状态只保留面板主体
+ * 打印 REPL 启动就绪面板：信息分组行（模式/模型/技能/MCP）与命令提示行
+ *
+ * 命令提示行由斜杠命令注册表按 available 过滤生成（与补全面板、/help 单一事实来源）；
+ * 装配阶段警告（技能扫描、沙箱装载、MCP 连接）统一缩进展示在面板下方，默认状态只保留面板主体
  * @param {ReplOptions} options - 启动参数（配置、会话运行时、模式标签）
  * @param {ThinkingLevel} thinkingLevel - 初始思考档位
  * @param {SlashCommand[]} commands - 斜杠命令注册表
@@ -205,13 +187,13 @@ function printReadyPanel(
 }
 
 /**
- * 多轮对话 REPL 主循环（chat、agent 命令共用）：循环提问，直到用户输入 exit/quit 或按 Ctrl+C 退出
- * 基于 Responses API（无状态模式）+ agentic loop：历史由本地维护、每轮全量发送，
- * 模型可在任意一轮发起工具调用，工具带与沙箱由调用方经会话运行时按模式装配
- * 输入行由自研组件 askReplLine 采集：行首输入 "/" 弹出斜杠命令/技能补全面板（≤10 条、↑↓ 选择、Tab 补全），
- * 行中「空格 + /」弹出技能补全面板（仅技能提及，补全为 /name 纯文本，不展开手册），
- * 分发经命令注册表查表执行（/think、/skill、/skills、/todos、/permissions、/help）
- * 单轮请求失败（网络抖动、限流等可预期错误）只提示不终止会话，避免丢失整个对话上下文
+ * 多轮对话 REPL 主循环（chat、agent 命令共用）：循环采集输入并执行回合，直到用户退出
+ *
+ * 输入行由 askReplLine 采集：行首 "/" 弹出斜杠命令/技能补全面板（≤10 条、↑↓ 选择、Tab 补全），
+ * 行中「空格 + /」弹出技能补全面板（仅技能提及，补全为 /name 纯文本）；
+ * 命令分发经注册表查表执行（/think、/skill、/skills、/todos、/permissions、/help），未命中按普通问题发给模型；
+ * 单轮请求失败（网络抖动、限流等可预期错误）只提示不终止会话，避免丢失整个对话上下文；
+ * 交互中取消（Ctrl+C）回滚本轮历史后继续会话
  * @param {ReplOptions} options - 启动参数（配置、会话运行时、思考风格与初始档位、模式标签）
  * @returns {Promise<void>}
  */
@@ -344,8 +326,8 @@ export interface ReplConversationOptions {
 
 /**
  * 多轮对话入口（chat、agent 命令共用的 REPL 薄入口）：解析档位 → 装配会话运行时 → 进入 REPL 循环
- * 模式差异（人设、标签、bash 装配策略）由 modeConfig 决定；运行时生命周期在本函数内管理
- * @param {ReplConversationOptions} options - 入参对象（llmConfig/modeConfig/thinkingLevel/mcpEnabled/cliSandboxOptions 字段说明见接口定义）
+ * 模式差异（人设、标签、工具带装配策略）由 modeConfig 决定；运行时生命周期在本函数内管理
+ * @param {ReplConversationOptions} options - 入参对象（字段说明见接口定义）
  * @returns {Promise<void>}
  */
 export async function runReplConversation({
@@ -355,11 +337,13 @@ export async function runReplConversation({
   mcpEnabled = true,
   cliSandboxOptions,
 }: ReplConversationOptions): Promise<void> {
+  // 获取最终生效的思考档位
   const currentLevel = resolveThinkingLevel({
     cliLevel: thinkingLevel,
     llmConfig: llmConfig,
     fallback: modeConfig.defaultThinkingLevel,
   });
+  // 获取最终生效的思考样式
   const thinkingStyle = resolveThinkingStyle(llmConfig);
   const runtime = await createConversationRuntime(modeConfig.basePrompt, {
     mcpEnabled,

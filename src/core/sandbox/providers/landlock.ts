@@ -4,9 +4,9 @@ import type {
   SandboxProvider,
   SandboxViolationInfo,
   TierConfig,
-} from "../../types";
-import { isExecutable } from "../../../../shared/fs";
-import { shellQuote } from "../../utils/shell";
+} from "../types";
+import { isExecutable } from "../../../shared/fs";
+import { shellQuote } from "../utils/shell";
 
 /** 外部 helper 的可执行文件名（PATH 或 ~/.tx-cli/bin 下探测） */
 const HELPER_BIN = "landlock-exec";
@@ -49,8 +49,7 @@ async function resolveHelperPath(): Promise<string | null> {
 /**
  * Landlock 沙箱 Provider：基于外部 helper（landlock-exec）的 Linux 内核级隔离
  * 现实约束：Node 无法直接发起 Landlock syscall（seccomp + prctl 需在 exec 前由父进程设置），
- * 因此设计为外部 helper 方案——helper 需用户自行安装（放置于 PATH 或 ~/.tx-cli/bin，
- * 或经 TX_SANDBOX_LANDLOCK_HELPER 指定路径），CLI 按约定的命令行参数调用它；
+ * 因此设计为外部 helper 方案（helper 需用户自行安装，探测规则见 resolveHelperPath）；
  * Landlock 是 allow-list 语义，denyRead 这类「父目录已授权时排除子树」无法表达，
  * 细粒度路径排除由应用层（fs 工具边界检查）与规则层兜底；
  * Landlock 违规表现为 EACCES/EPERM（信息已在 stderr 原文中），无结构化违规事件通道

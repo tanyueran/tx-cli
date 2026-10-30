@@ -1,7 +1,7 @@
 import type {
   SandboxProvider,
   SandboxViolationInfo,
-} from "../../types";
+} from "../types";
 
 /**
  * noop Provider：直通实现，不提供任何隔离
@@ -23,9 +23,7 @@ export const noopProvider: SandboxProvider = {
    * 无需初始化
    * @returns {Promise<void>}
    */
-  async initialize(): Promise<void> {
-    // 直通实现：无隔离边界需要建立
-  },
+  async initialize(): Promise<void> {},
 
   /**
    * 原样返回命令
@@ -53,7 +51,5 @@ export const noopProvider: SandboxProvider = {
    * 无资源需要释放
    * @returns {Promise<void>}
    */
-  async dispose(): Promise<void> {
-    // 直通实现：无清理动作
-  },
+  async dispose(): Promise<void> {},
 };

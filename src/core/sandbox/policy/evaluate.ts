@@ -60,17 +60,12 @@ export type ToolCategory = "command" | "tool" | "mcp-tool" | "mcp-read";
 
 /**
  * 按档位、审批策略与工具类目给出未命中任何规则时的默认判定
- * - danger-full-access：沙箱与规则全关，默认放行
- * - mcp-read：MCP 只读工具（readOnlyHint 为 true）无外部副作用，默认放行；
- *   always-ask 策略下仍征询，尊重用户"每次都问"的显式选择
- * - mcp-tool：MCP 工具在沙箱硬边界之外，不走"沙箱兜底放行"，默认改为审批；
- *   never 策略无法征询，按拒绝处理（fail-closed）
- * - tool 且声明 net 能力（read-only 档）：read-only 承诺禁网，而进程内网络工具
- *   不受沙箱网络白名单约束；声明 readOnlySafe 的无副作用只读检索工具（如 web_search）
- *   口径对齐 mcp-read 默认放行（always-ask 策略下仍征询），
- *   其余未命中规则时默认审批（与 MCP 工具口径对齐）；never 策略无法征询，按拒绝处理
- * - 其余类目：read-only/workspace-write 依赖沙箱硬边界兜底默认放行；
- *   always-ask 策略下未知命令交由用户裁决
+ *
+ * danger-full-access 全放行；mcp-read 与声明 readOnlySafe 的只读检索工具（read-only 档）
+ * 无外部副作用默认放行，always-ask 下仍征询；mcp-tool 在沙箱硬边界之外、read-only 档
+ * 其余 net 工具因进程内网络调用不受沙箱约束，均默认审批，never 策略无法征询按拒绝处理
+ * （fail-closed）；其余类目依赖沙箱硬边界兜底放行，always-ask 下未知命令交由用户裁决
+ *
  * @param {SandboxLevel} level - 沙箱档位
  * @param {ApprovalPolicy} approval - 审批策略
  * @param {ToolCategory} category - 工具类目（bash 为 command，内置工具为 tool，MCP 工具为 mcp-tool / mcp-read）
@@ -98,7 +93,7 @@ function defaultDecision(
     if (approval === "always-ask") {
       return {
         decision: "ask",
-        // matchedRule 取工具键本身：用户选"本会话/始终允许"时按该工具粒度复用授权
+        // matchedRule 取规则键：授权按该工具粒度复用
         matchedRule: ruleKey,
         reason: `只读 MCP 工具 ${ruleKey} 未命中任何规则，always-ask 策略下默认询问`,
       };
@@ -119,18 +114,17 @@ function defaultDecision(
     }
     return {
       decision: "ask",
-      // matchedRule 取工具键本身：用户选"本会话/始终允许"时按该工具粒度复用授权
+      // matchedRule 取规则键：授权按该工具粒度复用
       matchedRule: ruleKey,
       reason: `MCP 工具 ${ruleKey} 未命中任何规则，默认需要审批`,
     };
   }
   if (level === "read-only" && category === "tool" && capabilities.includes("net")) {
-    // 只读检索工具无外部副作用，口径对齐声明 readOnlyHint 的 MCP 只读工具：默认放行，always-ask 仍询问
     if (readOnlySafe) {
       if (approval === "always-ask") {
         return {
           decision: "ask",
-          // matchedRule 取规则键本身：用户选"本会话/始终允许"时按该工具粒度复用授权
+          // matchedRule 取规则键：授权按该工具粒度复用
           matchedRule: ruleKey,
           reason: `只读检索工具 ${ruleKey} 未命中任何规则，always-ask 策略下默认询问`,
         };
@@ -150,7 +144,7 @@ function defaultDecision(
     }
     return {
       decision: "ask",
-      // matchedRule 取规则键本身：用户选"本会话/始终允许"时按该工具粒度复用授权
+      // matchedRule 取规则键：授权按该工具粒度复用
       matchedRule: ruleKey,
       reason: `网络工具 ${ruleKey} 在 read-only 档默认需要审批（该档承诺禁网，进程内网络调用不受沙箱边界约束）`,
     };

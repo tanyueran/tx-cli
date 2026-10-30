@@ -1,4 +1,4 @@
-import type { SandboxContext } from "../sandbox/runtime/context";
+import type { SandboxContext } from "../sandbox/runtime/sandbox-context";
 import { throwIfTurnCancelled } from "../../shared/turn-cancel";
 import type { Tool, ToolOutput, ToolPermission } from "./types";
 
@@ -34,13 +34,14 @@ export function wrapToolWithPermission(
         // 排队中的剩余任务不再执行，避免取消后静默跑完同轮命令
         throwIfTurnCancelled();
         const ruleKey = permission.ruleKey(args);
-        const guardDenial = await sandbox.guard(
-          tool.name,
+        const guardDenial = await sandbox.guard({
+          toolName: tool.name,
           ruleKey,
-          permission.capabilities,
-          permission.mcp,
-          permission.readOnlySafe === true,
-        );
+          capabilities: permission.capabilities,
+          mcp: permission.mcp,
+          readOnlySafe: permission.readOnlySafe === true,
+        });
+        // 规则判定拒绝：拒绝执行并记录拒绝原因
         if (guardDenial) {
           return guardDenial;
         }
@@ -51,14 +52,13 @@ export function wrapToolWithPermission(
           args,
           ruleKey,
         );
+        // 档位边界拒绝：拒绝执行并记录拒绝原因
         if (fsDenial) {
           return fsDenial;
         }
         return tool.execute(args);
       };
-      return permission.isSerial
-        ? sandbox.runSerial(invoke)
-        : invoke();
+      return permission.isSerial ? sandbox.runSerial(invoke) : invoke();
     },
   };
 }

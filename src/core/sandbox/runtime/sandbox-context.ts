@@ -10,8 +10,8 @@ import type {
   TierConfig,
 } from "../types";
 import type { SandboxFileConfig, SandboxRulesConfig } from "../config/schema";
-import { appendProjectGrant } from "../config/grants";
-import { appendAudit, type AuditEntry } from "../audit";
+import { appendProjectGrant } from "./approval-grants";
+import { appendAudit, type AuditEntry } from "./audit";
 import { BUILTIN_DANGER_RULES, type DangerRule } from "../policy/danger";
 import {
   evaluateCommand,
@@ -20,14 +20,15 @@ import {
   type ToolCategory,
 } from "../policy/evaluate";
 import { parseRule } from "../policy/syntax";
-import { buildTierConfig } from "../policy/tier";
-import {
-  pauseToolTimeout,
-  resumeToolTimeout,
-} from "../../../shared/timeout";
+import { buildTierConfig } from "./tier-config";
+import { pauseToolTimeout, resumeToolTimeout } from "../../../shared/timeout";
 import { throwIfTurnCancelled } from "../../../shared/turn-cancel";
 import { SerialQueue } from "../../../shared/serial-queue";
-import { checkFsRead, checkFsWrite, type FsBoundaryResult } from "./fs-boundary";
+import {
+  checkFsRead,
+  checkFsWrite,
+  type FsBoundaryResult,
+} from "./fs-boundary";
 
 /** 会话级沙箱上下文的构造参数 */
 export interface SandboxContextOptions {
@@ -51,6 +52,20 @@ export interface SandboxContextOptions {
   projectConfigPath?: string;
   /** 审计日志路径（缺省 ~/.tx-cli/sandbox-audit.jsonl，测试可注入） */
   auditPath?: string;
+}
+
+/** SandboxContext.evaluate 与 SandboxContext.guard 的工具调用入参 */
+export interface SandboxEvaluationInput {
+  /** 工具名 */
+  toolName: string;
+  /** 工具生成的规则键 */
+  ruleKey: string;
+  /** 工具能力声明（read-only 档禁网语义判定用） */
+  capabilities?: readonly string[];
+  /** MCP 工具元信息（服务器名与只读标记，非 MCP 工具时缺省） */
+  mcp?: McpToolMeta;
+  /** 是否为无副作用只读检索工具（read-only 档 net 判定用） */
+  readOnlySafe?: boolean;
 }
 
 /**
@@ -118,8 +133,7 @@ export class SandboxContext {
     this.cwd = options.cwd ?? process.cwd();
     this.projectConfigPath = options.projectConfigPath;
     this.tier =
-      options.tier ??
-      buildTierConfig(options.level, options.config, this.cwd);
+      options.tier ?? buildTierConfig(options.level, options.config, this.cwd);
     this.dangerRules = options.config.builtinDangerRules
       ? BUILTIN_DANGER_RULES
       : null;
@@ -136,20 +150,17 @@ export class SandboxContext {
    * L2 规则判定入口：bash 工具走复合命令判定，其余工具走规则键判定
    * MCP 工具按 mcp 元信息区分类目：声明 readOnlyHint 的走 mcp-read（默认放行），
    * 其余走 mcp-tool（默认审批）；未携带元信息但规则键为 mcp__ 前缀时按 mcp-tool 兜底
-   * @param {string} toolName - 工具名
-   * @param {string} ruleKey - 工具生成的规则键
-   * @param {readonly string[]} capabilities - 工具能力声明（read-only 档禁网语义判定用）
-   * @param {McpToolMeta} mcp - MCP 工具元信息（服务器名与只读标记，非 MCP 工具时缺省）
-   * @param {boolean} readOnlySafe - 是否为无副作用只读检索工具（read-only 档 net 判定用）
+   * @param {SandboxEvaluationInput} input - 工具调用信息
    * @returns {RuleEvaluation} 判定结果
    */
-  evaluate(
-    toolName: string,
-    ruleKey: string,
-    capabilities: readonly string[] = [],
-    mcp?: McpToolMeta,
-    readOnlySafe = false,
-  ): RuleEvaluation {
+  evaluate(input: SandboxEvaluationInput): RuleEvaluation {
+    const {
+      toolName,
+      ruleKey,
+      capabilities = [],
+      mcp,
+      readOnlySafe = false,
+    } = input;
     if (toolName === "bash") {
       const parsedKey = parseRule(ruleKey);
       const command = parsedKey?.pattern ?? ruleKey;
@@ -198,30 +209,13 @@ export class SandboxContext {
   }
 
   /**
-   * L3 门卫：按 L2 判定放行、拒绝或征询审批
-   * MCP 工具审批时额外提供服务器级授权（mcp__server__*），
-   * 用户选「本会话/始终允许该服务器」后，同服务器其余工具不再逐个询问
-   * @param {string} toolName - 工具名
-   * @param {string} ruleKey - 规则键
-   * @param {readonly string[]} capabilities - 工具能力声明（read-only 档禁网语义判定用）
-   * @param {McpToolMeta} mcp - MCP 工具元信息（服务器名与只读标记，非 MCP 工具时缺省）
-   * @param {boolean} readOnlySafe - 是否为无副作用只读检索工具（read-only 档 net 判定用）
+   * L3 门卫：按 L2 判定放行、拒绝或征询审批；MCP 工具审批时额外提供服务器级授权（mcp__server__*）
+   * @param {SandboxEvaluationInput} input - 工具调用信息
    * @returns {Promise<ToolOutput | null>} 拒绝时返回失败输出，放行时返回 null
    */
-  async guard(
-    toolName: string,
-    ruleKey: string,
-    capabilities: readonly string[] = [],
-    mcp?: McpToolMeta,
-    readOnlySafe = false,
-  ): Promise<ToolOutput | null> {
-    const evaluation = this.evaluate(
-      toolName,
-      ruleKey,
-      capabilities,
-      mcp,
-      readOnlySafe,
-    );
+  async guard(input: SandboxEvaluationInput): Promise<ToolOutput | null> {
+    const { toolName, ruleKey, mcp } = input;
+    const evaluation = this.evaluate(input);
     if (evaluation.decision === "deny") {
       this.recordAudit({
         tool: toolName,
@@ -258,6 +252,7 @@ export class SandboxContext {
       resumeToolTimeout();
     }
     if (choice.kind === "deny") {
+      // 用户拒绝：拒绝执行并记录拒绝原因
       this.recordAudit({
         tool: toolName,
         ruleKey,
@@ -265,13 +260,13 @@ export class SandboxContext {
       });
       return { ok: false, output: "用户拒绝了本次命令执行" };
     }
-    // 授权粒度：服务器级选择（MCP）落 mcp__server__*；其余优先复用命中的规则原文，
-    // always-ask 默认判定无规则可复用时按工具粒度推导
-    // （bash 取命令前缀 bash(git status) → bash(git status:*)，其余工具取工具名），
-    // 保证「本会话/始终允许」在任何 ask 场景都有可复用的同类粒度
+    // 授权粒度：服务器级选择落 mcp__server__*；其余优先复用命中的规则原文，
+    // 无规则可复用时按 deriveGrantRule 推导同类粒度
     const serverGrant = mcp ? `mcp__${mcp.serverKey}__*` : undefined;
+    // 是否服务器授权
     const isServerChoice =
       choice.kind === "session-server" || choice.kind === "always-server";
+    // 授权规则
     const grantRule = isServerChoice
       ? serverGrant
       : evaluation.matchedRule || deriveGrantRule(toolName, ruleKey);
@@ -347,7 +342,9 @@ export class SandboxContext {
    * @param {Omit<AuditEntry, "timestamp" | "level" | "approval">} entry - 审计事件（时间戳与档位自动补全）
    * @returns {void}
    */
-  recordAudit(entry: Omit<AuditEntry, "timestamp" | "level" | "approval">): void {
+  recordAudit(
+    entry: Omit<AuditEntry, "timestamp" | "level" | "approval">,
+  ): void {
     if (!this.auditEnabled) {
       return;
     }

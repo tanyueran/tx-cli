@@ -17,25 +17,25 @@ import type {
   SandboxMissingAction,
 } from "../../core/sandbox/types";
 
-/** agent 命令执行体的选项入参（沙箱枚举字段用联合类型，choices() 保证运行时合法，无需断言） */
+/** agent 命令执行体的选项入参（沙箱枚举字段用联合类型，合法性由 commander choices() 保证） */
 interface AgentOptions {
-  /** 思考档位（--think），由 parseThinkingLevel 校验归一化，未指定时回退配置默认 */
+  /** 思考档位（--think），经 parseThinkingLevel 校验归一化 */
   think?: string;
-  /** 是否启用 MCP 服务器：--no-mcp 显式传入 false，缺省视为开启 */
+  /** MCP 开关：--no-mcp 显式传入 false，缺省视为开启 */
   mcp?: boolean;
   /** 沙箱档位（--sandbox），未指定时回退配置默认（项目 > 全局） */
   sandbox?: SandboxLevel;
   /** 审批策略（--approval），未指定时回退配置默认（项目 > 全局） */
   approval?: ApprovalPolicy;
-  /** 是否启用 bash 工具：--no-bash 显式传入 false，缺省视为开启 */
+  /** bash 工具开关：--no-bash 显式传入 false，缺省视为开启 */
   bash?: boolean;
   /** 沙箱不可用时的处置（--sandbox-missing），缺省 deny（失败关闭） */
   sandboxMissing?: SandboxMissingAction;
 }
 
 /**
- * 组装沙箱 CLI 选项：枚举合法性已由 commander 的 choices() 在 action 执行前拦截，
- * 入参字段已声明为联合类型，此处只做可选字段到 SandboxCliOptions 的映射（导出以便单测直测映射逻辑）
+ * 组装沙箱 CLI 选项：仅做可选字段到 SandboxCliOptions 的映射（导出以便单测直测）
+ * 枚举合法性已由 commander 的 choices() 在 action 执行前拦截
  * @param {AgentOptions} agentOptions - 命令行选项
  * @returns {SandboxCliOptions} 沙箱选项（未指定任何沙箱相关项时为空对象，走配置文件默认）
  */
@@ -60,11 +60,14 @@ export function buildSandboxOptions(
 }
 
 /**
- * agent 命令执行体：档位校验、配置装载与单次/多轮分流
- * 与 commander 解耦后可直接对分流与空参逻辑单测；
- * 空白任务（如 tx agent "" 或 tx agent "  "）按未传参处理，进入多轮任务模式而非向模型发送空任务；
- * Agent 模式为全量工具带（bash 受沙箱与审批管控），只读问答请用 chat 命令
- * @param {string[]} taskSegments - 命令位置参数（可变参数，未拼接的任务分段）
+ * agent 命令执行体：校验选项、装载配置，按是否传入任务分流单次/多轮
+ *
+ * CLI 选项必须先于 loadLlmConfig 处理：配置缺失时后者会进入交互向导并写盘，
+ * 思考档位等非法值需在写盘前报错退出（沙箱枚举已由 commander choices() 提前拦截）。
+ * 空白任务（如 tx agent ""）按未传参处理，进入多轮任务模式而非向模型发送空任务。
+ * 只读问答请用 chat 命令，Agent 模式为全量工具带（bash 受沙箱与审批管控）。
+ *
+ * @param {string[]} taskSegments - 命令位置参数（可变参数）
  * @param {AgentOptions} agentOptions - 命令行选项
  * @returns {Promise<void>}
  */
@@ -72,9 +75,6 @@ export async function runAgentAction(
   taskSegments: string[],
   agentOptions: AgentOptions,
 ): Promise<void> {
-  // CLI 选项处理全部前置：loadLlmConfig 在配置缺失时会进入交互向导并写盘，
-  // 必须先完成所有命令行选项的解析（沙箱枚举合法性由 commander choices() 拦截，
-  // 思考档位经 parseThinkingLevel 校验归一化，非法值在进入交互向导前报错退出）
   const thinkingLevel = parseThinkingLevel(agentOptions.think);
   const cliSandboxOptions = buildSandboxOptions(agentOptions);
   const llmConfig = await loadLlmConfig();
@@ -101,13 +101,7 @@ export async function runAgentAction(
 
 /**
  * 注册 agent 命令：让 AI Agent 执行任务（Agent 模式，对标 Codex CLI / Claude Code 默认模式）
- * 工具带为全量：只读内置工具 + bash（受三档沙箱与审批策略管控）+ 技能 + MCP；
- * 默认 read-only 档：写文件与 bash 命令需逐次审批或被沙箱拒绝，可用 --sandbox/--approval 调整；
- * 沙箱档位优先级：--sandbox > 项目配置 sandbox.level > 全局配置 sandbox.level > read-only，
- * --sandbox 显式传入时同时启用沙箱（覆盖配置 sandbox.enabled=false）；
- * 审批策略优先级：--approval > 项目配置 sandbox.approval > 全局配置 sandbox.approval > on-failure；
- * 沙箱枚举选项经 choices() 声明：非法值由 commander 在 action 执行前拒绝；
- * 思考档位经 parseThinkingLevel 校验（支持大小写与首尾空格归一化）：非法值报错退出
+ * 各选项的取值与优先级链路以 .option() 帮助文案为单一事实源，此处不再复述
  * @param {Command} program - commander 实例
  * @returns {void}
  */

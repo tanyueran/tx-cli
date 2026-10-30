@@ -1,4 +1,4 @@
-import type { SkillMeta } from "../../skills";
+import type { SkillMeta } from "../../../skills";
 
 /**
  * 组装 system 提示词：基础人设 + 技能元数据清单

@@ -1,4 +1,4 @@
-import type { ThinkingLevel } from "../../llm/types";
+import type { ThinkingLevel } from "../../../llm/types";
 
 /** 对话模式配置：chat、agent 命令的模式差异项，会话入口（单次/多轮）据此装配运行时 */
 export interface ConversationModeConfig {
@@ -6,7 +6,12 @@ export interface ConversationModeConfig {
   basePrompt: string;
   /** 模式标签（REPL 就绪面板「模式」行展示，如「对话模式」「Agent 模式」） */
   modeLabel: string;
-  /** bash 工具是否装配；未指定时跟随 cliSandboxOptions/配置默认（agent 模式），chat 模式固定传 false */
+  /**
+   * bash 工具是否装配（三态约定的单一说明源）：
+   * - undefined（缺省）：跟随 CLI/配置/沙箱存在性决定（agent 模式）
+   * - false：强制不装配，同时跳过 bash 专用装载（Provider）并抑制 bash 相关警告（chat 模式）
+   * 传递链：ConversationModeConfig → ConversationOptions → SkillAssemblyOptions（skill-context 侧缺省视为 true）
+   */
   bashEnabled?: boolean;
   /** 任务清单工具（write_todos）是否装配；agent 模式开启，chat 只读问答不装配 */
   todosEnabled?: boolean;

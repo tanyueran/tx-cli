@@ -1,6 +1,6 @@
-import { srtProvider } from "./backends/srt";
-import { noopProvider } from "./backends/noop";
-import { landlockProvider } from "./backends/landlock";
+import { srtProvider } from "./srt";
+import { noopProvider } from "./noop";
+import { landlockProvider } from "./landlock";
 import type { SandboxProvider } from "../types";
 
 /**

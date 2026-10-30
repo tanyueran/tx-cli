@@ -9,9 +9,9 @@ import {
   runWithTurnCancellation,
 } from "../src/shared/turn-cancel";
 import { CancelError } from "../src/shared/errors";
-import { SandboxContext } from "../src/core/sandbox/runtime/context";
+import { SandboxContext } from "../src/core/sandbox/runtime/sandbox-context";
 import { DEFAULT_SANDBOX_CONFIG } from "../src/core/sandbox/config/schema";
-import { noopProvider } from "../src/core/sandbox/providers/backends/noop";
+import { noopProvider } from "../src/core/sandbox/providers/noop";
 import type {
   ApprovalChoice,
   Approver,
@@ -184,7 +184,11 @@ describe("审批问询不消耗工具超时（guard / askEscalation 集成）", 
     // 审批等待 150ms（远超 50ms 工具时限），guard 内暂停计时后应正常放行
     const context = makeContext(new SlowApprover({ kind: "once" }, 150));
     const result = await withPausableTimeout(
-      () => context.guard("bash", "bash(git status)"),
+      () =>
+        context.guard({
+          toolName: "bash",
+          ruleKey: "bash(git status)",
+        }),
       50,
       "工具执行超时",
     );
@@ -205,7 +209,10 @@ describe("审批问询不消耗工具超时（guard / askEscalation 集成）", 
     const context = makeContext(new SlowApprover({ kind: "once" }, 1));
     const task = withPausableTimeout(
       async () => {
-        const denial = await context.guard("bash", "bash(git status)");
+        const denial = await context.guard({
+          toolName: "bash",
+          ruleKey: "bash(git status)",
+        });
         expect(denial).toBeNull();
         await sleep(120); // 审批通过后的慢执行
         return "ok";
@@ -224,7 +231,10 @@ describe("审批问询不消耗工具超时（guard / askEscalation 集成）", 
     await expect(
       runWithTurnCancellation(async () => {
         markTurnCancelled();
-        return context.guard("bash", "bash(git status)");
+        return context.guard({
+          toolName: "bash",
+          ruleKey: "bash(git status)",
+        });
       }),
     ).rejects.toThrow(CancelError);
     expect(askSpy).not.toHaveBeenCalled();

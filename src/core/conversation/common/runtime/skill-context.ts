@@ -1,17 +1,17 @@
-import { createLoadSkillTool, discoverSkills, SkillCatalog } from "../../skills";
+import { createLoadSkillTool, discoverSkills, SkillCatalog } from "../../../skills";
 import {
   builtinTools,
   createTodoTool,
   WRITE_TOOL_NAMES,
   type Tool,
-} from "../../tools";
-import type { TodoToolHandle } from "../../tools";
-import { createBashTool } from "../../tools/builtin/bash";
-import { wrapToolWithPermission } from "../../tools/permission";
-import type { SandboxContext } from "../../sandbox/runtime/context";
-import { createMcpDiscoveryTool } from "../../mcp/discovery-tool";
+} from "../../../tools";
+import type { TodoToolHandle } from "../../../tools";
+import { createBashTool } from "../../../tools/builtin/bash";
+import { wrapToolWithPermission } from "../../../tools/permission";
+import type { SandboxContext } from "../../../sandbox/runtime/sandbox-context";
+import { createMcpDiscoveryTool } from "../../../mcp/discovery-tool";
 import { buildSystemPrompt } from "./prompt";
-import { CliError } from "../../../shared/errors";
+import { CliError } from "../../../../shared/errors";
 
 /** MCP 工具内联下发阈值：超过该数量时折叠为 discover_mcp_tools 按需激活，避免每轮请求背负全部 schema */
 export const MCP_INLINE_TOOL_LIMIT = 8;
@@ -56,7 +56,7 @@ function ensureUniqueToolNames(tools: Tool[]): void {
 
 /** 技能装配选项：按模式裁剪工具带 */
 export interface SkillAssemblyOptions {
-  /** bash 工具是否装配；缺省 true（跟随沙箱存在性），chat 模式固定传 false */
+  /** bash 工具是否装配；缺省 true（跟随沙箱存在性），三态约定见 ConversationModeConfig.bashEnabled（runtime/mode.ts） */
   bashEnabled?: boolean;
   /** 任务清单工具（write_todos）是否装配；缺省 false，agent 模式传 true */
   todosEnabled?: boolean;

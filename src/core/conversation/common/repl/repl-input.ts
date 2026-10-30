@@ -1,11 +1,11 @@
 import readline from "node:readline";
 import pico from "picocolors";
-import { CancelError } from "../../../shared/errors";
+import { CancelError } from "../../../../shared/errors";
 import {
   displayWidth,
   stripAnsi,
   truncateToWidth,
-} from "../../../shared/string";
+} from "../../../../shared/string";
 
 /** 补全建议项（与 slash-commands 的 SlashSuggestion 结构兼容，可直接传入） */
 export interface ReplSuggestion {

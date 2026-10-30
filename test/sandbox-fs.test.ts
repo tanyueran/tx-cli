@@ -3,13 +3,13 @@ import { mkdtempSync, rmSync, writeFileSync, chmodSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { matchPathPattern } from "../src/core/sandbox/utils/path";
-import { SandboxContext } from "../src/core/sandbox/runtime/context";
+import { SandboxContext } from "../src/core/sandbox/runtime/sandbox-context";
 import { DEFAULT_SANDBOX_CONFIG } from "../src/core/sandbox/config/schema";
-import { noopProvider } from "../src/core/sandbox/providers/backends/noop";
+import { noopProvider } from "../src/core/sandbox/providers/noop";
 import {
   landlockProvider,
   __resetLandlockForTest,
-} from "../src/core/sandbox/providers/backends/landlock";
+} from "../src/core/sandbox/providers/landlock";
 import type { ApprovalChoice, Approver, TierConfig } from "../src/core/sandbox/types";
 import type { SandboxFileConfig } from "../src/core/sandbox/config/schema";
 import { wrapToolWithPermission } from "../src/core/tools/permission";
@@ -337,13 +337,12 @@ describe("fs 工具的权限门卫包装", () => {
     });
     // 只读检索工具无外部副作用：默认放行，不再要求审批（避免非交互环境 fail-closed）；
     // 断言判定结果而非执行工具，避免用例真实发起网络请求
-    const evaluation = context.evaluate(
-      "web_search",
-      "web_search(新闻)",
-      ["net"],
-      undefined,
-      true,
-    );
+    const evaluation = context.evaluate({
+      toolName: "web_search",
+      ruleKey: "web_search(新闻)",
+      capabilities: ["net"],
+      readOnlySafe: true,
+    });
     expect(evaluation.decision).toBe("allow");
   });
 
@@ -363,13 +362,12 @@ describe("fs 工具的权限门卫包装", () => {
       projectConfigPath: join(dir, "project-config.json"),
       auditPath: join(dir, "audit.jsonl"),
     });
-    const evaluation = context.evaluate(
-      "web_search",
-      "web_search(新闻)",
-      ["net"],
-      undefined,
-      true,
-    );
+    const evaluation = context.evaluate({
+      toolName: "web_search",
+      ruleKey: "web_search(新闻)",
+      capabilities: ["net"],
+      readOnlySafe: true,
+    });
     expect(evaluation.decision).toBe("ask");
     expect(evaluation.matchedRule).toBe("web_search(新闻)");
   });
