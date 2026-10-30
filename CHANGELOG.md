@@ -1,3 +1,18 @@
+## [0.10.0](https://github.com/tanyueran/tx-cli/compare/v0.9.1...v0.10.0) (2026-10-30)
+
+### Features
+
+* mcp 工具超过 8 个时折叠为按需发现，降低每轮请求的工具定义开销 ([9e7a0d3](https://github.com/tanyueran/tx-cli/commit/9e7a0d320870f23c47a28ef3352207344a43b736))
+* 补齐子进程代理与工具分页，减少长任务的无效轮次 ([23ff9bd](https://github.com/tanyueran/tx-cli/commit/23ff9bd38ce623a6c89c24d78b9a4a14cfeaa5b6))
+
+### Bug Fixes
+
+* 避免递归清理规则误伤沙箱内明确目标 ([5a13fe2](https://github.com/tanyueran/tx-cli/commit/5a13fe27f1e69374081d4af002b27f42504542f2))
+
+### Code Refactoring
+
+* 代码优化 ([0616980](https://github.com/tanyueran/tx-cli/commit/06169809a0aebe4b6a5e9b3077aea270f0d2f3ad))
+* 目录层级结构修改 ([b0bb8e5](https://github.com/tanyueran/tx-cli/commit/b0bb8e54e4a6da4c8dfa284fd71f6f2e06f62c9b))
 ## [0.9.1](https://github.com/tanyueran/tx-cli/compare/v0.9.0...v0.9.1) (2026-10-29)
 
 ### Bug Fixes
