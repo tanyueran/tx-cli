@@ -46,10 +46,8 @@ function uniquePaths(paths: string[]): string[] {
 }
 
 /**
- * 按档位生成 TierConfig：三档沙箱的标准隔离参数
- * read-only：全禁写、全禁网，读侧禁凭据目录；
- * workspace-write：可写 cwd 与临时目录（os.tmpdir() 及系统 /tmp），禁写敏感文件，网络按用户配置；
- * danger-full-access：无隔离（调用方不装配真实沙箱，此档返回值仅作展示）
+ * 按档位生成 TierConfig：三档沙箱的标准隔离参数（档位语义见 types.ts）
+ * danger-full-access 无隔离：调用方不装配真实沙箱，此档返回值仅作展示
  * @param {SandboxLevel} level - 沙箱档位
  * @param {SandboxFileConfig} sandboxConfig - 用户沙箱配置（扩展限制合并进档位默认）
  * @param {string} cwd - 当前工作目录（workspace-write 档的可写根）

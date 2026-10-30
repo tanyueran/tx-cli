@@ -5,9 +5,9 @@ import { join } from "node:path";
 import {
   loadSandboxConfig,
 } from "../src/core/sandbox/config/load";
-import { appendProjectGrant } from "../src/core/sandbox/config/grants";
+import { appendProjectGrant } from "../src/core/sandbox/runtime/approval-grants";
 import { DEFAULT_SANDBOX_CONFIG } from "../src/core/sandbox/config/schema";
-import { buildTierConfig } from "../src/core/sandbox/policy/tier";
+import { buildTierConfig } from "../src/core/sandbox/runtime/tier-config";
 
 /** 测试用临时目录 */
 let dir: string;

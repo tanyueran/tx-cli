@@ -2,9 +2,9 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, rmSync, readFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { SandboxContext } from "../src/core/sandbox/runtime/context";
+import { SandboxContext } from "../src/core/sandbox/runtime/sandbox-context";
 import { DEFAULT_SANDBOX_CONFIG } from "../src/core/sandbox/config/schema";
-import { noopProvider } from "../src/core/sandbox/providers/backends/noop";
+import { noopProvider } from "../src/core/sandbox/providers/noop";
 import type {
   ApprovalAskContext,
   ApprovalChoice,
@@ -144,7 +144,10 @@ describe("SandboxContext.guard", () => {
     const context = makeContext({
       rules: { allow: [], ask: [], deny: ["Bash(rm -rf:*)"] },
     });
-    const blocked = await context.guard("bash", "bash(rm -rf /tmp/x)");
+    const blocked = await context.guard({
+      toolName: "bash",
+      ruleKey: "bash(rm -rf /tmp/x)",
+    });
     expect(blocked).not.toBeNull();
     expect(blocked?.ok).toBe(false);
     expect(blocked?.output).toContain("已拒绝执行");
@@ -157,7 +160,10 @@ describe("SandboxContext.guard", () => {
     const context = makeContext({
       rules: { allow: ["Bash(git status)"], ask: [], deny: [] },
     });
-    const blocked = await context.guard("bash", "bash(git status)");
+    const blocked = await context.guard({
+      toolName: "bash",
+      ruleKey: "bash(git status)",
+    });
     expect(blocked).toBeNull();
     expect(readAuditLines().length).toBe(0);
   });
@@ -168,8 +174,18 @@ describe("SandboxContext.guard", () => {
       { rules: { allow: [], ask: ["Bash(git status)"], deny: [] } },
       approver,
     );
-    expect(await context.guard("bash", "bash(git status)")).toBeNull();
-    expect(await context.guard("bash", "bash(git status)")).toBeNull();
+    expect(
+      await context.guard({
+        toolName: "bash",
+        ruleKey: "bash(git status)",
+      }),
+    ).toBeNull();
+    expect(
+      await context.guard({
+        toolName: "bash",
+        ruleKey: "bash(git status)",
+      }),
+    ).toBeNull();
     expect(approver.askCalls).toBe(2);
   });
 
@@ -179,8 +195,18 @@ describe("SandboxContext.guard", () => {
       { rules: { allow: [], ask: ["Bash(git status)"], deny: [] } },
       approver,
     );
-    expect(await context.guard("bash", "bash(git status)")).toBeNull();
-    expect(await context.guard("bash", "bash(git status)")).toBeNull();
+    expect(
+      await context.guard({
+        toolName: "bash",
+        ruleKey: "bash(git status)",
+      }),
+    ).toBeNull();
+    expect(
+      await context.guard({
+        toolName: "bash",
+        ruleKey: "bash(git status)",
+      }),
+    ).toBeNull();
     expect(approver.askCalls).toBe(1);
   });
 
@@ -190,7 +216,12 @@ describe("SandboxContext.guard", () => {
       { rules: { allow: [], ask: ["Bash(git status)"], deny: [] } },
       approver,
     );
-    expect(await context.guard("bash", "bash(git status)")).toBeNull();
+    expect(
+      await context.guard({
+        toolName: "bash",
+        ruleKey: "bash(git status)",
+      }),
+    ).toBeNull();
     const projectConfig = JSON.parse(
       readFileSync(join(dir, "project-config.json"), "utf-8"),
     );
@@ -203,9 +234,19 @@ describe("SandboxContext.guard", () => {
       { level: "read-only", approval: "always-ask", rules: { allow: [], ask: [], deny: [] } },
       approver,
     );
-    expect(await context.guard("bash", "bash(git status)")).toBeNull();
+    expect(
+      await context.guard({
+        toolName: "bash",
+        ruleKey: "bash(git status)",
+      }),
+    ).toBeNull();
     // 前缀规则 bash(git status:*) 覆盖带参变体，不再询问
-    expect(await context.guard("bash", "bash(git status --porcelain)")).toBeNull();
+    expect(
+      await context.guard({
+        toolName: "bash",
+        ruleKey: "bash(git status --porcelain)",
+      }),
+    ).toBeNull();
     expect(approver.askCalls).toBe(1);
   });
 
@@ -215,7 +256,12 @@ describe("SandboxContext.guard", () => {
       { level: "read-only", approval: "always-ask", rules: { allow: [], ask: [], deny: [] } },
       approver,
     );
-    expect(await context.guard("bash", "bash(git status)")).toBeNull();
+    expect(
+      await context.guard({
+        toolName: "bash",
+        ruleKey: "bash(git status)",
+      }),
+    ).toBeNull();
     const projectConfig = JSON.parse(
       readFileSync(join(dir, "project-config.json"), "utf-8"),
     );
@@ -228,13 +274,21 @@ describe("SandboxContext.guard", () => {
       { rules: { allow: [], ask: ["Bash(git status)"], deny: [] } },
       approver,
     );
-    await first.guard("bash", "bash(git status)");
+    await first.guard({
+      toolName: "bash",
+      ruleKey: "bash(git status)",
+    });
     // 新上下文读取同一 grants 文件：不再询问
     const second = makeContext(
       { rules: { allow: [], ask: ["Bash(git status)"], deny: [] } },
       new FakeApprover([{ kind: "once" }]),
     );
-    expect(await second.guard("bash", "bash(git status)")).toBeNull();
+    expect(
+      await second.guard({
+        toolName: "bash",
+        ruleKey: "bash(git status)",
+      }),
+    ).toBeNull();
   });
 
   it("ask 判定 + 用户拒绝 → 返回失败输出", async () => {
@@ -243,7 +297,10 @@ describe("SandboxContext.guard", () => {
       { rules: { allow: [], ask: ["Bash(git push:*)"], deny: [] } },
       approver,
     );
-    const blocked = await context.guard("bash", "bash(git push)");
+    const blocked = await context.guard({
+      toolName: "bash",
+      ruleKey: "bash(git push)",
+    });
     expect(blocked?.ok).toBe(false);
     expect(blocked?.output).toContain("用户拒绝");
   });
@@ -255,7 +312,10 @@ describe("SandboxContext.guard", () => {
       approver,
       false,
     );
-    const blocked = await context.guard("bash", "bash(git status)");
+    const blocked = await context.guard({
+      toolName: "bash",
+      ruleKey: "bash(git status)",
+    });
     expect(blocked?.ok).toBe(false);
     expect(blocked?.output).toContain("非交互");
     expect(approver.askCalls).toBe(0);
@@ -268,7 +328,10 @@ describe("SandboxContext.guard", () => {
       audit: false,
       rules: { allow: [], ask: [], deny: ["Bash(rm -rf:*)"] },
     });
-    await context.guard("bash", "bash(rm -rf /tmp/x)");
+    await context.guard({
+      toolName: "bash",
+      ruleKey: "bash(rm -rf /tmp/x)",
+    });
     expect(readAuditLines().length).toBe(0);
   });
 });
@@ -304,7 +367,10 @@ describe("SandboxContext.runSerial", () => {
 describe("SandboxContext.evaluate", () => {
   it("bash 工具走复合命令判定：危险段导致整条拒绝", () => {
     const context = makeContext();
-    const evaluation = context.evaluate("bash", "bash(echo hi && rm -rf /)");
+    const evaluation = context.evaluate({
+      toolName: "bash",
+      ruleKey: "bash(echo hi && rm -rf /)",
+    });
     expect(evaluation.decision).toBe("deny");
   });
 
@@ -312,7 +378,10 @@ describe("SandboxContext.evaluate", () => {
     const context = makeContext({
       rules: { allow: ["web_search"], ask: [], deny: [] },
     });
-    const evaluation = context.evaluate("web_search", "websearch");
+    const evaluation = context.evaluate({
+      toolName: "web_search",
+      ruleKey: "websearch",
+    });
     expect(evaluation.decision).toBe("allow");
   });
 });
@@ -330,12 +399,12 @@ describe("SandboxContext.guard: MCP 授权粒度", () => {
   it("只读 MCP 工具默认放行且不触发审批", async () => {
     const approver = new FakeApprover([{ kind: "deny" }]);
     const context = makeContext({}, approver);
-    const blocked = await context.guard(
-      "mcp__github__get_issue",
-      "mcp__github__get_issue",
-      ["net"],
-      readMeta,
-    );
+    const blocked = await context.guard({
+      toolName: "mcp__github__get_issue",
+      ruleKey: "mcp__github__get_issue",
+      capabilities: ["net"],
+      mcp: readMeta,
+    });
     expect(blocked).toBeNull();
     expect(approver.askCalls).toBe(0);
   });
@@ -346,12 +415,12 @@ describe("SandboxContext.guard: MCP 授权粒度", () => {
       { approval: "always-ask" },
       approver,
     );
-    const blocked = await context.guard(
-      "mcp__github__get_issue",
-      "mcp__github__get_issue",
-      ["net"],
-      readMeta,
-    );
+    const blocked = await context.guard({
+      toolName: "mcp__github__get_issue",
+      ruleKey: "mcp__github__get_issue",
+      capabilities: ["net"],
+      mcp: readMeta,
+    });
     expect(blocked).toBeNull();
     expect(approver.askCalls).toBe(1);
     expect(approver.lastContext?.mcp?.serverName).toBe("github");
@@ -361,20 +430,20 @@ describe("SandboxContext.guard: MCP 授权粒度", () => {
     const approver = new FakeApprover([{ kind: "session-server" }]);
     const context = makeContext({}, approver);
     expect(
-      await context.guard(
-        "mcp__github__create_issue",
-        "mcp__github__create_issue",
-        ["net", "exec"],
-        writableMeta,
-      ),
+      await context.guard({
+        toolName: "mcp__github__create_issue",
+        ruleKey: "mcp__github__create_issue",
+        capabilities: ["net", "exec"],
+        mcp: writableMeta,
+      }),
     ).toBeNull();
     expect(
-      await context.guard(
-        "mcp__github__delete_repo",
-        "mcp__github__delete_repo",
-        ["net", "exec"],
-        writableMeta,
-      ),
+      await context.guard({
+        toolName: "mcp__github__delete_repo",
+        ruleKey: "mcp__github__delete_repo",
+        capabilities: ["net", "exec"],
+        mcp: writableMeta,
+      }),
     ).toBeNull();
     expect(approver.askCalls).toBe(1);
     expect(context.listRules().allow).toContain("mcp__github__*");
@@ -383,12 +452,12 @@ describe("SandboxContext.guard: MCP 授权粒度", () => {
   it("服务器级始终授权落盘，新会话不再询问", async () => {
     const approver = new FakeApprover([{ kind: "always-server" }]);
     const context = makeContext({}, approver);
-    await context.guard(
-      "mcp__github__create_issue",
-      "mcp__github__create_issue",
-      ["net", "exec"],
-      writableMeta,
-    );
+    await context.guard({
+      toolName: "mcp__github__create_issue",
+      ruleKey: "mcp__github__create_issue",
+      capabilities: ["net", "exec"],
+      mcp: writableMeta,
+    });
     expect(
       readProjectAllow(join(dir, "project-config.json")),
     ).toContain("mcp__github__*");
@@ -398,12 +467,12 @@ describe("SandboxContext.guard: MCP 授权粒度", () => {
       new FakeApprover([{ kind: "deny" }]),
     );
     expect(
-      await second.guard(
-        "mcp__github__delete_repo",
-        "mcp__github__delete_repo",
-        ["net", "exec"],
-        writableMeta,
-      ),
+      await second.guard({
+        toolName: "mcp__github__delete_repo",
+        ruleKey: "mcp__github__delete_repo",
+        capabilities: ["net", "exec"],
+        mcp: writableMeta,
+      }),
     ).toBeNull();
   });
 
@@ -411,12 +480,12 @@ describe("SandboxContext.guard: MCP 授权粒度", () => {
     const meta = { serverName: "my.mcp", serverKey: "my_mcp", readOnly: false };
     const approver = new FakeApprover([{ kind: "always-server" }]);
     const context = makeContext({}, approver);
-    await context.guard(
-      "mcp__my_mcp__ping",
-      "mcp__my_mcp__ping",
-      ["net", "exec"],
-      meta,
-    );
+    await context.guard({
+      toolName: "mcp__my_mcp__ping",
+      ruleKey: "mcp__my_mcp__ping",
+      capabilities: ["net", "exec"],
+      mcp: meta,
+    });
     expect(
       readProjectAllow(join(dir, "project-config.json")),
     ).toContain("mcp__my_mcp__*");
@@ -428,18 +497,18 @@ describe("SandboxContext.guard: MCP 授权粒度", () => {
       { rules: { allow: [], ask: ["mcp__github__delete_*"], deny: [] } },
       approver,
     );
-    await context.guard(
-      "mcp__github__create_issue",
-      "mcp__github__create_issue",
-      ["net", "exec"],
-      writableMeta,
-    );
-    await context.guard(
-      "mcp__github__delete_repo",
-      "mcp__github__delete_repo",
-      ["net", "exec"],
-      writableMeta,
-    );
+    await context.guard({
+      toolName: "mcp__github__create_issue",
+      ruleKey: "mcp__github__create_issue",
+      capabilities: ["net", "exec"],
+      mcp: writableMeta,
+    });
+    await context.guard({
+      toolName: "mcp__github__delete_repo",
+      ruleKey: "mcp__github__delete_repo",
+      capabilities: ["net", "exec"],
+      mcp: writableMeta,
+    });
     expect(approver.askCalls).toBe(2);
   });
 });

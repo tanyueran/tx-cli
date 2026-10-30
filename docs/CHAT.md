@@ -5,8 +5,8 @@
 ## 基本用法
 
 - 传入问题：单次问答，流式输出回答后退出
-- 不传参数：进入多轮对话模式，持续输入问题对话，输入 `exit`/`quit` 或按 `Ctrl+C` 退出
-- 工具调用默认开启、不可关闭：仅支持随版本内置发布的固定工具集，不支持运行时动态注册——`read_file`、`list_dir`、`glob`、`grep` 用于读取与检索本地文件，`write_file`、`edit_file` 用于创建与精确修改文件（受沙箱可写边界管控，默认 `read-only` 档下不可写），`web_search` 用于联网搜索实时信息；每次调用会打印 `→ 调用 ...` 提示
+- 不传参数（或纯空白，如 `tx chat ""`）：进入多轮对话模式，持续输入问题对话，输入 `exit`/`quit` 或按 `Ctrl+C` 退出
+- 工具调用默认开启、不可关闭：仅支持随版本内置发布的固定工具集，不支持运行时动态注册——`read_file`、`list_dir`、`glob`、`grep` 用于读取与检索本地文件（读侧仍受沙箱禁读边界管控），`web_search` 用于联网搜索实时信息；只读语义由代码强制：固定不装配 bash、MCP 与写侧工具（`write_file` / `edit_file`），创建或修改文件请用 `agent` 命令；每次调用会打印 `→ 调用 ...` 提示
 - 支持技能（skills）：扫描 `~/.tx-cli/skills`（用户级）与 `./.tx-cli/skills`（项目级，同名时项目级优先）中的 `SKILL.md` 技能手册，发现技能时自动装配 `load_skill` 工具，模型按需加载手册后按其指引执行；多轮对话中可用 `/skills` 查看技能清单
 - 不支持 MCP：为保持轻量，`chat` 不装配 MCP 服务器，需要接入外部工具请用 `agent` 命令（详见 [agent 命令详解](./AGENT.md)）
 - 单次问答与多轮对话均走 Responses API 无状态模式（要求所配置的服务支持该接口）：服务端不留存会话，多轮历史由本地维护并每轮全量发送
@@ -57,7 +57,7 @@ tx-cli chat --think low
 1. 首次运行时的交互式引导，配置会保存到 `~/.tx-cli/config.json`（文件权限仅限当前用户读写）
 2. 直接写入配置文件的 `llm` 段：全局 `~/.tx-cli/config.json` 或项目 `<cwd>/.tx-cli/config.json`（同名字段项目配置优先）
 
-**配置分层合并规则**（适用于 `llm`、`sandbox`、`mcp`、`mcpServers` 各段）：优先级为命令行选项 > 项目配置（`<cwd>/.tx-cli/config.json`）> 全局配置（`~/.tx-cli/config.json`）；标量字段高层覆盖低层，数组字段（如 `sandbox.rules.allow`、`mcp.rules.allow`、`sandbox.network.allowedDomains`、`sandbox.trustDirectories`）两层合并去重（全局在前、项目在后），`mcpServers` 按服务器名合并（同名以项目为准，启动时告警提示）。
+**配置分层合并规则**（适用于 `llm`、`mcp`、`mcpServers` 各段）：优先级为命令行选项 > 项目配置（`<cwd>/.tx-cli/config.json`）> 全局配置（`~/.tx-cli/config.json`）；标量字段高层覆盖低层，数组字段（如 `mcp.rules.allow`）两层合并去重（全局在前、项目在后），`mcpServers` 按服务器名合并（同名以项目为准，启动时告警提示）。`sandbox` 段不适用此规则：采用能力感知合并，项目配置仅可收紧沙箱能力，放宽类字段（如 `network.allowedDomains`、`trustDirectories`）来自项目配置时被忽略并告警，详见 [agent 命令详解](./AGENT.md) 的「项目沙箱配置（能力感知合并）」。
 
 **`llm` 段字段：**
 

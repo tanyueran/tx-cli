@@ -3,7 +3,7 @@ import { describe, it, expect } from "vitest";
 import {
   MCP_INLINE_TOOL_LIMIT,
   setupSkillContext,
-} from "../src/core/conversation/common/skill-context";
+} from "../src/core/conversation/common/runtime/skill-context";
 import type { Tool } from "../src/core/tools/types";
 
 /**

@@ -1,18 +1,11 @@
-import { createResponsesTurn } from "./responses-turn";
-import {
-  createStreamRenderer,
-  createToolCallLogger,
-  createSoftConvergeNotice,
-} from "./renderer";
-import { runAgentLoop, DEFAULT_MAX_ITERATIONS } from "./loop";
+import { executeConversationTurn } from "./turn/execute-turn";
 import {
   createConversationRuntime,
   disposeConversationRuntime,
-} from "./runtime";
-import type { ConversationModeConfig } from "./mode";
+} from "./runtime/runtime";
+import type { ConversationModeConfig } from "./runtime/mode";
 import { printWarnings } from "../../../shared/warnings";
 import {
-  resolveResponsesThinkingFields,
   resolveThinkingLevel,
   resolveThinkingStyle,
   warnThinkingFallback,
@@ -28,7 +21,7 @@ import type {
 export interface OneShotConversationOptions {
   /** LLM 接入配置 */
   llmConfig: LlmConfig;
-  /** 模式配置（人设、标签、bash 装配策略） */
+  /** 模式配置（人设、标签、工具带装配策略，差异项说明见 ConversationModeConfig） */
   modeConfig: ConversationModeConfig;
   /** 用户问题或任务 */
   userInput: string;
@@ -42,12 +35,12 @@ export interface OneShotConversationOptions {
 
 /**
  * 单次会话（chat、agent 命令共用的单次入口）：走 Responses API（无状态模式）+ agentic loop
- * 思考档位取值：命令行 > 配置文件（项目 > 全局）> 模式内置默认（chat low / agent medium），
- * 经 thinking 适配层翻译为协议扩展字段下发；
- * 服务不支持分档思考时先打印折算警告，避免用户误以为 high 等档位真实生效；
- * 技能扫描与装配阶段警告（沙箱降级、Provider 不可用、MCP 连接失败等）在开始对话前一并输出；
- * 深度思考内容以暗色流式输出（模型未返回时不输出）
- * @param {OneShotConversationOptions} options - 入参对象（llmConfig/modeConfig/userInput/thinkingLevel/mcpEnabled/cliSandboxOptions 字段说明见接口定义）
+ *
+ * 对话历史仅在本函数内存活，会话结束即丢弃；
+ * 服务不支持分档思考时先打印折算警告，避免用户误以为档位真实生效；
+ * 技能扫描与装配阶段警告（沙箱降级、Provider 不可用、MCP 连接失败等）在对话开始前一并输出
+ *
+ * @param {OneShotConversationOptions} options - 入参对象（字段说明见接口定义）
  * @returns {Promise<void>}
  */
 export async function runOneShotConversation({
@@ -58,19 +51,14 @@ export async function runOneShotConversation({
   mcpEnabled = true,
   cliSandboxOptions,
 }: OneShotConversationOptions): Promise<void> {
-  // 获取最终生效的思考档位
   const effectiveThinkingLevel = resolveThinkingLevel({
     cliLevel: thinkingLevel,
     llmConfig: llmConfig,
     fallback: modeConfig.defaultThinkingLevel,
   });
-  // 获取最终生效的思考样式
   const thinkingStyle = resolveThinkingStyle(llmConfig);
-  // 打印折算思考配置最终生效的信息
   warnThinkingFallback(effectiveThinkingLevel, thinkingStyle);
-  // 创建流渲染器：处理正文与思考增量
-  const renderer = createStreamRenderer();
-  // 会话运行时（MCP 连接与沙箱）随会话创建，finally 中统一释放；bash 装配由模式决定
+  // 会话运行时（MCP 连接与沙箱）随会话创建，finally 中统一释放；工具带装配由模式决定
   const runtime = await createConversationRuntime(modeConfig.basePrompt, {
     mcpEnabled,
     bashEnabled: modeConfig.bashEnabled,
@@ -80,33 +68,20 @@ export async function runOneShotConversation({
   });
   try {
     const { systemPrompt, tools, scanWarnings } = runtime.skill;
-    // 与 REPL 面板保持一致：技能扫描警告与装配阶段警告（沙箱降级、Provider 不可用、MCP 连接失败等）一并输出
+    // 与 REPL 面板保持一致：技能扫描警告与装配阶段警告一并输出
     printWarnings([...scanWarnings, ...runtime.bootWarnings]);
     // 单次会话的历史仅在本函数内存活：不跨次共享，会话结束即丢弃
     const history: ResponseHistoryItem[] = [];
-    const runTurn = createResponsesTurn({
+    await executeConversationTurn({
       llmConfig,
-      userInput,
+      thinkingLevel: effectiveThinkingLevel,
+      thinkingStyle,
       history,
+      userInput,
       instructions: systemPrompt,
-      tools: runtime.skill.advertisedTools,
-      extraBody: resolveResponsesThinkingFields({
-        thinkingLevel: effectiveThinkingLevel,
-        thinkingStyle,
-        thinkingEffortMap: llmConfig.thinkingEffortMap,
-      }),
-      onDelta: renderer.onDelta,
-      onReasoningDelta: renderer.onReasoningDelta,
-    });
-    // 回答由 onDelta 流式输出；每次工具调用前结束思考块并打印一行提示，避免中间轮静默无输出
-    // 轮数上限由模式决定（chat 8 轮、agent 40 轮），未指定时回退 loop 默认值；进入软收敛轮时提示用户
-    const maxIterations = modeConfig.maxIterations ?? DEFAULT_MAX_ITERATIONS;
-    await runAgentLoop({
-      runTurn,
       tools,
-      maxIterations,
-      onToolCall: createToolCallLogger(renderer),
-      onSoftConverge: createSoftConvergeNotice(renderer, maxIterations),
+      advertisedTools: runtime.skill.advertisedTools,
+      maxIterations: modeConfig.maxIterations,
     });
   } finally {
     // 成功与异常路径都先补换行，避免后续输出（错误提示等）粘在残缺的流式输出之后

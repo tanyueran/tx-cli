@@ -1,6 +1,6 @@
 import pico from "picocolors";
-import type { ToolCall } from "../../llm/types";
-import type { Tool } from "../../tools";
+import type { ToolCall } from "../../../llm/types";
+import type { Tool } from "../../../tools";
 
 /**
  * 创建流式渲染器：正文按原样输出，深度思考内容以暗色流式输出

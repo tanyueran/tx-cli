@@ -45,8 +45,8 @@ function normalizeText(configValue: string | undefined): string | undefined {
 
 /**
  * 按优先级合并两级配置文件的 llm 段：项目配置 > 全局配置
- * 标量字段（apiKey/baseUrl/model/thinkingLevel/thinkingStyle）高层覆盖低层，
- * thinkingEffortMap 对象按 key 合并（项目同名覆盖全局）
+ *
+ * 标量字段高层覆盖低层，thinkingEffortMap 按 key 合并（项目同名覆盖全局）
  * @param {string} globalPath - 全局配置文件路径
  * @param {string | undefined} projectPath - 项目配置文件路径（缺省跳过项目层）
  * @returns {Partial<LlmConfig>} 解析结果，任一项都可能为空
@@ -65,7 +65,6 @@ function resolveConfigFromSources(
     baseUrl:
       normalizeText(projectLlm?.baseUrl) ?? normalizeText(globalLlm?.baseUrl),
     model: normalizeText(projectLlm?.model) ?? normalizeText(globalLlm?.model),
-    // 思考档位/风格为可选配置：项目覆盖全局；合法性与格式校验统一在装载时进行
     thinkingLevel: (projectLlm?.thinkingLevel ?? globalLlm?.thinkingLevel) as
       | ThinkingLevel
       | undefined,
@@ -83,8 +82,7 @@ function resolveConfigFromSources(
 }
 
 /**
- * 保存 LLM 配置到用户级配置文件
- * 走统一写入口：只替换 llm 段，mcpServers 等其他段由共享模块负责保留，缓存同步刷新
+ * 保存 LLM 配置到用户级配置文件（统一写入口只替换 llm 段，其他段与缓存由共享模块处理）
  * @param {LlmConfig} llmConfig - 完整配置
  * @returns {void}
  */
@@ -94,9 +92,11 @@ function saveConfigFile(llmConfig: LlmConfig): void {
 }
 
 /**
- * 加载 LLM 配置：项目配置优先于全局配置（CLI 选项在命令层更优先）；必填三项（apiKey/baseUrl/model）任一缺失时进入引导流程
- * 可选思考配置（thinkingLevel/thinkingStyle/thinkingEffortMap）不参与引导，
- * 装载时统一校验并随完整配置返回，向导补全后原样保留以免落盘丢失
+ * 加载 LLM 配置：项目配置优先于全局配置（CLI 选项在命令层更优先）
+ *
+ * 必填三项（apiKey/baseUrl/model）任一缺失时进入交互向导补全并写盘；
+ * 可选思考配置不参与引导，装载时统一校验，向导补全后原样合并保留以免落盘丢失
+ *
  * @param {string} globalPath - 全局配置文件路径（缺省 ~/.tx-cli/config.json，测试可注入）
  * @param {string} projectPath - 项目配置文件路径（缺省 <cwd>/.tx-cli/config.json，测试可注入）
  * @returns {Promise<LlmConfig>} 完整可用的 LLM 配置
@@ -107,7 +107,6 @@ export async function loadLlmConfig(
   projectPath: string = resolveProjectConfigPath(process.cwd()),
 ): Promise<LlmConfig> {
   const partialLlmConfig = resolveConfigFromSources(globalPath, projectPath);
-  // 思考配置装载即校验：非法值直接报错，避免静默失效
   const thinkingLevel = parseThinkingLevel(partialLlmConfig.thinkingLevel);
   const thinkingStyle = parseThinkingStyle(partialLlmConfig.thinkingStyle);
   const thinkingConfig = {
@@ -130,7 +129,6 @@ export async function loadLlmConfig(
     };
   }
   const wizardConfig = await runSetupWizard(partialLlmConfig);
-  // 向导只收集必填三项，可选思考配置原样合并保留
   const mergedLlmConfig = { ...wizardConfig, ...thinkingConfig };
   saveConfigFile(mergedLlmConfig);
   return mergedLlmConfig;

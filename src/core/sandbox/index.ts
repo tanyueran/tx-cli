@@ -27,7 +27,7 @@ export type {
   SandboxRulesConfig,
 } from "./config/schema";
 export { loadSandboxConfig } from "./config/load";
-export { appendProjectGrant } from "./config/grants";
+export { appendProjectGrant } from "./runtime/approval-grants";
 export { parseRule, matchSpec } from "./policy/syntax";
 export type { ParsedRule } from "./policy/syntax";
 export {
@@ -43,15 +43,21 @@ export {
   buildTierConfig,
   DEFAULT_DENY_READ,
   DEFAULT_DENY_WRITE,
-} from "./policy/tier";
+} from "./runtime/tier-config";
 export { matchPathPattern } from "./utils/path";
 export { expandHome } from "../../shared/paths";
-export { appendAudit } from "./audit";
-export type { AuditEntry } from "./audit";
+export { appendAudit } from "./runtime/audit";
+export type { AuditEntry } from "./runtime/audit";
 export { getProvider, listProviderNames } from "./providers/registry";
-export { landlockProvider } from "./providers/backends/landlock";
-export { SandboxContext } from "./runtime/context";
-export type { SandboxContextOptions } from "./runtime/context";
-export { interactiveApprover, detectInteractive } from "./runtime/approver";
-export { createSandboxContext } from "./assembly";
-export type { SandboxCliOptions } from "./assembly";
+export { landlockProvider } from "./providers/landlock";
+export { SandboxContext } from "./runtime/sandbox-context";
+export type {
+  SandboxContextOptions,
+  SandboxEvaluationInput,
+} from "./runtime/sandbox-context";
+export {
+  interactiveApprover,
+  detectInteractive,
+} from "./runtime/interactive-approver";
+export { createSandboxContext } from "./bootstrap/create-context";
+export type { SandboxCliOptions } from "./bootstrap/options";

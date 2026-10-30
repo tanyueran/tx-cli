@@ -1,16 +1,16 @@
 import pico from "picocolors";
-import { formatTodoList } from "../../tools";
-import type { TodoToolHandle } from "../../tools";
-import type { SandboxContext } from "../../sandbox/runtime/context";
-import type { SkillCatalog } from "../../skills";
+import { formatTodoList } from "../../../tools";
+import type { TodoToolHandle } from "../../../tools";
+import type { SandboxContext } from "../../../sandbox/runtime/sandbox-context";
+import type { SkillCatalog } from "../../../skills";
 import {
   parseThinkingLevel,
   warnThinkingFallback,
   THINKING_LEVELS,
-} from "../../llm";
-import type { ThinkingLevel, ThinkingStyle } from "../../llm/types";
-import { CliError } from "../../../shared/errors";
-import { displayWidth, padToWidth } from "../../../shared/string";
+} from "../../../llm";
+import type { ThinkingLevel, ThinkingStyle } from "../../../llm/types";
+import { CliError } from "../../../../shared/errors";
+import { displayWidth, padToWidth } from "../../../../shared/string";
 
 /** 斜杠命令执行结果：handled 表示命令已就地处理完，send 表示要把任务文本交给模型处理 */
 export type SlashCommandResult =

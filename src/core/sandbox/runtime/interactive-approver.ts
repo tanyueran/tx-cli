@@ -12,8 +12,7 @@ import type {
 export const interactiveApprover: Approver = {
   /**
    * 征询命令审批：一次/本会话/始终/拒绝
-   * MCP 工具改为服务器级粒度（本会话/始终允许整个服务器），
-   * 避免同一服务器多个工具逐个弹窗
+   * MCP 工具改为服务器级粒度，避免同一服务器多个工具逐个弹窗
    * @param {string} ruleKey - 规则键
    * @param {string} reason - 判定说明
    * @param {ApprovalAskContext} context - 问询上下文（MCP 工具时携带服务器信息）

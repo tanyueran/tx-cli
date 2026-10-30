@@ -5,8 +5,8 @@
 ## 基本用法
 
 - 传入任务：单次执行，完成后退出
-- 不传参数：进入多轮任务模式，持续输入任务，输入 `exit`/`quit` 或按 `Ctrl+C` 退出
-- 工具带为全量：在 `chat` 工具集之外额外装配 `bash`（受沙箱与审批管控）与 `write_todos`（任务清单）工具，并接入 MCP 服务器（`chat` 不装配），模型创建/修改文件优先使用 `write_file`（整体写入）与 `edit_file`（精确字符串替换，片段不唯一即失败）；技能、Responses 无状态模式等机制与 `chat` 一致（详见 [chat 命令详解](./CHAT.md)）；多轮模式支持 `/think`、`/skills`、`/todos`、`/permissions` 内联命令
+- 不传参数（或纯空白，如 `tx agent ""`）：进入多轮任务模式，持续输入任务，输入 `exit`/`quit` 或按 `Ctrl+C` 退出
+- 工具带为全量：在 `chat` 工具集之外额外装配 `bash`（受沙箱与审批管控）与 `write_todos`（任务清单）工具，并接入 MCP 服务器（`chat` 不装配），模型创建/修改文件优先使用 `write_file`（整体写入）与 `edit_file`（精确字符串替换，片段不唯一即失败）；技能、Responses 无状态模式等机制与 `chat` 一致（详见 [chat 命令详解](./CHAT.md)）；多轮模式支持 `/think`、`/skill`、`/skills`、`/todos`、`/permissions`、`/help` 内联命令，输入行首 `/` 弹出命令与技能补全面板，行中「空格 + /」弹出技能补全
 - 任务清单：对 3 步以上的任务，模型会先用 `write_todos` 建立清单并随进度更新（调用时打印清单视图：`☐` 待办 / `◐` 进行中 / `☑` 已完成），多轮模式可用 `/todos` 随时查看
 - 单轮任务的工具调用轮数上限为 40 轮（chat 为 8 轮），达到上限后模型将基于已有信息直接作答（黄字提示）
 
@@ -14,9 +14,9 @@
 
 | 选项 | 说明 |
 |---|---|
-| `--think <level>` | 思考档位：`off` \| `low` \| `medium` \| `high`，同 `chat` |
+| `--think <level>` | 思考档位：`off` \| `low` \| `medium` \| `high`，优先级同 `chat`（agent 最终默认 `medium`） |
 | `--no-mcp` | 本次任务禁用 MCP 服务器（缺省启用） |
-| `--sandbox <level>` | bash 沙箱档位：`read-only`（默认，全禁写）\| `workspace-write`（可写工作空间）\| `danger-full-access`（无隔离） |
+| `--sandbox <level>` | bash 沙箱档位：`read-only`（默认，全禁写）\| `workspace-write`（可写工作空间）\| `danger-full-access`（无隔离）；显式传入时同时启用沙箱（覆盖配置 `sandbox.enabled=false`） |
 | `--approval <policy>` | 审批策略：`always-ask`（每次询问）\| `on-failure`（默认，沙箱拦截失败时询问）\| `never`（从不询问） |
 | `--no-bash` | 本次任务禁用 bash 工具 |
 | `--sandbox-missing <action>` | 沙箱在当前环境不可用时的处置：`deny`（默认，失败关闭）\| `allow`（降级为无隔离执行，规则与审批仍生效） |

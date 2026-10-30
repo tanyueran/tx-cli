@@ -1,11 +1,11 @@
-import { CancelError, CliError } from "../../../shared/errors";
+import { CancelError, CliError } from "../../../../shared/errors";
 import {
   markTurnCancelled,
   runWithTurnCancellation,
-} from "../../../shared/turn-cancel";
-import type { ToolCall } from "../../llm/types";
-import { executeToolCall } from "../../tools";
-import type { Tool, ToolResult } from "../../tools";
+} from "../../../../shared/turn-cancel";
+import type { ToolCall } from "../../../llm/types";
+import { executeToolCall } from "../../../tools";
+import type { Tool, ToolResult } from "../../../tools";
 
 /** 单回合结果：模型的最终回答，或新的工具调用请求 */
 export type TurnOutcome =
@@ -20,7 +20,7 @@ export type TurnOutcome =
  */
 export type RunTurn = (
   toolResults: ToolResult[],
-  toolsDisabled: boolean
+  toolsDisabled: boolean,
 ) => Promise<TurnOutcome>;
 
 /** 工具调用轮数默认上限：模式未指定 maxIterations 时回退该值（chat 显式 8、agent 显式 40） */
@@ -68,6 +68,7 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<string> {
         // 首次进入软收敛轮时提示一次：模型将被禁止调用工具，直接基于已有信息作答
         options.onSoftConverge?.();
       }
+      // 执行回合函数，把上一轮工具执行结果作为输入反馈给AI
       const outcome = await options.runTurn(toolResults, toolsDisabled);
       if (outcome.type === "reply") {
         return outcome.reply;
@@ -90,6 +91,7 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<string> {
             };
           }
           try {
+            // 执行工具调用
             return await executeToolCall(tool, call);
           } catch (err) {
             // 用户取消不是工具失败：标记回合取消（同轮排队任务与待审批点全部短路）后原样上抛

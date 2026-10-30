@@ -4,8 +4,8 @@ import {
   ReplInputController,
   renderReplFrame,
   PANEL_LIMIT,
-} from "../src/core/conversation/common/repl-input";
-import type { ReplSuggestion } from "../src/core/conversation/common/repl-input";
+} from "../src/core/conversation/common/repl/repl-input";
+import type { ReplSuggestion } from "../src/core/conversation/common/repl/repl-input";
 import { stripAnsi } from "../src/shared/string";
 
 /** 构造固定候选的 suggest 回调 */

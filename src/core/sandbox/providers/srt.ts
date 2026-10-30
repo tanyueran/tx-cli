@@ -6,12 +6,12 @@ import type {
   SandboxProvider,
   SandboxViolationInfo,
   TierConfig,
-} from "../../types";
+} from "../types";
 
 /**
  * srt Provider：@anthropic-ai/sandbox-runtime 的适配层
  * 本文件是整个代码库中唯一 import sandbox-runtime 的位置，
- * 未来替换沙箱实现（如自研 Landlock）只需提供新的 Provider 注册进注册表
+ * 替换沙箱实现只需提供新的 Provider 注册进注册表
  */
 export const srtProvider: SandboxProvider = {
   name: "srt",

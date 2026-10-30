@@ -4,7 +4,10 @@
  */
 
 /** 沙箱隔离档位（标准三档权限模型） */
-export type SandboxLevel = "read-only" | "workspace-write" | "danger-full-access";
+export type SandboxLevel =
+  | "read-only"
+  | "workspace-write"
+  | "danger-full-access";
 
 /** 审批策略：ask 命中后与沙箱内失败后的处置方式 */
 export type ApprovalPolicy = "always-ask" | "on-failure" | "never";
@@ -44,8 +47,7 @@ export interface SandboxViolationInfo {
 
 /**
  * 沙箱 Provider 接口：具体沙箱实现的可插拔抽象
- * 实现方（如 srt、noop、未来的 Landlock）只需覆盖命令包装与违规回传，
- * 上层（规则判定、审批、审计）不感知具体沙箱技术
+ * 实现方只需覆盖命令包装与违规回传，上层（规则判定、审批、审计）不感知具体沙箱技术
  */
 export interface SandboxProvider {
   /** Provider 名称（配置 sandbox.provider 按此选择） */
@@ -116,12 +118,12 @@ export interface ApprovalAskContext {
  * 避免同一服务器多个工具逐个询问
  */
 export type ApprovalChoice =
-  | { kind: "once" }
-  | { kind: "session" }
-  | { kind: "always" }
-  | { kind: "session-server" }
-  | { kind: "always-server" }
-  | { kind: "deny" };
+  | { kind: "once" } // 仅执行一次
+  | { kind: "session" } // 会话级授权
+  | { kind: "always" } // 永久授权
+  | { kind: "session-server" } // 会话级服务器授权
+  | { kind: "always-server" } // 永久服务器授权
+  | { kind: "deny" }; // 拒绝执行
 
 /**
  * 审批器：ask 判定发生时向用户征询处置

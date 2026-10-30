@@ -51,8 +51,9 @@ src/
 │   ├── conversation/          # 对话编排（chat / agent 命令共用机制，模式即配置）
 │   │   ├── chat.ts            #   chat 命令实现：CHAT_MODE + one-shot（单次）/ repl（多轮）入口
 │   │   ├── agent.ts           #   agent 命令实现：AGENT_MODE + one-shot（单次）/ repl（多轮）入口
-│   │   └── common/            #   会话机制：agentic loop、Responses 适配、
-│   │                          #   流式渲染、技能装配（skill-context）
+│   │   └── common/            #   会话机制：one-shot / repl 入口、turn/（execute-turn 回合
+│   │                          #   wiring、agentic loop、Responses 适配、流式渲染）、
+│   │                          #   runtime/（运行时装配、模式配置、技能装配）、repl/（输入与斜杠命令）
 │   ├── tools/                 # 工具系统
 │   │   ├── types.ts           #   Tool 接口（含 permission 权限声明、renderCall 调用渲染扩展点）
 │   │   ├── executor.ts        #   执行器：参数解析、超时、8KB 截断
@@ -61,14 +62,15 @@ src/
 │   │                          #   grep / web_search / write_file / edit_file（写侧，
 │   │                          #   受可写边界管控）/ write_todos（agent 模式装配，
 │   │                          #   工厂创建）/ bash（工厂创建，按需拼入）
-│   ├── sandbox/               # 沙箱与权限（四层模型，见下文）
-│   │   ├── config/            #   配置 schema / 加载校验 / 项目授权读写
-│   │   ├── policy/            #   L2 纯策略：规则语法、危险类目、判定引擎、档位配置
-│   │   ├── runtime/           #   L3 运行时：SandboxContext、fs 边界、审批器
-│   │   ├── providers/         #   Provider 注册表 + backends/（srt / noop / landlock）
+│   ├── sandbox/               # 沙箱与权限（四层模型，见下文；模块详情见 src/core/sandbox/README.md）
+│   │   ├── bootstrap/         #   L1 装配：create-context（createSandboxContext）、
+│   │   │                      #   options（CLI/配置优先级合并）、trust（目录信任与降级）
+│   │   ├── config/            #   配置 schema / 全局与项目配置加载校验
+│   │   ├── policy/            #   L2 纯策略：规则语法、危险类目、判定引擎
+│   │   ├── runtime/           #   L3 运行时：SandboxContext、fs 边界、审批器、
+│   │   │                      #   档位边界构造、授权落盘、审计日志（JSONL）
+│   │   ├── providers/         #   Provider 注册表 + srt / landlock / noop
 │   │   ├── utils/             #   与业务无关的工具：glob 编译、路径匹配、命令切分、shell 引号
-│   │   ├── assembly.ts        #   L1 装配（createSandboxContext）
-│   │   ├── audit.ts           #   审计日志（JSONL）
 │   │   └── types.ts           #   领域类型与 Provider / Approver 接口
 │   ├── llm/                   # LLM 接入：client、config 向导、thinking 适配（含档位解析）
 │   ├── mcp/                   # MCP：config 解析、manager 连接管理、tool-adapter
@@ -86,10 +88,10 @@ src/
 
 ```mermaid
 flowchart LR
-    A["chat-command<br/>解析 --think（默认 low）"] --> B["one-shot / repl<br/>会话生命周期"]
-    A2["agent-command<br/>解析 --think/--no-mcp/<br/>--sandbox 等"] --> B["one-shot / repl<br/>会话生命周期"]
-    B --> C["setupSkillContext<br/>装配提示词与工具"]
-    C --> D["runAgentLoop<br/>agentic loop"]
+    A["chat-command<br/>解析 --think（模式兜底 low）"] --> B["runOneShotConversation /<br/>runReplConversation<br/>会话生命周期"]
+    A2["agent-command<br/>解析 --think/--no-mcp/<br/>--sandbox 等"] --> B
+    B --> C["createConversationRuntime<br/>MCP / 沙箱 / 技能装配<br/>（setupSkillContext）"]
+    C --> D["executeConversationTurn<br/>渲染器 + Responses 回合<br/>+ runAgentLoop"]
     D --> E["Responses API<br/>（无状态，历史本地维护）"]
     D --> F["executeToolCall<br/>参数解析/超时/截断"]
     F --> G["内置工具 / bash（门卫包装）<br/>load_skill / MCP 工具"]
@@ -98,7 +100,7 @@ flowchart LR
 
 ### 模式即配置
 
-chat 与 agent 共用同一套会话机制（单次 one-shot / 多轮 repl、agentic loop、流式渲染、技能装配），两个命令的差异全部收敛为一份 `ConversationModeConfig`（`core/conversation/common/mode.ts`），由 `chat.ts` / `agent.ts` 各自提供，传给公共的 `runOneShotConversation` / `runReplConversation`——新增一种模式不需要新写编排逻辑。
+chat 与 agent 共用同一套会话机制（单次 one-shot / 多轮 repl、agentic loop、流式渲染、技能装配），两个命令的差异全部收敛为一份 `ConversationModeConfig`（`core/conversation/common/runtime/mode.ts`），由 `chat.ts` / `agent.ts` 各自提供，传给公共的 `runOneShotConversation` / `runReplConversation`——新增一种模式不需要新写编排逻辑。
 
 **配置字段：**
 
@@ -106,7 +108,7 @@ chat 与 agent 共用同一套会话机制（单次 one-shot / 多轮 repl、age
 |---|---|
 | `basePrompt` | 模式人设（system 提示词底稿，技能元数据由 `buildSystemPrompt` 追加） |
 | `modeLabel` | REPL 就绪面板展示标签 |
-| `bashEnabled?` | 是否装配 bash 工具（缺省跟随沙箱装配结果） |
+| `bashEnabled?` | bash 装配三态开关（单一说明源即本字段注释，见 `runtime/mode.ts`）：缺省跟随 CLI/配置/沙箱存在性；`false` 强制不装配，同时跳过 bash 专用 Provider 装载并抑制 bash 相关警告 |
 | `todosEnabled?` | 是否装配 `write_todos` 任务清单 |
 | `writeToolsEnabled?` | 是否装配 `write_file` / `edit_file`（缺省装配） |
 | `maxIterations?` | 工具调用轮数上限（缺省 8） |
@@ -118,16 +120,16 @@ chat 与 agent 共用同一套会话机制（单次 one-shot / 多轮 repl、age
 |---|---|---|
 | 人设 | 轻量 AI 助手，简洁中文回答 | 任务执行 Agent：自主拆解步骤；优先 `write_file`/`edit_file` 而非 bash 重定向；高危操作先确认；3 步以上先 `write_todos` 且同一时刻仅一项进行中 |
 | 写侧文件工具 | 代码强制剔除（`writeToolsEnabled: false`，只读语义写死在模式配置，不依赖沙箱档位） | 装配 |
-| bash | 不装配（沙箱上下文仍创建，只读工具照常受 fs 边界管控） | 缺省装配（受沙箱与审批管控，`--no-bash` 可关） |
+| bash | 强制不装配（`bashEnabled: false`，跳过 Provider 装载；沙箱上下文仍创建，只读工具照常受 fs 边界管控） | 缺省装配（跟随 CLI/配置，受沙箱与审批管控，`--no-bash` 可关） |
 | `write_todos` | 不装配 | 装配 |
 | MCP | 硬编码关闭 | 缺省开启（`--no-mcp` 按次关闭） |
-| 工具调用轮数上限 | 8 | 20 |
+| 工具调用轮数上限 | 8 | 40 |
 | 思考档位兜底 | `low` | `medium` |
 | 沙箱命令行选项 | 不接收 | 接收 `--sandbox` / `--approval` / `--no-bash` / `--sandbox-missing` |
 
 ### agentic loop（runAgentLoop）
 
-`core/conversation/common/loop.ts` 的 `runAgentLoop` 是所有会话的心脏：整体运行在回合级取消上下文中（见下文），循环体不感知任何 LLM 细节，每轮通过 `runTurn(toolResults, toolsDisabled)` 回调向模式适配器（`responses-turn.ts`）要结果：
+`core/conversation/common/turn/loop.ts` 的 `runAgentLoop` 是所有会话的心脏：整体运行在回合级取消上下文中（见下文），循环体不感知任何 LLM 细节，每轮通过 `runTurn(toolResults, toolsDisabled)` 回调向模式适配器（`responses-turn.ts`）要结果。单次会话与 REPL 每轮都经共用入口 `executeConversationTurn`（`turn/execute-turn.ts`）完成「渲染器 + Responses 回合 + agentic loop」的统一 wiring：
 
 1. **请求回合**：`runTurn` 把上一轮的工具结果追加进历史、调用 LLM，返回两种 `TurnOutcome` 之一——`reply`（纯文本回答）或 `tool_calls`（工具调用清单）。
 2. **正常退出**：收到 `reply` 即结束循环，返回最终回复。
@@ -186,11 +188,12 @@ LLM 调用走 OpenAI 兼容 Responses API 的**无状态模式**（`core/llm/cli
 四档思考强度：`off` / `low` / `medium` / `high`，取值优先级：
 
 ```text
-命令行 --think  >  配置文件 llm.thinkingLevel  >  内置默认（chat 为 low，agent 为 medium）
+命令行 --think  >  配置文件 llm.thinkingLevel（项目 > 全局）  >  模式兜底（chat 为 low，agent 为 medium）
 ```
 
-- `chat` 命令为轻量只读问答：兜底档位比 `agent` 更轻（`low`，`agent` 为 `medium`），其余优先级与 `agent` 一致（`--think` > 配置文件 `llm.thinkingLevel`，项目 > 全局）。
-- 档位校验前置（`parseThinkingLevel`）：非法值在对话开始前报错退出，不带着错误配置发请求。
+- 解析链路的单一入口是 `resolveThinkingLevel`（`core/llm/thinking.ts`）：CLI 与配置均未指定时取模式兜底，agent 模式未指定兜底时回退 `medium`。
+- `chat` 命令为轻量只读问答：兜底档位比 `agent` 更轻（`low`，`agent` 为 `medium`）。
+- 档位校验前置（`parseThinkingLevel`，与 `parseThinkingStyle` 共用枚举解析实现）：非法值在对话开始前报错退出，不带着错误配置发请求。
 - REPL 中可用 `/think` 内联命令会话内切换（无参查看、带参下一轮生效）。
 
 ### 协议风格适配
@@ -242,7 +245,7 @@ interface Tool extends ToolDefinition {
 
 ### 工具装配（setupSkillContext）
 
-`core/conversation/common/skill-context.ts` 按固定顺序拼接工具清单，**不支持运行时动态注册**：
+`core/conversation/common/runtime/skill-context.ts` 按固定顺序拼接工具清单，**不支持运行时动态注册**：
 
 1. **内置静态清单**（`tools/builtin/index.ts`）：`read_file`、`list_dir`、`glob`、`grep`、`web_search`、`write_file`、`edit_file` 共 7 个；模式关闭写侧工具时（chat）按名单剔除 `write_file` / `edit_file`；
 2. **`load_skill`**：仅当 `discoverSkills()` 扫描到技能时装配——空技能时不多下发无用工具定义；
@@ -276,6 +279,8 @@ interface Tool extends ToolDefinition {
 
 ## 沙箱与权限（四层模型）
 
+> 模块内部目录职责、核心概念与推荐阅读顺序见 [src/core/sandbox/README.md](../src/core/sandbox/README.md)。
+
 三档沙箱（`SandboxLevel`）× 审批策略（`ApprovalPolicy`）正交：
 
 | 档位                   | 文件系统                                | 网络               | Provider |
@@ -288,19 +293,19 @@ interface Tool extends ToolDefinition {
 
 ```mermaid
 flowchart TD
-    L1["L1 装配（assembly.ts）<br/>CLI > 项目配置 > 全局配置（项目配置仅可收紧）<br/>目录信任确认（写入全局配置缓存）/ 降级 / Provider 可用性探测"]
+    L1["L1 装配（bootstrap/create-context.ts）<br/>CLI > 项目配置 > 全局配置（项目配置仅可收紧）<br/>目录信任确认（写入全局配置缓存）/ 降级 / Provider 可用性探测"]
     L2["L2 规则（policy/evaluate.ts）<br/>deny（含内置危险类目）> ask > allow > 档位默认<br/>复合命令逐段判定，包装穿透"]
-    L3["L3 审批（runtime/context.ts）<br/>一次 / 本会话 / 始终（MCP 为服务器级：mcp__server__*）<br/>授权落项目 .tx-cli/config.json；非 TTY 时 ask→deny；JSONL 审计"]
+    L3["L3 审批（runtime/sandbox-context.ts）<br/>一次 / 本会话 / 始终（MCP 为服务器级：mcp__server__*）<br/>授权落项目 .tx-cli/config.json；非 TTY 时 ask→deny；JSONL 审计"]
     L4["L4 执行（bash.ts + Provider）<br/>wrapCommand → spawn → 违规标注回传<br/>on-failure 升级重跑"]
     L1 --> L2 --> L3 --> L4
 ```
 
-### L1 装配（assembly.ts · createSandboxContext）
+### L1 装配（bootstrap/create-context.ts · createSandboxContext）
 
 沙箱上下文随会话创建，流程：
 
-1. **配置装载**：加载全局 `~/.tx-cli/config.json` + 项目 `<cwd>/.tx-cli/config.json` 两份 sandbox 配置，按能力感知语义合并（项目仅可收紧，见下文「信任模型」）；生效档位/审批取 `CLI 选项 ?? 配置文件值`，即优先级 **CLI > 项目配置 > 全局配置**。
-2. **enabled 开关**：配置关闭沙箱时不装配 bash、上下文返回 undefined；但 CLI 显式传 `--sandbox <level>` 视为强制启用（覆盖配置的关闭），此时再传 `--approval` 等选项会警告不生效。bash 装配开关与沙箱上下文解耦：`--no-bash` 只移除 bash 工具，fs 门卫对其他工具照常生效。
+1. **配置装载**：加载全局 `~/.tx-cli/config.json` + 项目 `<cwd>/.tx-cli/config.json` 两份 sandbox 配置，按能力感知语义合并（项目仅可收紧，见下文「信任模型」）；生效档位/审批取 `CLI 选项 ?? 配置文件值`，即优先级 **CLI > 项目配置 > 全局配置**（链路说明源 `bootstrap/options.ts` 的 `ResolvedOptions`）。
+2. **enabled 开关**：配置关闭沙箱时不装配 bash、上下文返回 undefined；但 CLI 显式传 `--sandbox <level>` 视为强制启用（覆盖配置的关闭），此时再传 `--approval` 等选项会警告不生效。bash 装配开关与沙箱上下文解耦：`--no-bash` 只移除 bash 工具，fs 门卫对其他工具照常生效；chat 等强制无 bash 的模式经 `bashForcedOff` 跳过 Provider 装载并抑制 bash 相关警告。
 3. **目录信任确认**：仅当 `danger-full-access` 档 / `never` 审批**来自配置文件**（CLI 未显式传入）且当前目录不在信任目录内时触发交互确认——确认则去重写入全局 `trustDirectories` 缓存并按原值生效；拒绝/取消/非交互则降级（full → workspace-write、never → on-failure）并黄字告警。
 4. **Provider 探测**：`danger-full-access` 直通 noop；否则按配置取 Provider 并探测 `isAvailable()` + `initialize()`——不可用时默认 fail-closed（bash 返回失败并提示），`--sandbox-missing allow` 显式降级为 noop 无隔离执行（规则与审批仍生效）。
 5. **提前警告**：bash 装配且 workspace-write 档且网络白名单为空时，提前提示所有 bash 联网将被 403 拒绝。
@@ -318,7 +323,7 @@ flowchart TD
 
 ### L3 审批与授权（runtime/）
 
-- **审批触发**：`guard` 中 L2 判定为 `ask` 才进入审批——非交互环境（非 TTY / CI）一律按拒绝处理（denied-noninteractive）；交互环境则暂停工具计时 → 取消检查 → `approver.ask` → 恢复计时。用户 deny 记审计并回传「用户拒绝了本次命令执行」。
+- **审批触发**：`guard` 中 L2 判定为 `ask` 才进入审批——非交互环境（非 TTY / CI）一律按拒绝处理（denied-noninteractive）；交互环境则暂停工具计时 → 取消检查 → `approver.ask`（实现在 `runtime/interactive-approver.ts`）→ 恢复计时。用户 deny 记审计并回传「用户拒绝了本次命令执行」。
 - **授权粒度四级**：本次 / 本会话 / 始终允许（落盘）/ MCP 服务器级（落 `mcp__<server>__*`，同服务器其余工具不再逐个询问；不覆盖显式 ask 规则）。
 - **落盘规则**：「始终允许」写入项目空间 `<cwd>/.tx-cli/config.json`（仅当前项目生效）——MCP 授权落 `mcp.rules.allow`，其余落 `sandbox.rules.allow`；规则键优先复用命中的显式规则，无可复用时自动派生（bash 取命令前缀，如 `bash(git status)` → `bash(git status:*)`；其余取工具名）。本会话授权仅存内存，并把命中的 ask 规则移入 allow。
 - **审计**：所有拦截与审批判定追加一行 JSON 到 `~/.tx-cli/sandbox-audit.jsonl`。
@@ -344,7 +349,7 @@ bash（exec，串行）、read_file / list_dir / glob / grep（fs.read，规则�
 
 ### Provider 插拔（核心解耦）
 
-`SandboxProvider` 接口（`isAvailable` / `initialize` / `wrapCommand` / `annotateStderr` / `dispose`），注册表编译期固定。`providers/backends/srt.ts` 是全库唯一 import `@anthropic-ai/sandbox-runtime` 的文件；`providers/backends/landlock.ts` 走外部 helper 方案（Node 无法直接发起 Landlock syscall，用户自装 `landlock-exec` 到 PATH 或 `~/.tx-cli/bin`，或经 `TX_SANDBOX_LANDLOCK_HELPER` 指定路径；denyRead 子树排除由应用层兜底）——新增沙箱实现只需实现 Provider 并注册，上层无感知。
+`SandboxProvider` 接口（`isAvailable` / `initialize` / `wrapCommand` / `annotateStderr` / `dispose`），注册表编译期固定。`providers/srt.ts` 是全库唯一 import `@anthropic-ai/sandbox-runtime` 的文件；`providers/landlock.ts` 走外部 helper 方案（Node 无法直接发起 Landlock syscall，用户自装 `landlock-exec` 到 PATH 或 `~/.tx-cli/bin`，或经 `TX_SANDBOX_LANDLOCK_HELPER` 指定路径；denyRead 子树排除由应用层兜底）——新增沙箱实现只需实现 Provider 并注册，上层无感知。
 
 ## 配置文件
 
@@ -367,6 +372,6 @@ bash（exec，串行）、read_file / list_dir / glob / grep（fs.read，规则�
 | ---------- | ------------------------------------------------------------------------------------------ |
 | 新增命令       | `src/program/command/` 新建文件并在 `program/index.ts` 的 registrars 注册                           |
 | 新增内置工具     | `src/core/tools/builtin/` 实现 `Tool` 接口并加入 `builtinTools`；需权限管控则声明 `permission` 字段（自动被门卫包装） |
-| 新增沙箱实现     | `src/core/sandbox/providers/backends/` 实现 `SandboxProvider` 并在 `providers/registry.ts` 注册                     |
+| 新增沙箱实现     | `src/core/sandbox/providers/` 实现 `SandboxProvider` 并在 `providers/registry.ts` 注册                     |
 | 新增模板       | `template/` 目录（create/add 共用脚手架流程 `core/scaffold`）                                         |
 | 接入新 LLM 能力 | 思考档位等协议差异统一收敛在 `core/llm/thinking.ts` 适配层                                                  |

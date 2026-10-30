@@ -5,9 +5,9 @@ import { join } from "node:path";
 import { writeFileTool } from "../src/core/tools/builtin/write-file";
 import { editFileTool } from "../src/core/tools/builtin/edit-file";
 import { wrapToolWithPermission } from "../src/core/tools/permission";
-import { SandboxContext } from "../src/core/sandbox/runtime/context";
+import { SandboxContext } from "../src/core/sandbox/runtime/sandbox-context";
 import { DEFAULT_SANDBOX_CONFIG } from "../src/core/sandbox/config/schema";
-import { noopProvider } from "../src/core/sandbox/providers/backends/noop";
+import { noopProvider } from "../src/core/sandbox/providers/noop";
 import type { ApprovalChoice, Approver } from "../src/core/sandbox/types";
 import type { SandboxFileConfig } from "../src/core/sandbox/config/schema";
 
