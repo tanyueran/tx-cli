@@ -2,6 +2,10 @@ import pico from "picocolors";
 import { executeConversationTurn } from "../turn/execute-turn";
 import { DEFAULT_MAX_ITERATIONS } from "../turn/loop";
 import {
+  formatCompactionNotice,
+  maybeCompactHistory,
+} from "../turn/compaction";
+import {
   createConversationRuntime,
   disposeConversationRuntime,
 } from "../runtime/runtime";
@@ -15,6 +19,7 @@ import {
   warnThinkingFallback,
   resolveThinkingLevel,
   resolveThinkingStyle,
+  resolveCompactionConfig,
   addUsage,
   createEmptyUsage,
   describePricing,
@@ -254,6 +259,10 @@ export async function runConversationRepl(options: ReplOptions): Promise<void> {
   const { sandbox } = runtime;
   // 会话累计 token 用量：每次 LLM 请求返回 usage 时累加（无状态模式 input 为历史全量口径）
   let totalUsage: TokenUsage = createEmptyUsage();
+  // 上下文压缩配置：未配置 llm.context.maxContextTokens 时为 undefined，压缩完全不介入
+  const compactionConfig = resolveCompactionConfig(llmConfig.context);
+  // 上一次请求的真实 input token：压缩判定优先用它（含系统提示与工具定义，口径最准）
+  let lastInputTokens: number | undefined;
   // 本地维护的对话历史：store=false 模式下每轮全量发送给服务端，跨轮累积
   const history: ResponseHistoryItem[] = [];
   // 输入历史（面板关闭时 ↑/↓ 回溯）：仅会话内内存记录，上限 200 条
@@ -274,6 +283,7 @@ export async function runConversationRepl(options: ReplOptions): Promise<void> {
       const cleared = history.length;
       history.length = 0;
       totalUsage = createEmptyUsage();
+      lastInputTokens = undefined;
       inputHistory.length = 0;
       todoHandle?.resetTodos();
       return cleared;
@@ -354,10 +364,31 @@ export async function runConversationRepl(options: ReplOptions): Promise<void> {
       }
     }
 
-    // 记录本轮开始前历史长度：本轮被取消时回滚，避免残留未配对的用户输入或工具调用项
-    const historyStart = history.length;
     // 本轮用量：agentic 循环一次用户输入可能发生多次 LLM 请求，按回调逐次累加
     let turnUsage: TokenUsage = createEmptyUsage();
+    // 本轮开始前是安全点：上一轮已完整结束，此时压缩早期历史不会切断工具调用配对
+    if (compactionConfig) {
+      const outcome = await maybeCompactHistory({
+        llmConfig,
+        history,
+        config: compactionConfig,
+        lastInputTokens,
+        onUsage: (usage) => {
+          // 摘要请求同样消耗 token：计入累计与本轮，保证统计口径完整
+          turnUsage = addUsage(turnUsage, usage);
+          totalUsage = addUsage(totalUsage, usage);
+        },
+      });
+      const notice = formatCompactionNotice(outcome);
+      if (notice) {
+        console.log(
+          outcome.status === "failed" ? pico.yellow(notice) : pico.cyan(notice),
+        );
+      }
+    }
+    // 记录本轮开始前历史长度：本轮被取消时回滚，避免残留未配对的用户输入或工具调用项
+    // 必须在压缩之后记录：压缩会缩短历史，若以压缩前长度为基准回滚会把摘要一并裁掉
+    const historyStart = history.length;
     try {
       await runReplTurn({
         session,
@@ -367,6 +398,7 @@ export async function runConversationRepl(options: ReplOptions): Promise<void> {
         onUsage: (usage) => {
           turnUsage = addUsage(turnUsage, usage);
           totalUsage = addUsage(totalUsage, usage);
+          lastInputTokens = usage.inputTokens;
         },
       });
       // 本轮结束后展示「本轮 + 累计」用量（含配置单价时的费用估算）

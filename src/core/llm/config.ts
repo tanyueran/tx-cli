@@ -10,6 +10,7 @@ import { runSetupWizard } from "./config-wizard";
 import { parseThinkingLevel, parseThinkingStyle } from "./thinking";
 import type {
   LlmConfig,
+  LlmContextConfig,
   LlmPricing,
   ThinkingLevel,
   ThinkingStyle,
@@ -81,6 +82,60 @@ function normalizePricing(raw: LlmPricing | undefined): LlmPricing | undefined {
 }
 
 /**
+ * 校验并归一化上下文压缩配置：逐字段丢弃非法值，全部无效时返回 undefined
+ * maxContextTokens 是启用开关，缺失该项时压缩整体关闭
+ * @param {LlmContextConfig | undefined} raw - 配置文件中的原始 context 段
+ * @returns {LlmContextConfig | undefined} 归一化后的配置
+ */
+function normalizeContext(
+  raw: LlmContextConfig | undefined,
+): LlmContextConfig | undefined {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return undefined;
+  }
+  const context: LlmContextConfig = {};
+  const numericFields: Array<[keyof LlmContextConfig, string]> = [
+    ["maxContextTokens", "大于 0 的整数"],
+    ["compactAt", "大于 0 的数值（≤1 按窗口比例，>1 为绝对 token 数）"],
+    ["keepRecentTurns", "大于 0 的整数"],
+    ["summaryMaxChars", "大于 0 的整数"],
+  ];
+  for (const [key, expectation] of numericFields) {
+    const value = raw[key];
+    if (value === undefined) {
+      continue;
+    }
+    if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+      context[key] = value;
+    } else {
+      console.warn(
+        pico.yellow(`llm.context.${key} 配置非法（需为${expectation}），已忽略`),
+      );
+    }
+  }
+  return Object.keys(context).length > 0 ? context : undefined;
+}
+
+/**
+ * 合并两级上下文压缩配置：先各自校验，项目配置仅覆盖有效字段
+ * 无效字段在归一化阶段已丢弃，不会因项目层的非法值把全局层的合法值冲掉
+ * @param {LlmContextConfig | undefined} globalContext - 全局配置 context 段
+ * @param {LlmContextConfig | undefined} projectContext - 项目配置 context 段
+ * @returns {LlmContextConfig | undefined} 合并后的配置
+ */
+function mergeContextConfig(
+  globalContext: LlmContextConfig | undefined,
+  projectContext: LlmContextConfig | undefined,
+): LlmContextConfig | undefined {
+  const globalCtx = normalizeContext(globalContext);
+  const projectCtx = normalizeContext(projectContext);
+  if (!globalCtx && !projectCtx) {
+    return undefined;
+  }
+  return { ...globalCtx, ...projectCtx };
+}
+
+/**
  * 按优先级合并两级配置文件的 llm 段：项目配置 > 全局配置
  *
  * 标量字段高层覆盖低层，thinkingEffortMap 按 key 合并（项目同名覆盖全局）
@@ -117,6 +172,8 @@ function resolveConfigFromSources(
         : undefined,
     // 单价配置整体覆盖（项目 > 全局），非法字段在校验时丢弃
     pricing: normalizePricing(projectLlm?.pricing ?? globalLlm?.pricing),
+    // 上下文压缩配置逐字段合并（项目覆盖全局），非法字段在校验时丢弃
+    context: mergeContextConfig(globalLlm?.context, projectLlm?.context),
   };
 }
 
@@ -156,6 +213,8 @@ export async function loadLlmConfig(
       : {}),
     // 可选费用单价不参与引导，装载时原样保留
     ...(partialLlmConfig.pricing ? { pricing: partialLlmConfig.pricing } : {}),
+    // 可选上下文压缩配置不参与引导，装载时原样保留
+    ...(partialLlmConfig.context ? { context: partialLlmConfig.context } : {}),
   };
   if (
     partialLlmConfig.apiKey &&

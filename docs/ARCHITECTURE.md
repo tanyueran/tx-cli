@@ -168,6 +168,31 @@ LLM 调用走 OpenAI 兼容 Responses API 的**无状态模式**（`core/llm/cli
 }
 ```
 
+### 上下文自动压缩
+
+无状态模式每轮全量重传历史，长任务会让 `input` token 持续膨胀。自动压缩在历史超过阈值时，把早期轮次摘要成一条消息插回历史首部，从而在保留关键信息的前提下收缩上下文。同样是 `chat` / `agent`、单次 / 多轮共用的公共机制。
+
+- **配置归一**（`core/llm/context.ts` 的 `resolveCompactionConfig`）：未配置 `llm.context.maxContextTokens` 时整体不启用；`thresholdTokens` = `compactAt <= 1` 时按比例换算（`maxContextTokens × compactAt`，缺省 0.7），`compactAt > 1` 时视为绝对 token 阈值；`keepRecentTurns` 缺省 4（小于 1 回退默认），`summaryMaxChars` 缺省 2000（下限 200）。非法字段在配置装载时告警并忽略，项目配置按字段覆盖全局配置。
+- **触发点（安全点）**：压缩只在「不会切断工具调用配对」的边界执行——REPL 在每轮用户输入开始前（`repl/repl.ts`），agentic loop 在每次请求前（`loop.ts` 的 `beforeIteration`，仅 `iteration > 0`，此时上一轮工具结果已回传）。正在进行的回合与工具调用链不受影响。
+- **阈值判定**（`shouldCompact`）：优先使用上一轮 LLM 请求返回的真实 `input_tokens`，没有时回退到历史字符数估算（`Math.ceil(字符数 / 2)`）；两者任一超过 `thresholdTokens` 即触发。
+- **安全切分**（`findCompactionSplit`）：切分点固定落在 **user 消息**上，取「倒数第 `keepRecentTurns` 轮用户输入」为界；轮次不足（历史 user 消息数 ≤ 保留轮数）时跳过压缩，保证每轮 user/assistant 与 `function_call`/`function_call_output` 不被拆散。
+- **摘要生成**：`buildSummaryTranscript` 把待压缩段展开成带角色标注的纯文本（工具输出截断到 1000 字符）→ 用**无工具**的 LLM 请求（`createLlmSummaryGenerator`，走同一 `streamResponse`，不下发工具定义）生成摘要 → `createSummaryMessage` 包装为 **user 角色**、以 `【历史摘要】` 开头的消息，保证压缩后历史首项仍是 user。
+- **原地替换**：`maybeCompactHistory`（`turn/compaction.ts`）用 `history.splice(0, split, summaryMessage)` 原地替换，保持 REPL 共享的数组引用；摘要请求的用量通过 `onUsage` 计入本轮与累计统计。
+- **失败降级**：摘要请求失败、返回空摘要等异常一律返回 `status: "failed"`，历史保持原样、本轮继续用完整历史对话，不中断会话；压缩成功与否都以一行提示告知（成功青色、失败黄色）。
+
+```jsonc
+{
+  "llm": {
+    "context": {
+      "maxContextTokens": 128000, // 必填：模型上下文窗口，缺省不启用压缩
+      "compactAt": 0.7,            // 比例触发（0-1）；>1 时视为绝对 token 阈值
+      "keepRecentTurns": 4,        // 至少保留的最近用户轮数
+      "summaryMaxChars": 2000      // 摘要文本上限（字），下限 200
+    }
+  }
+}
+```
+
 ### 流式渲染
 
 `renderer.ts` 用 `lastStreamKind`（`reasoning` / `content` / undefined=行首）跟踪当前输出流，实现思考与正文的分流：

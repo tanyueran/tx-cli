@@ -1,11 +1,13 @@
+import pico from "picocolors";
 import { createResponsesTurn } from "./responses-turn";
 import {
   createStreamRenderer,
   createToolCallLogger,
   createSoftConvergeNotice,
 } from "./renderer";
+import { formatCompactionNotice, maybeCompactHistory } from "./compaction";
 import { runAgentLoop, DEFAULT_MAX_ITERATIONS } from "./loop";
-import { resolveResponsesThinkingFields } from "../../../llm";
+import { resolveCompactionConfig, resolveResponsesThinkingFields } from "../../../llm";
 import type { Tool } from "../../../tools";
 import type {
   LlmConfig,
@@ -50,6 +52,14 @@ export async function executeConversationTurn(
   options: ConversationTurnOptions,
 ): Promise<string> {
   const renderer = createStreamRenderer();
+  // 上下文压缩配置：未配置 llm.context.maxContextTokens 时为空，compress 完全不介入
+  const compactionConfig = resolveCompactionConfig(options.llmConfig.context);
+  // 上一次请求的真实 input token：压缩判定优先用它（含系统提示与工具定义，口径最准）
+  let lastInputTokens: number | undefined;
+  const handleUsage = (usage: TokenUsage): void => {
+    lastInputTokens = usage.inputTokens;
+    options.onUsage?.(usage);
+  };
   const runTurn = createResponsesTurn({
     llmConfig: options.llmConfig,
     userInput: options.userInput,
@@ -63,7 +73,7 @@ export async function executeConversationTurn(
     tools: options.advertisedTools,
     onDelta: renderer.onDelta,
     onReasoningDelta: renderer.onReasoningDelta,
-    onUsage: options.onUsage,
+    onUsage: handleUsage,
   });
   const maxIterations = options.maxIterations ?? DEFAULT_MAX_ITERATIONS;
   return runAgentLoop({
@@ -72,5 +82,24 @@ export async function executeConversationTurn(
     maxIterations,
     onToolCall: createToolCallLogger(renderer),
     onSoftConverge: createSoftConvergeNotice(renderer, maxIterations),
+    // agentic 循环内部的安全点（首轮由会话层在进入回合前处理，此处从第二次请求开始）
+    beforeIteration: async (iteration) => {
+      if (iteration === 0 || !compactionConfig) {
+        return;
+      }
+      const outcome = await maybeCompactHistory({
+        llmConfig: options.llmConfig,
+        history: options.history,
+        config: compactionConfig,
+        lastInputTokens,
+        onUsage: options.onUsage,
+      });
+      const notice = formatCompactionNotice(outcome);
+      if (notice) {
+        console.log(
+          outcome.status === "failed" ? pico.yellow(notice) : pico.cyan(notice),
+        );
+      }
+    },
   });
 }

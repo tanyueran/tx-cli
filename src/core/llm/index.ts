@@ -5,6 +5,26 @@
 export { loadLlmConfig } from "./config";
 export { streamResponse } from "./client";
 export {
+  DEFAULT_COMPACT_RATIO,
+  DEFAULT_KEEP_RECENT_TURNS,
+  DEFAULT_SUMMARY_MAX_CHARS,
+  SUMMARY_MARKER,
+  resolveCompactionConfig,
+  estimateTextTokens,
+  estimateHistoryTokens,
+  shouldCompact,
+  findCompactionSplit,
+  buildSummaryTranscript,
+  createLlmSummaryGenerator,
+  createSummaryMessage,
+  generateSummary,
+} from "./context";
+export type {
+  CompactionConfig,
+  SummaryGenerator,
+  SummaryResult,
+} from "./context";
+export {
   createEmptyUsage,
   addUsage,
   isEmptyUsage,

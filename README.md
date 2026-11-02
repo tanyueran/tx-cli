@@ -125,6 +125,7 @@ tx-cli commit-fix "#532311 优化属性设置 https://ones.x.cn/abc"
 - 支持技能（skills）：自动扫描 `~/.tx-cli/skills` 与 `./.tx-cli/skills` 中的 `SKILL.md` 技能手册，多轮对话可用 `/skills` 查看清单
 - 思考档位 `--think off|low|medium|high`（兜底 `low`），多轮对话可用 `/think` 随时切换
 - 会话管理：多轮对话可用 `/clear` 清空历史与累计用量重新开始，`/export` 将当前会话导出为 Markdown 存档（写入当前目录）
+- 上下文自动压缩：配置 `llm.context.maxContextTokens` 后，历史接近阈值时自动把早期轮次摘要压缩，长会话不再撑爆上下文（`chat` / `agent` 共用，单次与多轮均生效）
 - 走 Responses API 无状态模式，多轮历史由本地维护；不支持 MCP，需要接入外部工具请用 `agent`
 
 ```bash
@@ -147,6 +148,7 @@ tx-cli chat
 - 传入任务：单次执行，完成后退出；不传参数（或纯空白，如 `tx agent ""`）：进入多轮任务模式（支持 `/think`、`/skill`、`/skills`、`/clear`、`/export`、`/todos`、`/permissions`、`/help` 内联命令）
 - 任务清单：对 3 步以上的任务，模型会先用 `write_todos` 建立清单并随进度更新
 - 单轮任务的工具调用轮数上限为 40 轮（chat 为 8 轮），达到上限后基于已有信息直接作答
+- 上下文自动压缩：与 `chat` 共用同一机制，配置 `llm.context.maxContextTokens` 后长任务会在阈值处自动摘要早期轮次
 
 **选项：**
 
@@ -191,7 +193,7 @@ tx-cli agent
 - [x] agent 命令（让 AI Agent 执行任务，bash 受沙箱与审批管控，单次/多轮两种模式）
 - [ ] 子 Agent（agent 派生独立上下文的子任务，仅摘要结果回传主上下文，避免中间输出污染主会话）
 - [ ] 子 Agent 并行编排（一次派生多个子 agent 并行执行独立子任务并汇总结果）
-- [ ] 上下文自动压缩（历史超阈值时摘要压缩早期轮次，长任务不爆上下文）
+- [x] 上下文自动压缩（历史超阈值时摘要压缩早期轮次，长任务不爆上下文）
 - [x] `/clear` 内联命令（一键清空当前会话历史重开）
 - [x] Token 用量统计（每轮/累计 token 与费用估算，REPL 就绪面板展示；费用需配置 `llm.pricing`）
 - [x] `/export` 会话导出（当前会话导出为 Markdown 存档）

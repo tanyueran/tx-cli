@@ -224,6 +224,34 @@ describe("runAgentLoop", () => {
     expect(tool2Executed).toBe(false);
   });
 
+  it("每次请求前触发 beforeIteration，第二次调用已带上一轮工具结果", async () => {
+    const seen: Array<{ iteration: number; results: unknown }> = [];
+    let call = 0;
+    const runTurn: RunTurn = async () => {
+      call += 1;
+      if (call === 1) {
+        return { type: "tool_calls", toolCalls: [makeCall("read_file")] };
+      }
+      return { type: "reply", reply: "完成" };
+    };
+
+    await runAgentLoop({
+      runTurn,
+      tools: [makeTool("read_file", "内容")],
+      beforeIteration: async (iteration, toolResults) => {
+        seen.push({ iteration, results: toolResults });
+      },
+    });
+
+    expect(seen).toEqual([
+      { iteration: 0, results: [] },
+      {
+        iteration: 1,
+        results: [{ callId: "call_read_file", ok: true, output: "内容" }],
+      },
+    ]);
+  });
+
   it("未发生取消时同轮串行工具正常依次执行", async () => {
     const queue = new SerialQueue();
     const sandbox = {
