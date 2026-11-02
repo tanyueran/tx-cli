@@ -68,6 +68,16 @@ export interface SlashCommandDeps {
   getThinkingLevel(): ThinkingLevel;
   /** 写入新的思考档位（/think 切换） */
   setThinkingLevel(level: ThinkingLevel): void;
+  /**
+   * 清空当前会话历史与累计状态（/clear）
+   * @returns {number} 被清除的历史消息条数
+   */
+  clearSession(): number;
+  /**
+   * 导出当前会话为 Markdown 文件（/export）
+   * @returns {Promise<string | undefined>} 写入路径；无历史可导出时为 undefined
+   */
+  exportSession(): Promise<string | undefined>;
 }
 
 /**
@@ -131,6 +141,8 @@ export function buildSlashCommands(deps: SlashCommandDeps): SlashCommand[] {
     thinkingStyle,
     getThinkingLevel,
     setThinkingLevel,
+    clearSession,
+    exportSession,
   } = deps;
   const commands: SlashCommand[] = [
     {
@@ -218,6 +230,46 @@ export function buildSlashCommands(deps: SlashCommandDeps): SlashCommand[] {
           const skillSource = skill.source === "project" ? "项目级" : "用户级";
           console.log(
             `${pico.cyan(skill.name)}（${skillSource}）${skill.description}`,
+          );
+        }
+        return { kind: "handled" };
+      },
+    },
+    {
+      name: "/clear",
+      description: "清空当前会话历史与累计用量",
+      available: true,
+      execute() {
+        const cleared = clearSession();
+        if (cleared === 0) {
+          console.log(pico.gray("当前会话没有可清空的历史"));
+          return { kind: "handled" };
+        }
+        console.log(
+          pico.cyan(
+            `已清空会话历史（${cleared} 条消息），累计用量与任务清单已重置`,
+          ),
+        );
+        return { kind: "handled" };
+      },
+    },
+    {
+      name: "/export",
+      description: "把当前会话导出为 Markdown 文件",
+      available: true,
+      async execute() {
+        try {
+          const path = await exportSession();
+          if (!path) {
+            console.log(pico.yellow("当前会话没有可导出的内容"));
+            return { kind: "handled" };
+          }
+          console.log(pico.cyan(`已导出会话：${path}`));
+        } catch (err) {
+          console.error(
+            pico.red(
+              `导出会话失败：${err instanceof Error ? err.message : String(err)}`,
+            ),
           );
         }
         return { kind: "handled" };

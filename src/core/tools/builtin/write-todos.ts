@@ -21,6 +21,11 @@ export interface TodoToolHandle {
    * @returns {TodoItem[]} 当前清单（数组副本，外部修改不影响工具状态）
    */
   getTodos(): TodoItem[];
+  /**
+   * 清空任务清单（/clear 重置会话时调用）
+   * @returns {void}
+   */
+  resetTodos(): void;
 }
 
 /** 单次清单的任务项数量上限：防止清单膨胀失控、挤占上下文 */
@@ -182,5 +187,11 @@ export function createTodoTool(): TodoToolHandle {
       return { ok: true, output: buildModelSummary(parsedTodos) };
     },
   };
-  return { tool, getTodos: () => todos.map((todo) => ({ ...todo })) };
+  return {
+    tool,
+    getTodos: () => todos.map((todo) => ({ ...todo })),
+    resetTodos: () => {
+      todos = [];
+    },
+  };
 }

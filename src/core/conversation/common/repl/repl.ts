@@ -32,6 +32,7 @@ import type {
 } from "../../../llm/types";
 import { displayWidth } from "../../../../shared/string";
 import { askReplLine } from "./repl-input";
+import { writeSessionMarkdown } from "./session-export";
 import {
   buildSlashCommands,
   buildSkillSuggestions,
@@ -238,7 +239,7 @@ function printReadyPanel(
  *
  * 输入行由 askReplLine 采集：行首 "/" 弹出斜杠命令/技能补全面板（≤10 条、↑↓ 选择、Tab 补全），
  * 行中「空格 + /」弹出技能补全面板（仅技能提及，补全为 /name 纯文本）；
- * 命令分发经注册表查表执行（/think、/skill、/skills、/todos、/permissions、/help），未命中按普通问题发给模型；
+ * 命令分发经注册表查表执行（/think、/skill、/skills、/clear、/export、/todos、/permissions、/help），未命中按普通问题发给模型；
  * 单轮请求失败（网络抖动、限流等可预期错误）只提示不终止会话，避免丢失整个对话上下文；
  * 交互中取消（Ctrl+C）回滚本轮历史后继续会话
  * @param {ReplOptions} options - 启动参数（配置、会话运行时、思考风格与初始档位、模式标签）
@@ -251,7 +252,13 @@ export async function runConversationRepl(options: ReplOptions): Promise<void> {
   const { systemPrompt, tools, advertisedTools, catalog, todoHandle } =
     runtime.skill;
   const { sandbox } = runtime;
-  // 斜杠命令注册表：补全面板、/help、就绪面板与分发共用；档位读写经闭包桥接本函数的 currentLevel
+  // 会话累计 token 用量：每次 LLM 请求返回 usage 时累加（无状态模式 input 为历史全量口径）
+  let totalUsage: TokenUsage = createEmptyUsage();
+  // 本地维护的对话历史：store=false 模式下每轮全量发送给服务端，跨轮累积
+  const history: ResponseHistoryItem[] = [];
+  // 输入历史（面板关闭时 ↑/↓ 回溯）：仅会话内内存记录，上限 200 条
+  const inputHistory: string[] = [];
+  // 斜杠命令注册表：补全面板、/help、就绪面板与分发共用；档位与会话状态经闭包桥接本函数
   const commands = buildSlashCommands({
     sandbox,
     bashEnabled: runtime.skill.bashEnabled,
@@ -262,11 +269,31 @@ export async function runConversationRepl(options: ReplOptions): Promise<void> {
     setThinkingLevel: (level) => {
       currentLevel = level;
     },
+    // /clear：只重置会话状态，保留运行时（system 提示词、工具、MCP、沙箱）
+    clearSession: () => {
+      const cleared = history.length;
+      history.length = 0;
+      totalUsage = createEmptyUsage();
+      inputHistory.length = 0;
+      todoHandle?.resetTodos();
+      return cleared;
+    },
+    // /export：把当前历史与累计用量写入当前目录的 Markdown 存档
+    exportSession: async () => {
+      if (history.length === 0) {
+        return undefined;
+      }
+      return writeSessionMarkdown(history, {
+        modeLabel: options.modeLabel,
+        model: llmConfig.model,
+        thinkingLevel: currentLevel,
+        usage: totalUsage,
+        pricing: llmConfig.pricing,
+      });
+    },
   });
   // 技能建议列表（/skill 二级补全）：技能清单会话内不变，构建一次
   const skillSuggestions = buildSkillSuggestions(catalog);
-  // 会话累计 token 用量：每次 LLM 请求返回 usage 时累加（无状态模式 input 为历史全量口径）
-  let totalUsage: TokenUsage = createEmptyUsage();
   // 就绪面板：标题、模型/用量/技能/MCP 信息行与命令提示，装配阶段警告统一缩进展示在其下
   printReadyPanel(options, currentLevel, commands, totalUsage);
   // 服务能力折算警告：off 档位本就对应关闭，此时不提示
@@ -280,10 +307,6 @@ export async function runConversationRepl(options: ReplOptions): Promise<void> {
     todoHandle,
     maxIterations: options.maxIterations,
   };
-  // 本地维护的对话历史：store=false 模式下每轮全量发送给服务端，跨轮累积
-  const history: ResponseHistoryItem[] = [];
-  // 输入历史（面板关闭时 ↑/↓ 回溯）：仅会话内内存记录，上限 200 条
-  const inputHistory: string[] = [];
 
   for (;;) {
     let userInput: string;

@@ -45,6 +45,13 @@ describe("write_todos 工具", () => {
     expect(getTodos()).toEqual([]);
   });
 
+  it("resetTodos 清空会话清单", async () => {
+    const { tool, getTodos, resetTodos } = createTodoTool();
+    await tool.execute({ todos: [todo("a", "pending")] });
+    resetTodos();
+    expect(getTodos()).toEqual([]);
+  });
+
   it("非数组 todos 转为失败输出回传模型", async () => {
     const { tool, getTodos } = createTodoTool();
     const result = await tool.execute({ todos: "清理仓库" });
