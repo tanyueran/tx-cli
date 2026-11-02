@@ -364,6 +364,36 @@ export interface AttachSubAgentResult {
   handle: SubAgentToolHandle;
 }
 
+/** 按模式开关装配会话工具带的结果：展开后的两份工具列表与可选句柄 */
+export interface SessionToolAttachResult {
+  /** 全量工具列表（未启用子 Agent 时为运行时原列表） */
+  tools: Tool[];
+  /** 下发给模型的工具清单（未启用子 Agent 时为运行时原列表） */
+  advertisedTools: Tool[];
+  /** 子 Agent 工具句柄（未启用时为 undefined） */
+  handle?: SubAgentToolHandle;
+}
+
+/**
+ * 按模式开关装配会话工具带：enabled 为假（如 chat 只读问答）时原样返回运行时工具列表，
+ * 免去调用方「attached?.tools ?? 原列表」的三元展开；one-shot 与 REPL 共用此入口
+ * @param {AttachSubAgentOptions & { enabled?: boolean }} options - 装配入参（enabled 缺省视为关闭）
+ * @returns {SessionToolAttachResult} 展开后的工具列表与可选句柄
+ */
+export function attachSubAgentIfEnabled(
+  options: AttachSubAgentOptions & { enabled?: boolean },
+): SessionToolAttachResult {
+  if (!options.enabled) {
+    return { tools: options.tools, advertisedTools: options.advertisedTools };
+  }
+  const attached = attachSubAgentTools(options);
+  return {
+    tools: attached.tools,
+    advertisedTools: attached.advertisedTools,
+    handle: attached.handle,
+  };
+}
+
 /**
  * 为会话装配子 Agent 工具：创建 delegate_task 并原地追加进全量与下发两份工具列表
  *
