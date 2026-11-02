@@ -6,7 +6,6 @@ import {
   maybeCompactHistory,
 } from "../turn/compaction";
 import { attachSubAgentTools } from "../turn/sub-agent";
-import type { SubAgentToolHandle } from "../turn/sub-agent";
 import {
   createConversationRuntime,
   disposeConversationRuntime,
@@ -64,8 +63,6 @@ interface ReplSession {
   advertisedTools: Tool[];
   /** 任务清单工具句柄（agent 模式装配 write_todos 时存在，/todos 读取清单状态） */
   todoHandle?: TodoToolHandle;
-  /** 子 Agent 工具句柄（agent 模式装配 delegate_task 时存在，每轮设置用量上报器） */
-  subAgentHandle?: SubAgentToolHandle;
   /** 工具调用轮数上限（按模式装配：chat 8 轮、agent 40 轮），超出后软收敛为直接作答 */
   maxIterations: number;
 }
@@ -340,7 +337,6 @@ export async function runConversationRepl(options: ReplOptions): Promise<void> {
     tools,
     advertisedTools,
     todoHandle,
-    subAgentHandle,
     maxIterations: options.maxIterations,
   };
 

@@ -1,4 +1,5 @@
 import pico from "picocolors";
+import { TODO_TOOL_NAME } from "../registry";
 import type { Tool, ToolOutput } from "../types";
 
 /** 任务状态：待办 / 进行中 / 已完成 */
@@ -118,7 +119,7 @@ function buildModelSummary(todos: TodoItem[]): string {
 export function createTodoTool(): TodoToolHandle {
   let todos: TodoItem[] = [];
   const tool: Tool = {
-    name: "write_todos",
+    name: TODO_TOOL_NAME,
     description:
       "写入或更新任务清单（全量替换，每次传入完整清单）：用于多步任务的计划维护——" +
       "开始 3 步以上的任务前先建立清单，每完成一项即将其置为 completed；" +

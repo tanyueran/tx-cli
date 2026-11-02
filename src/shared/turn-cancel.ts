@@ -17,7 +17,9 @@ const turnCancellationStorage = new AsyncLocalStorage<TurnCancellationState>();
  * 在回合级取消上下文中运行回调：包裹整个 agentic 循环，
  * 任一工具链中的用户取消（CancelError）经 markTurnCancelled 置位后，
  * 同轮尚未启动的工具、串行队列中排队的任务与待审批的问询都会被
- * throwIfTurnCancelled 短路，实现「取消一轮即中止整轮」
+ * throwIfTurnCancelled 短路，实现「取消一轮即中止整轮」；
+ * 已处于回合取消上下文中时（如 delegate_task 派生的子 Agent 嵌套 loop）直接复用外层状态：
+ * 主回合取消能短路子 Agent 的排队任务与审批，避免主回合结束后子 Agent 孤儿续跑
  * @template T - 回调返回值类型
  * @param {() => Promise<T>} fn - 回调（整个 agentic 循环）
  * @returns {Promise<T>} 回调结果
@@ -25,6 +27,9 @@ const turnCancellationStorage = new AsyncLocalStorage<TurnCancellationState>();
 export async function runWithTurnCancellation<T>(
   fn: () => Promise<T>,
 ): Promise<T> {
+  if (turnCancellationStorage.getStore()) {
+    return fn();
+  }
   return turnCancellationStorage.run({ cancelled: false }, fn);
 }
 

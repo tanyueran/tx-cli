@@ -8,19 +8,11 @@ import { webSearchTool } from "./web-search";
 import { writeFileTool } from "./write-file";
 import { createTodoTool } from "./write-todos";
 import type { TodoItem, TodoStatus, TodoToolHandle } from "./write-todos";
+import { WRITE_TOOL_NAMES } from "../registry";
 import type { Tool } from "../types";
 
 export type { TodoItem, TodoStatus, TodoToolHandle };
-export { createTodoTool };
-
-/**
- * 写侧内置工具名清单：chat 只读模式在装配阶段按此集合剔除，
- * 使「只读」由代码强制，不依赖沙箱档位配置（workspace-write / sandbox 关闭时同样不可写）
- */
-export const WRITE_TOOL_NAMES: ReadonlySet<string> = new Set([
-  "write_file",
-  "edit_file",
-]);
+export { createTodoTool, WRITE_TOOL_NAMES };
 
 /**
  * 内置工具清单：随版本固定发布，不支持运行时动态注册（原插件目录方案已废弃）

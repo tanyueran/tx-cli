@@ -1,5 +1,6 @@
 import { readTextFile, sliceLines } from "../../../shared/fs";
 import { resolveFromCwd } from "../../../shared/paths";
+import { READ_FILE_TOOL_NAME } from "../registry";
 import type { Tool, ToolOutput } from "../types";
 
 /**
@@ -30,7 +31,7 @@ function parseLineParam(
  * 相对路径基于当前工作目录解析；支持 offset/limit 按行分段读取大文件
  */
 export const readFileTool: Tool = {
-  name: "read_file",
+  name: READ_FILE_TOOL_NAME,
   description:
     "读取指定路径的文本文件内容。默认返回全文；文件较大时用 offset（起始行，从 1 开始）与 limit（行数）分段读取，避免输出被截断",
   parameters: {

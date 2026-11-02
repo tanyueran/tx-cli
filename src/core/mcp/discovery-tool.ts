@@ -1,3 +1,4 @@
+import { MCP_DISCOVERY_TOOL_NAME } from "../tools/registry";
 import type { Tool, ToolOutput } from "../tools/types";
 
 /** 目录中单条工具描述的最大长度（超出截断，控制目录体积） */
@@ -31,7 +32,7 @@ export function createMcpDiscoveryTool(
   advertisedTools: Tool[],
 ): Tool {
   return {
-    name: "discover_mcp_tools",
+    name: MCP_DISCOVERY_TOOL_NAME,
     description:
       "检索并按需激活外部 MCP 工具。未激活的 MCP 工具不在可用工具列表中：先用 query/server 检索目录，再用 activate 激活目标工具（激活当次返回完整参数 schema），之后即可按工具名直接调用",
     parameters: {

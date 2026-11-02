@@ -1,12 +1,20 @@
 import pico from "picocolors";
 import { CancelError } from "../../../../shared/errors";
+import { resolveCompactionConfig } from "../../../llm";
+import type { LlmConfig, ResponseHistoryItem, TokenUsage } from "../../../llm/types";
+import { createMcpDiscoveryTool } from "../../../mcp/discovery-tool";
+import {
+  MCP_DISCOVERY_TOOL_NAME,
+  SUB_AGENT_EXCLUDED_TOOL_NAMES,
+  SUB_AGENT_TOOL_NAME,
+} from "../../../tools/registry";
+import type { Tool, ToolOutput } from "../../../tools";
+import { maybeCompactHistory } from "./compaction";
 import { createResponsesTurn } from "./responses-turn";
 import { runAgentLoop } from "./loop";
-import type { LlmConfig, ResponseHistoryItem, TokenUsage } from "../../../llm/types";
-import type { Tool, ToolOutput } from "../../../tools";
 
-/** 子 Agent 工具名：主会话模型通过它派生子任务 */
-export const SUB_AGENT_TOOL_NAME = "delegate_task";
+// 工具名与裁剪集合的唯一定义在 tools/registry.ts，此处转发以维持既有导入路径
+export { SUB_AGENT_EXCLUDED_TOOL_NAMES, SUB_AGENT_TOOL_NAME };
 
 /** 子 Agent 默认工具调用轮数上限：子任务边界清晰，轮数无需与主 Agent 对齐 */
 export const DEFAULT_SUB_AGENT_MAX_ITERATIONS = 20;
@@ -16,16 +24,6 @@ export const DEFAULT_SUB_AGENT_MAX_ITERATIONS = 20;
  * 内层工具各自仍有独立超时，此值只约束整个子任务的墙钟上限
  */
 const SUB_AGENT_TIMEOUT_MS = 10 * 60 * 1000;
-
-/**
- * 子 Agent 不继承的工具名：
- * write_todos 的工具实例持有主会话共享的任务清单状态（避免污染主会话 /todos），
- * delegate_task 自身排除以防无限递归派生
- */
-export const SUB_AGENT_EXCLUDED_TOOL_NAMES: ReadonlySet<string> = new Set([
-  "write_todos",
-  SUB_AGENT_TOOL_NAME,
-]);
 
 /** 子任务描述的字符上限：防止主模型把整段历史原文塞进子任务 */
 const MAX_TASK_CHARS = 4_000;
@@ -125,7 +123,8 @@ function buildSubAgentUserInput(request: SubAgentRequest): string {
 /**
  * 创建子 Agent 执行器：每次调用使用全新历史，跑独立 agentic loop，只返回最终结论
  * 子 Agent 的输出不再流式渲染到终端（避免中间过程污染主会话展示），
- * 但它调用的工具仍是主会话经权限门卫包装的实例，沙箱边界与审批链完全沿用
+ * 但它调用的工具仍是主会话经权限门卫包装的实例，沙箱边界与审批链完全沿用；
+ * 循环内接入与主会话同口径的上下文压缩（tool-rounds 切分策略）与软收敛提示
  * @param {CreateSubAgentRunnerOptions} options - 入参（字段说明见接口定义）
  * @returns {SubAgentRunner} 子 Agent 执行器
  */
@@ -135,10 +134,18 @@ export function createSubAgentRunner(
   const maxIterations = options.maxIterations ?? DEFAULT_SUB_AGENT_MAX_ITERATIONS;
   const instructions = buildSubAgentInstructions(options.skills ?? []);
   const advertisedTools = options.advertisedTools ?? options.tools;
+  // 上下文压缩配置：未配置 llm.context.maxContextTokens 时为 undefined，压缩完全不介入（与主会话同口径）
+  const compactionConfig = resolveCompactionConfig(options.llmConfig.context);
 
   return async (request, onUsage) => {
     // 每次派生使用全新历史：子 Agent 与主会话上下文彻底隔离，结束即丢弃
     const history: ResponseHistoryItem[] = [];
+    // 上一次请求的真实 input token：子 Agent 压缩判定与主会话同口径
+    let lastInputTokens: number | undefined;
+    const handleUsage = (usage: TokenUsage): void => {
+      lastInputTokens = usage.inputTokens;
+      onUsage?.(usage);
+    };
     const runTurn = createResponsesTurn({
       llmConfig: options.llmConfig,
       userInput: buildSubAgentUserInput(request),
@@ -149,12 +156,35 @@ export function createSubAgentRunner(
       // 子 Agent 正文与思考不渲染：主会话只关心最终结论
       onDelta: () => {},
       onReasoningDelta: () => {},
-      onUsage,
+      onUsage: handleUsage,
     });
     const output = await runAgentLoop({
       runTurn,
       tools: options.tools,
       maxIterations,
+      // 首次进入软收敛轮时打一行弱化提示：用户只看得到「运行中」一行，需有进展感知
+      onSoftConverge: () => {
+        console.log(
+          pico.dim(
+            `…… 子 Agent 已达 ${maxIterations} 轮上限，将基于已有信息直接收尾`,
+          ),
+        );
+      },
+      // 压缩安全点与主会话同构（首轮无历史不压缩）：检索型子任务最容易膨胀历史，全量重传前先摘要；
+      // 子 Agent 静默运行，压缩结果不打印提示
+      beforeIteration: async (iteration) => {
+        if (iteration === 0 || !compactionConfig) {
+          return;
+        }
+        await maybeCompactHistory({
+          llmConfig: options.llmConfig,
+          history,
+          config: compactionConfig,
+          lastInputTokens,
+          onUsage: handleUsage,
+          splitStrategy: "tool-rounds",
+        });
+      },
     });
     return { output: output.trim() || "（子 Agent 执行完毕，但未给出文字结论）" };
   };
@@ -323,35 +353,58 @@ export interface AttachSubAgentOptions {
 
 /** 子 Agent 工具装配结果 */
 export interface AttachSubAgentResult {
-  /** 追加 delegate_task 后的全量工具列表（新数组，不改动原列表） */
+  /** 追加 delegate_task 后的全量工具列表（原数组原地追加，保持既有共享引用） */
   tools: Tool[];
-  /** 追加 delegate_task 后的下发工具列表（新数组，不改动原列表） */
+  /**
+   * 追加 delegate_task 后的下发工具列表（原数组原地追加）：
+   * discover_mcp_tools 的激活机制依赖与请求层共享同一数组引用，复制新数组会导致激活失效
+   */
   advertisedTools: Tool[];
   /** 子 Agent 工具句柄（会话层每轮设置用量上报器） */
   handle: SubAgentToolHandle;
 }
 
 /**
- * 为会话装配子 Agent 工具：创建 delegate_task 并追加到全量与下发两份工具列表
- * 子 Agent 继承过滤后的工具（剔除 write_todos 与 delegate_task），沙箱与审批链不变
+ * 为会话装配子 Agent 工具：创建 delegate_task 并原地追加进全量与下发两份工具列表
+ *
+ * 原地追加而非复制新数组：MCP 折叠模式下 discover_mcp_tools 激活的工具被 push 进下发列表
+ * （与请求层共享同一数组引用），复制列表会让 agent 模式下激活的工具永远到不了请求层；
+ * 子 Agent 继承过滤后的工具（剔除 write_todos 与 delegate_task），沙箱与审批链不变；
+ * MCP 折叠模式下为子 Agent 重绑独立的 discovery 实例——原实例的激活写入主会话下发列表，
+ * 子 Agent 的请求层看不到，重绑后激活只写入子 Agent 自己的下发列表
  * @param {AttachSubAgentOptions} options - 入参（字段说明见接口定义）
- * @returns {AttachSubAgentResult} 装配结果（新工具列表 + 句柄）
+ * @returns {AttachSubAgentResult} 装配结果（原工具列表引用 + 句柄）
  */
 export function attachSubAgentTools(
   options: AttachSubAgentOptions,
 ): AttachSubAgentResult {
+  // 子 Agent 下发列表：过滤后的副本，激活与裁剪都不回写主会话列表
+  const subAdvertised = filterSubAgentTools(options.advertisedTools);
+  // MCP 折叠模式下重绑 discovery：pool 取「执行侧有而下发侧没有」的工具（即折叠的 MCP 全集）
+  const discoveryIndex = subAdvertised.findIndex(
+    (tool) => tool.name === MCP_DISCOVERY_TOOL_NAME,
+  );
+  if (discoveryIndex >= 0) {
+    const pool = options.tools.filter(
+      (tool) => !options.advertisedTools.includes(tool),
+    );
+    subAdvertised[discoveryIndex] = createMcpDiscoveryTool(pool, subAdvertised);
+  }
   const runner = createSubAgentRunner({
     llmConfig: options.llmConfig,
     tools: filterSubAgentTools(options.tools),
-    advertisedTools: filterSubAgentTools(options.advertisedTools),
+    advertisedTools: subAdvertised,
     skills: options.skills,
     extraBody: options.extraBody,
     maxIterations: options.maxIterations,
   });
   const handle = createSubAgentTool(runner);
+  // 原地追加 delegate_task：保持与 discover_mcp_tools 激活机制共享同一数组引用
+  options.tools.push(handle.tool);
+  options.advertisedTools.push(handle.tool);
   return {
-    tools: [...options.tools, handle.tool],
-    advertisedTools: [...options.advertisedTools, handle.tool],
+    tools: options.tools,
+    advertisedTools: options.advertisedTools,
     handle,
   };
 }

@@ -1,3 +1,4 @@
+import { WEB_FETCH_TOOL_NAME } from "../registry";
 import type { Tool, ToolOutput } from "../types";
 
 /** 单次抓取的请求级超时（毫秒）：需小于执行器 30s 兜底超时，留出转换与截断余量 */
@@ -347,7 +348,7 @@ function fail(message: string): ToolOutput {
  * 仅支持公网 http/https，逐跳校验重定向目标；长页面可用 offset 续读
  */
 export const webFetchTool: Tool = {
-  name: "web_fetch",
+  name: WEB_FETCH_TOOL_NAME,
   description:
     "抓取指定 URL 的网页并转换为 Markdown 正文，用于读取 web_search 结果或已知链接的完整内容；" +
     "仅支持公网 http/https，禁止内网与本机地址；长页面可传 offset 续读",
