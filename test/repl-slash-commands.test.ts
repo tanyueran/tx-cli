@@ -32,6 +32,8 @@ function makeDeps(
     setThinkingLevel: (level) => {
       lastLevel = level;
     },
+    clearSession: () => 0,
+    exportSession: async () => undefined,
     ...overrides,
   };
 }
@@ -118,7 +120,12 @@ describe("filterSuggestions", () => {
 
   it("输入 / 时仅展示 available 的命令（chat 模式不含 /todos、/permissions）", () => {
     const result = filterSuggestions("/", chatCommands, []);
-    expect(result.map((item) => item.name)).toEqual(["/think", "/help"]);
+    expect(result.map((item) => item.name)).toEqual([
+      "/think",
+      "/clear",
+      "/export",
+      "/help",
+    ]);
   });
 
   it("装配 todoHandle 与技能后 /todos、/skills 进入面板", () => {
@@ -127,6 +134,8 @@ describe("filterSuggestions", () => {
       "/think",
       "/skill",
       "/skills",
+      "/clear",
+      "/export",
       "/todos",
       "/help",
     ]);
@@ -346,6 +355,48 @@ describe("buildSlashCommands 执行体", () => {
       .execute("/permissions");
     expect(result).toEqual({ kind: "handled" });
     expect(logSpy.mock.calls.join("\n")).toContain("本会话未启用沙箱");
+  });
+
+  it("/clear 有历史时调用清空回调并提示条数", async () => {
+    const commands = buildSlashCommands(
+      makeDeps(new SkillCatalog([]), { clearSession: () => 3 }),
+    );
+    const result = await commands
+      .find((command) => command.name === "/clear")!
+      .execute("/clear");
+    expect(result).toEqual({ kind: "handled" });
+    expect(logSpy.mock.calls.join("\n")).toContain(
+      "已清空会话历史（3 条消息）",
+    );
+  });
+
+  it("/clear 无历史时提示没有可清空内容", async () => {
+    const commands = buildSlashCommands(makeDeps(new SkillCatalog([])));
+    await commands.find((command) => command.name === "/clear")!.execute("/clear");
+    expect(logSpy.mock.calls.join("\n")).toContain("没有可清空的历史");
+  });
+
+  it("/export 成功时提示导出路径", async () => {
+    const commands = buildSlashCommands(
+      makeDeps(new SkillCatalog([]), {
+        exportSession: async () => "/tmp/tx-cli-session.md",
+      }),
+    );
+    const result = await commands
+      .find((command) => command.name === "/export")!
+      .execute("/export");
+    expect(result).toEqual({ kind: "handled" });
+    expect(logSpy.mock.calls.join("\n")).toContain(
+      "已导出会话：/tmp/tx-cli-session.md",
+    );
+  });
+
+  it("/export 无历史时提示没有可导出内容", async () => {
+    const commands = buildSlashCommands(makeDeps(new SkillCatalog([])));
+    await commands
+      .find((command) => command.name === "/export")!
+      .execute("/export");
+    expect(logSpy.mock.calls.join("\n")).toContain("没有可导出的内容");
   });
 
   it("/todos 未装配任务清单时打印提示", async () => {
