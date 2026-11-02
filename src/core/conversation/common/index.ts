@@ -18,6 +18,20 @@ export { runOneShotConversation } from "./one-shot";
 export type { OneShotConversationOptions } from "./one-shot";
 export type { ConversationModeConfig } from "./runtime/mode";
 export { setupSkillContext } from "./runtime/skill-context";
+export {
+  attachSubAgentTools,
+  createSubAgentRunner,
+  createSubAgentTool,
+  filterSubAgentTools,
+  SUB_AGENT_TOOL_NAME,
+  DEFAULT_SUB_AGENT_MAX_ITERATIONS,
+} from "./turn/sub-agent";
+export type {
+  SubAgentRequest,
+  SubAgentRunResult,
+  SubAgentRunner,
+  SubAgentToolHandle,
+} from "./turn/sub-agent";
 export type {
   SkillContext,
   SkillAssemblyOptions,

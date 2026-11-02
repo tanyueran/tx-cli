@@ -11,6 +11,7 @@
 - 单轮任务的工具调用轮数上限为 40 轮（chat 为 8 轮），达到上限后模型将基于已有信息直接作答（黄字提示）
 - Token 用量：每轮任务结束以表格展示「本轮 / 累计」用量，单次任务展示「本次」用量；统计与费用估算与 chat 共用，详见 [项目架构 · Token 用量统计与费用估算](./ARCHITECTURE.md#token-用量统计与费用估算)
 - 上下文自动压缩：与 chat 共用同一机制，配置 `llm.context.maxContextTokens` 后，历史达阈值时自动摘要压缩早期轮次（agentic loop 在每次请求前判定），详见 [项目架构 · 上下文自动压缩](./ARCHITECTURE.md#上下文自动压缩)
+- 子 Agent：装配 `delegate_task` 工具，把边界清晰、过程会产生大量无关输出的子任务交给独立上下文的子 Agent 执行，中间过程不进入主会话、仅结论回传（子 Agent 轮数上限 20 轮、单次超时 10 分钟），详见 [项目架构 · 子 Agent](./ARCHITECTURE.md#子-agentdelegate_task)
 
 **选项：**
 

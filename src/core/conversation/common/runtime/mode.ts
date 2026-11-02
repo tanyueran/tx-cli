@@ -15,6 +15,11 @@ export interface ConversationModeConfig {
   bashEnabled?: boolean;
   /** 任务清单工具（write_todos）是否装配；agent 模式开启，chat 只读问答不装配 */
   todosEnabled?: boolean;
+  /**
+   * 子 Agent 工具（delegate_task）是否装配；agent 模式开启，chat 只读问答不装配
+   * 装配后模型可派生独立上下文的子任务，仅结论回传主上下文
+   */
+  subAgentEnabled?: boolean;
   /** 写侧内置工具（write_file / edit_file）是否装配；未指定时装配（由沙箱档位兜底），chat 模式固定传 false */
   writeToolsEnabled?: boolean;
   /** agentic 循环的工具调用轮数上限，超出后软收敛为直接作答；未指定时由 loop 回退默认值 */

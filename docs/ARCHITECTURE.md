@@ -52,8 +52,9 @@ src/
 │   │   ├── chat.ts            #   chat 命令实现：CHAT_MODE + one-shot（单次）/ repl（多轮）入口
 │   │   ├── agent.ts           #   agent 命令实现：AGENT_MODE + one-shot（单次）/ repl（多轮）入口
 │   │   └── common/            #   会话机制：one-shot / repl 入口、turn/（execute-turn 回合
-│   │                          #   wiring、agentic loop、Responses 适配、流式渲染）、
-│   │                          #   runtime/（运行时装配、模式配置、技能装配）、repl/（输入与斜杠命令）
+│   │                          #   wiring、agentic loop、Responses 适配、流式渲染、上下文压缩、
+│   │                          #   子 Agent）、runtime/（运行时装配、模式配置、技能装配）、
+│   │                          #   repl/（输入与斜杠命令）
 │   ├── tools/                 # 工具系统
 │   │   ├── types.ts           #   Tool 接口（含 permission 权限声明、renderCall 调用渲染扩展点）
 │   │   ├── executor.ts        #   执行器：参数解析、超时、8KB 截断
@@ -110,6 +111,7 @@ chat 与 agent 共用同一套会话机制（单次 one-shot / 多轮 repl、age
 | `modeLabel` | REPL 就绪面板展示标签 |
 | `bashEnabled?` | bash 装配三态开关（单一说明源即本字段注释，见 `runtime/mode.ts`）：缺省跟随 CLI/配置/沙箱存在性；`false` 强制不装配，同时跳过 bash 专用 Provider 装载并抑制 bash 相关警告 |
 | `todosEnabled?` | 是否装配 `write_todos` 任务清单 |
+| `subAgentEnabled?` | 是否装配 `delegate_task` 子 Agent 工具（agent 模式开启，chat 不装配） |
 | `writeToolsEnabled?` | 是否装配 `write_file` / `edit_file`（缺省装配） |
 | `maxIterations?` | 工具调用轮数上限（缺省 8） |
 | `defaultThinkingLevel?` | 思考档位兜底 |
@@ -122,6 +124,7 @@ chat 与 agent 共用同一套会话机制（单次 one-shot / 多轮 repl、age
 | 写侧文件工具 | 代码强制剔除（`writeToolsEnabled: false`，只读语义写死在模式配置，不依赖沙箱档位） | 装配 |
 | bash | 强制不装配（`bashEnabled: false`，跳过 Provider 装载；沙箱上下文仍创建，只读工具照常受 fs 边界管控） | 缺省装配（跟随 CLI/配置，受沙箱与审批管控，`--no-bash` 可关） |
 | `write_todos` | 不装配 | 装配 |
+| `delegate_task`（子 Agent） | 不装配 | 装配 |
 | MCP | 硬编码关闭 | 缺省开启（`--no-mcp` 按次关闭） |
 | 工具调用轮数上限 | 8 | 40 |
 | 思考档位兜底 | `low` | `medium` |
@@ -192,6 +195,18 @@ LLM 调用走 OpenAI 兼容 Responses API 的**无状态模式**（`core/llm/cli
   }
 }
 ```
+
+### 子 Agent（delegate_task）
+
+`agent` 模式额外装配 `delegate_task`（实现见 `turn/sub-agent.ts`）：主模型把边界清晰的子任务交出去，子 Agent 用**独立历史**跑自己的 agentic loop，中间的工具调用与输出都不进入主上下文，只有最终结论作为工具结果回传。
+
+- **上下文隔离**：每次派生新建 `history`，结束即丢弃；子 Agent 使用独立人设（`SUB_AGENT_PROMPT` + 技能元数据），只依赖 `task` 与 `context` 两个参数，因此 `task` 必须自包含（目标、涉及路径、期望产出）。
+- **工具继承与裁剪**：子 Agent 继承主会话工具（已过权限门卫，沙箱边界与审批链完全不变），但剔除 `write_todos`（其工具实例闭包持有主会话共享清单，会污染 `/todos`）与 `delegate_task` 自身（防无限递归派生）；MCP 折叠状态一并继承（执行侧 `tools` 与下发侧 `advertisedTools` 分别传递）。
+- **静默执行**：子 Agent 的正文与思考增量不渲染，终端只在派发开始与结束时各打一行提示；结论按工具输出回传主模型，避免中间过程刷屏与污染主会话。
+- **轮数与超时**：子 Agent 轮数上限 20（`DEFAULT_SUB_AGENT_MAX_ITERATIONS`），`delegate_task` 声明 10 分钟超时（内层工具仍各自 30s，审批等待期间内层计时暂停）。
+- **失败与取消**：子任务失败转为 `ok:false` 工具结果回传主模型自纠；用户取消（`CancelError`）原样上抛——嵌套 loop 各自持有回合取消上下文，经 `delegate_task` 透传到主 loop 后置位主回合取消，整轮中止。
+- **用量统计**：子 Agent 每次 LLM 请求的 usage 经会话层每轮设置的 `setUsageReporter` 计入「本轮 / 累计」，但不更新 `lastInputTokens`，避免子 Agent 的上下文规模影响主会话压缩阈值判定。
+- **装配位置**：与 `write_todos` 不同，`delegate_task` 依赖 LLM 配置与当前思考档位，因此在会话入口（`one-shot.ts` / `repl.ts`）装配，通过 `subAgentEnabled` 模式开关控制；REPL 中扩展字段闭包读取当前档位，`/think` 切换后子 Agent 同步生效。
 
 ### 流式渲染
 
