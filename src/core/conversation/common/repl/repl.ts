@@ -5,6 +5,8 @@ import {
   formatCompactionNotice,
   maybeCompactHistory,
 } from "../turn/compaction";
+import { attachSubAgentTools } from "../turn/sub-agent";
+import type { SubAgentToolHandle } from "../turn/sub-agent";
 import {
   createConversationRuntime,
   disposeConversationRuntime,
@@ -19,6 +21,7 @@ import {
   warnThinkingFallback,
   resolveThinkingLevel,
   resolveThinkingStyle,
+  resolveResponsesThinkingFields,
   resolveCompactionConfig,
   addUsage,
   createEmptyUsage,
@@ -61,6 +64,8 @@ interface ReplSession {
   advertisedTools: Tool[];
   /** 任务清单工具句柄（agent 模式装配 write_todos 时存在，/todos 读取清单状态） */
   todoHandle?: TodoToolHandle;
+  /** 子 Agent 工具句柄（agent 模式装配 delegate_task 时存在，每轮设置用量上报器） */
+  subAgentHandle?: SubAgentToolHandle;
   /** 工具调用轮数上限（按模式装配：chat 8 轮、agent 40 轮），超出后软收敛为直接作答 */
   maxIterations: number;
 }
@@ -79,6 +84,8 @@ export interface ReplOptions {
   modeLabel: string;
   /** 工具调用轮数上限（来自模式配置，如 chat 8 轮、agent 40 轮） */
   maxIterations: number;
+  /** 是否装配子 Agent 工具（delegate_task）；agent 模式开启，chat 只读问答不装配 */
+  subAgentEnabled?: boolean;
 }
 
 /** runReplTurn 入参对象 */
@@ -254,8 +261,26 @@ export async function runConversationRepl(options: ReplOptions): Promise<void> {
   const { llmConfig, runtime, thinkingStyle } = options;
   // 档位由 /think 在会话内切换，仅本函数持有可变状态
   let currentLevel = options.initialThinkingLevel;
-  const { systemPrompt, tools, advertisedTools, catalog, todoHandle } =
-    runtime.skill;
+  const { systemPrompt, catalog, todoHandle } = runtime.skill;
+  // 子 Agent 工具按模式装配：扩展字段闭包读取当前档位，/think 切换后子 Agent 同步生效
+  const attachedSubAgent = options.subAgentEnabled
+    ? attachSubAgentTools({
+        llmConfig,
+        tools: runtime.skill.tools,
+        advertisedTools: runtime.skill.advertisedTools,
+        skills: catalog.list(),
+        extraBody: () =>
+          resolveResponsesThinkingFields({
+            thinkingLevel: currentLevel,
+            thinkingStyle,
+            thinkingEffortMap: llmConfig.thinkingEffortMap,
+          }),
+      })
+    : undefined;
+  const tools = attachedSubAgent?.tools ?? runtime.skill.tools;
+  const advertisedTools =
+    attachedSubAgent?.advertisedTools ?? runtime.skill.advertisedTools;
+  const subAgentHandle = attachedSubAgent?.handle;
   const { sandbox } = runtime;
   // 会话累计 token 用量：每次 LLM 请求返回 usage 时累加（无状态模式 input 为历史全量口径）
   let totalUsage: TokenUsage = createEmptyUsage();
@@ -315,6 +340,7 @@ export async function runConversationRepl(options: ReplOptions): Promise<void> {
     tools,
     advertisedTools,
     todoHandle,
+    subAgentHandle,
     maxIterations: options.maxIterations,
   };
 
@@ -389,6 +415,12 @@ export async function runConversationRepl(options: ReplOptions): Promise<void> {
     // 记录本轮开始前历史长度：本轮被取消时回滚，避免残留未配对的用户输入或工具调用项
     // 必须在压缩之后记录：压缩会缩短历史，若以压缩前长度为基准回滚会把摘要一并裁掉
     const historyStart = history.length;
+    // 本轮开始前设置子 Agent 用量上报器：子 Agent 的 LLM 用量计入本轮与累计，
+    // 但不覆盖 lastInputTokens（压缩阈值只按主会话请求口径判断）
+    subAgentHandle?.setUsageReporter((usage) => {
+      turnUsage = addUsage(turnUsage, usage);
+      totalUsage = addUsage(totalUsage, usage);
+    });
     try {
       await runReplTurn({
         session,
@@ -418,6 +450,9 @@ export async function runConversationRepl(options: ReplOptions): Promise<void> {
       // 换行避免错误提示接在残缺的流式输出之后
       process.stdout.write("\n");
       console.error(pico.red(err.message));
+    } finally {
+      // 回合结束即撤销上报器：避免子 Agent 用量混入后续轮次统计
+      subAgentHandle?.setUsageReporter(undefined);
     }
   }
 }
@@ -472,6 +507,7 @@ export async function runReplConversation({
       initialThinkingLevel: currentLevel,
       modeLabel: modeConfig.modeLabel,
       maxIterations: modeConfig.maxIterations ?? DEFAULT_MAX_ITERATIONS,
+      subAgentEnabled: modeConfig.subAgentEnabled,
     });
   } finally {
     await disposeConversationRuntime(runtime);

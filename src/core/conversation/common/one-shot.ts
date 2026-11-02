@@ -8,12 +8,14 @@ import { printWarnings } from "../../../shared/warnings";
 import {
   resolveThinkingLevel,
   resolveThinkingStyle,
+  resolveResponsesThinkingFields,
   warnThinkingFallback,
   addUsage,
   createEmptyUsage,
   formatUsageTable,
   isEmptyUsage,
 } from "../../llm";
+import { attachSubAgentTools } from "./turn/sub-agent";
 import type { SandboxCliOptions } from "../../sandbox";
 import type {
   LlmConfig,
@@ -74,9 +76,36 @@ export async function runOneShotConversation({
   // 本次会话的 token 用量：agentic 循环的多次请求经回调累加
   let totalUsage: TokenUsage = createEmptyUsage();
   try {
-    const { systemPrompt, tools, scanWarnings } = runtime.skill;
+    const {
+      systemPrompt,
+      tools: runtimeTools,
+      advertisedTools: runtimeAdvertisedTools,
+      scanWarnings,
+      catalog,
+    } = runtime.skill;
     // 与 REPL 面板保持一致：技能扫描警告与装配阶段警告一并输出
     printWarnings([...scanWarnings, ...runtime.bootWarnings]);
+    // 子 Agent 工具按模式装配：单次会话的思考档位固定，扩展字段直接闭包捕获
+    const thinkingFields = resolveResponsesThinkingFields({
+      thinkingLevel: effectiveThinkingLevel,
+      thinkingStyle,
+      thinkingEffortMap: llmConfig.thinkingEffortMap,
+    });
+    const attached = modeConfig.subAgentEnabled
+      ? attachSubAgentTools({
+          llmConfig,
+          tools: runtimeTools,
+          advertisedTools: runtimeAdvertisedTools,
+          skills: catalog.list(),
+          extraBody: () => thinkingFields,
+        })
+      : undefined;
+    const tools = attached?.tools ?? runtimeTools;
+    const advertisedTools = attached?.advertisedTools ?? runtimeAdvertisedTools;
+    // 子 Agent 的 LLM 用量计入「本次」统计
+    attached?.handle.setUsageReporter((usage) => {
+      totalUsage = addUsage(totalUsage, usage);
+    });
     // 单次会话的历史仅在本函数内存活：不跨次共享，会话结束即丢弃
     const history: ResponseHistoryItem[] = [];
     await executeConversationTurn({
@@ -87,7 +116,7 @@ export async function runOneShotConversation({
       userInput,
       instructions: systemPrompt,
       tools,
-      advertisedTools: runtime.skill.advertisedTools,
+      advertisedTools,
       maxIterations: modeConfig.maxIterations,
       onUsage: (usage) => {
         totalUsage = addUsage(totalUsage, usage);
