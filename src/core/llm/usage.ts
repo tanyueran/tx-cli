@@ -47,6 +47,35 @@ export function isEmptyUsage(usage: TokenUsage): boolean {
   );
 }
 
+/** 用量累加器：多来源 usage 汇入同一份累计，避免「x = addUsage(x, u)」散落各处 */
+export interface UsageAccumulator {
+  /** 累加一条用量 */
+  add(delta: TokenUsage): void;
+  /** 当前累计值（只读快照，每次访问返回最新累计） */
+  readonly current: TokenUsage;
+  /** 清零（REPL /clear 重置会话统计时使用） */
+  reset(): void;
+}
+
+/**
+ * 创建 token 用量累加器：主循环、压缩摘要请求、子 Agent 等多来源的用量统一汇入
+ * @returns {UsageAccumulator} 累加器实例
+ */
+export function createUsageAccumulator(): UsageAccumulator {
+  let current = createEmptyUsage();
+  return {
+    add: (delta) => {
+      current = addUsage(current, delta);
+    },
+    get current() {
+      return current;
+    },
+    reset: () => {
+      current = createEmptyUsage();
+    },
+  };
+}
+
 /** 紧凑单位的进位阈值：千（k）与百万（M），与主流 Agent CLI 的用量展示口径一致 */
 const THOUSAND = 1_000;
 const MILLION = 1_000_000;

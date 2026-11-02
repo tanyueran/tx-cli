@@ -27,6 +27,7 @@ export type {
 export {
   createEmptyUsage,
   addUsage,
+  createUsageAccumulator,
   isEmptyUsage,
   formatTokenCount,
   estimateCost,
@@ -35,6 +36,7 @@ export {
   describePricing,
   formatUsageTable,
 } from "./usage";
+export type { UsageAccumulator } from "./usage";
 export {
   parseThinkingLevel,
   parseThinkingStyle,
