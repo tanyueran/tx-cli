@@ -15,12 +15,20 @@ import {
   warnThinkingFallback,
   resolveThinkingLevel,
   resolveThinkingStyle,
+  addUsage,
+  createEmptyUsage,
+  describePricing,
+  formatUsageSummary,
+  formatUsageTable,
+  isEmptyUsage,
 } from "../../../llm";
 import type {
   LlmConfig,
+  LlmPricing,
   ResponseHistoryItem,
   ThinkingLevel,
   ThinkingStyle,
+  TokenUsage,
 } from "../../../llm/types";
 import { displayWidth } from "../../../../shared/string";
 import { askReplLine } from "./repl-input";
@@ -77,6 +85,8 @@ interface ReplTurnOptions {
   userInput: string;
   /** 本轮思考档位（/think 切换后下一轮使用新档位） */
   thinkingLevel: ThinkingLevel;
+  /** token 用量回调（可选）：每次 LLM 请求返回 usage 时触发，供会话层累加 */
+  onUsage?: (usage: TokenUsage) => void;
 }
 
 /**
@@ -90,6 +100,7 @@ async function runReplTurn({
   history,
   userInput,
   thinkingLevel,
+  onUsage,
 }: ReplTurnOptions): Promise<void> {
   await executeConversationTurn({
     llmConfig: session.llmConfig,
@@ -101,6 +112,7 @@ async function runReplTurn({
     tools: session.tools,
     advertisedTools: session.advertisedTools,
     maxIterations: session.maxIterations,
+    onUsage,
   });
   process.stdout.write("\n\n");
 }
@@ -135,27 +147,62 @@ function formatElapsed(ms: number): string {
 }
 
 /**
- * 打印 REPL 启动就绪面板：信息分组行（模式/模型/技能/MCP）与命令提示行
+ * 打印本轮与累计 token 用量：拆成两行并对齐标签，本轮高亮、累计弱化，避免混在一行难以区分
+ * 服务未返回 usage（本轮无数据）时不输出噪音
+ * @param {TokenUsage} turnUsage - 本轮累计用量（可能包含 agentic 循环的多轮请求）
+ * @param {TokenUsage} totalUsage - 会话累计用量
+ * @param {LlmPricing} [pricing] - 费用单价配置，未配置时只展示 token
+ * @returns {void}
+ */
+function printTurnUsage(
+  turnUsage: TokenUsage,
+  totalUsage: TokenUsage,
+  pricing?: LlmPricing,
+): void {
+  if (isEmptyUsage(turnUsage)) {
+    return;
+  }
+  // 表格展示本轮与累计：标签列对齐，本轮高亮、累计弱化
+  console.log(
+    formatUsageTable(
+      [
+        { label: "本轮", usage: turnUsage, emphasis: true },
+        { label: "累计", usage: totalUsage },
+      ],
+      pricing,
+    ),
+  );
+  console.log("");
+}
+
+/**
+ * 打印 REPL 启动就绪面板：信息分组行（模式/模型/用量/技能/MCP）与命令提示行
  *
  * 命令提示行由斜杠命令注册表按 available 过滤生成（与补全面板、/help 单一事实来源）；
  * 装配阶段警告（技能扫描、沙箱装载、MCP 连接）统一缩进展示在面板下方，默认状态只保留面板主体
  * @param {ReplOptions} options - 启动参数（配置、会话运行时、模式标签）
  * @param {ThinkingLevel} thinkingLevel - 初始思考档位
  * @param {SlashCommand[]} commands - 斜杠命令注册表
+ * @param {TokenUsage} usage - 当前会话累计用量
  * @returns {void}
  */
 function printReadyPanel(
   options: ReplOptions,
   thinkingLevel: ThinkingLevel,
   commands: SlashCommand[],
+  usage: TokenUsage,
 ): void {
   const { llmConfig, runtime } = options;
   const { mcpSummary, bootWarnings } = runtime;
   const { catalog, scanWarnings } = runtime.skill;
 
+  const usageText = isEmptyUsage(usage)
+    ? `${formatUsageSummary(usage)} · ${describePricing(llmConfig.pricing)}`
+    : `累计 ${formatUsageSummary(usage, llmConfig.pricing)}`;
   const rows: Array<[string, string]> = [
     ["模式", options.modeLabel],
     ["模型", `${llmConfig.model} · 思考 ${thinkingLevel}`],
+    ["用量", usageText],
   ];
   if (catalog.size > 0) {
     rows.push(["技能", `${catalog.size} 个`]);
@@ -218,8 +265,10 @@ export async function runConversationRepl(options: ReplOptions): Promise<void> {
   });
   // 技能建议列表（/skill 二级补全）：技能清单会话内不变，构建一次
   const skillSuggestions = buildSkillSuggestions(catalog);
-  // 就绪面板：标题、模型/技能/MCP 信息行与命令提示，装配阶段警告统一缩进展示在其下
-  printReadyPanel(options, currentLevel, commands);
+  // 会话累计 token 用量：每次 LLM 请求返回 usage 时累加（无状态模式 input 为历史全量口径）
+  let totalUsage: TokenUsage = createEmptyUsage();
+  // 就绪面板：标题、模型/用量/技能/MCP 信息行与命令提示，装配阶段警告统一缩进展示在其下
+  printReadyPanel(options, currentLevel, commands, totalUsage);
   // 服务能力折算警告：off 档位本就对应关闭，此时不提示
   warnThinkingFallback(currentLevel, thinkingStyle);
   const session: ReplSession = {
@@ -284,13 +333,21 @@ export async function runConversationRepl(options: ReplOptions): Promise<void> {
 
     // 记录本轮开始前历史长度：本轮被取消时回滚，避免残留未配对的用户输入或工具调用项
     const historyStart = history.length;
+    // 本轮用量：agentic 循环一次用户输入可能发生多次 LLM 请求，按回调逐次累加
+    let turnUsage: TokenUsage = createEmptyUsage();
     try {
       await runReplTurn({
         session,
         history,
         userInput,
         thinkingLevel: currentLevel,
+        onUsage: (usage) => {
+          turnUsage = addUsage(turnUsage, usage);
+          totalUsage = addUsage(totalUsage, usage);
+        },
       });
+      // 本轮结束后展示「本轮 + 累计」用量（含配置单价时的费用估算）
+      printTurnUsage(turnUsage, totalUsage, llmConfig.pricing);
     } catch (err) {
       // 审批等交互中按 Ctrl+C：只中断本轮并回滚本轮历史，会话继续
       if (err instanceof CancelError) {

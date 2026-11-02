@@ -2,6 +2,7 @@ import { streamResponse } from "../../../llm";
 import type {
   LlmConfig,
   ResponseHistoryItem,
+  TokenUsage,
   ToolDefinition,
 } from "../../../llm/types";
 import type { ToolResult } from "../../../tools";
@@ -28,6 +29,8 @@ interface CreateResponsesTurnOptions {
   onDelta: (text: string) => void;
   /** 深度思考增量回调（可选） */
   onReasoningDelta?: (text: string) => void;
+  /** token 用量回调（可选）：每次 LLM 请求返回 usage 时触发，供会话层累计 */
+  onUsage?: (usage: TokenUsage) => void;
 }
 
 /**
@@ -71,6 +74,10 @@ export function createResponsesTurn(
       onDelta: options.onDelta,
       onReasoningDelta: options.onReasoningDelta,
     });
+    // 每次请求返回用量即上报：agentic 循环的多轮请求在会话层累加
+    if (response.usage) {
+      options.onUsage?.(response.usage);
+    }
 
     // 模型的回答文本与工具调用都记入历史：无状态模式下服务端不再留存本轮输出
     if (response.reply) {

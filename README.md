@@ -192,7 +192,7 @@ tx-cli agent
 - [ ] 子 Agent 并行编排（一次派生多个子 agent 并行执行独立子任务并汇总结果）
 - [ ] 上下文自动压缩（历史超阈值时摘要压缩早期轮次，长任务不爆上下文）
 - [ ] `/clear` 内联命令（一键清空当前会话历史重开）
-- [ ] Token 用量统计（每轮/累计 token 与费用估算，REPL 就绪面板展示）
+- [x] Token 用量统计（每轮/累计 token 与费用估算，REPL 就绪面板展示；费用需配置 `llm.pricing`）
 - [ ] `/export` 会话导出（当前会话导出为 Markdown 存档）
 - [ ] `web_fetch` 工具（抓取 URL 网页转 Markdown 给模型，补齐联网闭环）
 - [ ] 回答 Markdown 渲染（REPL 中正文按 Markdown 渲染）

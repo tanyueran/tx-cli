@@ -3,6 +3,7 @@ import { CliError } from "../../shared/errors";
 import type {
   LlmConfig,
   ResponseHistoryItem,
+  TokenUsage,
   ToolCall,
   ToolDefinition,
 } from "./types";
@@ -60,6 +61,40 @@ export interface StreamResponseResult {
   reply: string;
   /** 模型请求的工具调用列表；为空表示模型直接给出了回答 */
   toolCalls: ToolCall[];
+  /** 本次请求的 token 用量；服务未返回 usage 时为 undefined */
+  usage?: TokenUsage;
+}
+
+/**
+ * 把数值字段归一化为非负有限数：兼容不同兼容服务返回的缺失或非法字段
+ * @param {unknown} value - 服务端原始值
+ * @returns {number} 合法数值或 0
+ */
+function toNumber(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+/**
+ * 把服务端返回的 usage 转换为内部 TokenUsage
+ * @param {OpenAI.Responses.ResponseUsage | undefined} raw - 服务端 usage
+ * @returns {TokenUsage | undefined} 归一化后的用量；未返回 usage 时为 undefined
+ */
+function toTokenUsage(
+  raw: OpenAI.Responses.ResponseUsage | undefined,
+): TokenUsage | undefined {
+  if (!raw) {
+    return undefined;
+  }
+  const inputTokens = toNumber(raw.input_tokens);
+  const outputTokens = toNumber(raw.output_tokens);
+  return {
+    inputTokens,
+    outputTokens,
+    // 部分兼容服务不返回 total_tokens，按输入 + 输出推算
+    totalTokens: toNumber(raw.total_tokens) || inputTokens + outputTokens,
+    cachedTokens: toNumber(raw.input_tokens_details?.cached_tokens),
+    reasoningTokens: toNumber(raw.output_tokens_details?.reasoning_tokens),
+  };
 }
 
 /**
@@ -130,9 +165,14 @@ export async function streamResponse(
     });
 
     let reply = "";
+    let usage: TokenUsage | undefined;
     const toolCalls: ToolCall[] = [];
     for await (const event of stream) {
       switch (event.type) {
+        case "response.completed":
+          // 完成事件携带本次请求的 usage；部分兼容服务可能不返回
+          usage = toTokenUsage(event.response.usage);
+          break;
         // 思考内容：openai 开源系模型走 reasoning_text，官方模型走 reasoning_summary_text
         case "response.reasoning_text.delta":
         case "response.reasoning_summary_text.delta":
@@ -157,7 +197,7 @@ export async function streamResponse(
           break;
       }
     }
-    return { reply, toolCalls };
+    return { reply, toolCalls, usage };
   } catch (err) {
     throw toCliError(err);
   }

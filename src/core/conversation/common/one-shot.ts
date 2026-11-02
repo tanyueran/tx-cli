@@ -9,12 +9,17 @@ import {
   resolveThinkingLevel,
   resolveThinkingStyle,
   warnThinkingFallback,
+  addUsage,
+  createEmptyUsage,
+  formatUsageTable,
+  isEmptyUsage,
 } from "../../llm";
 import type { SandboxCliOptions } from "../../sandbox";
 import type {
   LlmConfig,
   ResponseHistoryItem,
   ThinkingLevel,
+  TokenUsage,
 } from "../../llm/types";
 
 /** runOneShotConversation 入参对象 */
@@ -66,6 +71,8 @@ export async function runOneShotConversation({
     writeToolsEnabled: modeConfig.writeToolsEnabled,
     cliSandboxOptions,
   });
+  // 本次会话的 token 用量：agentic 循环的多次请求经回调累加
+  let totalUsage: TokenUsage = createEmptyUsage();
   try {
     const { systemPrompt, tools, scanWarnings } = runtime.skill;
     // 与 REPL 面板保持一致：技能扫描警告与装配阶段警告一并输出
@@ -82,10 +89,22 @@ export async function runOneShotConversation({
       tools,
       advertisedTools: runtime.skill.advertisedTools,
       maxIterations: modeConfig.maxIterations,
+      onUsage: (usage) => {
+        totalUsage = addUsage(totalUsage, usage);
+      },
     });
   } finally {
     // 成功与异常路径都先补换行，避免后续输出（错误提示等）粘在残缺的流式输出之后
     process.stdout.write("\n");
+    // 有用量时打印本次会话的 token 与费用估算（服务未返回 usage 时不输出噪音）
+    if (!isEmptyUsage(totalUsage)) {
+      console.log(
+        formatUsageTable(
+          [{ label: "本次", usage: totalUsage, emphasis: true }],
+          llmConfig.pricing,
+        ),
+      );
+    }
     await disposeConversationRuntime(runtime);
   }
 }

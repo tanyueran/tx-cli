@@ -14,6 +14,38 @@ export interface LlmConfig {
   thinkingStyle?: ThinkingStyle;
   /** 档位 → 服务端实际值的高级映射，优先于内置映射（适配仅支持部分档位的服务） */
   thinkingEffortMap?: Partial<Record<ThinkingLevel, string>>;
+  /** 费用单价配置（可选）：未配置时只统计 token，不估算费用 */
+  pricing?: LlmPricing;
+}
+
+/**
+ * 费用单价配置（每百万 token 单价）：用于 token 用量的费用估算
+ * 未配置或对应档位单价缺失时，该档位按 0 计
+ */
+export interface LlmPricing {
+  /** 输入 token 每百万单价（按服务端返回的 input_tokens 全量口径计） */
+  inputPerMillion?: number;
+  /** 输出 token 每百万单价 */
+  outputPerMillion?: number;
+  /** 币种符号，缺省 ¥ */
+  currency?: string;
+}
+
+/**
+ * token 用量：单次 LLM 调用或会话累计的统计口径
+ * 无状态模式下 input 为整段历史的全量重传量，即真实计费口径
+ */
+export interface TokenUsage {
+  /** 输入 token 数 */
+  inputTokens: number;
+  /** 输出 token 数（含思考内容） */
+  outputTokens: number;
+  /** 总 token 数（服务端未返回时按输入 + 输出推算） */
+  totalTokens: number;
+  /** 命中缓存读取的输入 token（服务未返回时为 0） */
+  cachedTokens: number;
+  /** 思考内容 token（服务未返回时为 0） */
+  reasoningTokens: number;
 }
 
 /**

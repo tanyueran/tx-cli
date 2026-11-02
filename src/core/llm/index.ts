@@ -5,6 +5,17 @@
 export { loadLlmConfig } from "./config";
 export { streamResponse } from "./client";
 export {
+  createEmptyUsage,
+  addUsage,
+  isEmptyUsage,
+  formatTokenCount,
+  estimateCost,
+  formatCost,
+  formatUsageSummary,
+  describePricing,
+  formatUsageTable,
+} from "./usage";
+export {
   parseThinkingLevel,
   parseThinkingStyle,
   resolveThinkingStyle,

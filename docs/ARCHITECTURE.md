@@ -146,6 +146,28 @@ LLM 调用走 OpenAI 兼容 Responses API 的**无状态模式**（`core/llm/cli
 - **每轮追加**：用户输入 push 为 user message → 上一轮工具结果追加为 `function_call_output` → 响应到达后 assistant 回复与 `function_call` 逐项追加。
 - **流式事件**（`client.ts`）：`output_text.delta` 累积正文并回调渲染；`reasoning_text.delta` 与 `reasoning_summary_text.delta`（分别对应 openai 开源系与官方模型的思考输出）统一路由到思考渲染，渲染层不感知模型差异；`output_item.done` 中 `type === "function_call"` 的项收集为工具调用。工具定义以 `type: "function"`、`strict: false` 下发。HTTP 错误经 `toCliError` 映射为中文 `CliError`（401/404/429/网络失败等）。
 
+### Token 用量统计与费用估算
+
+用量统计属于会话公共机制，`chat` 与 `agent`、单次与多轮均共用同一套实现：
+
+- **采集**（`core/llm/client.ts`）：`streamResponse` 在 `response.completed` 事件读取服务端 `usage`，归一化为 `TokenUsage`（输入 / 输出 / 总量、缓存命中、思考 token）；缺失字段按 0 兜底，`total_tokens` 缺失时按输入 + 输出推算，服务未返回 usage 时为 `undefined`。
+- **透传**（`responses-turn.ts` → `execute-turn.ts`）：每次 LLM 请求返回用量即通过 `onUsage` 回调上报，agentic loop 的多轮请求在会话层逐次累加。
+- **展示**（`core/llm/usage.ts`）：大数值用 `k` / `M` / `B` 紧凑单位；REPL 每轮结束以表格展示「本轮 / 累计」四列（项目、输入、输出、费用），单次会话展示「本次」单行表格；REPL 就绪面板展示当前累计统计口径。表格按 `displayWidth` 计算列宽以兼容中文全角，边框灰色、本轮标签高亮、累计标签弱化。
+- **计费口径**：无状态模式每轮全量重传历史，`input` token 即真实计费量，会随轮次增长；费用估算需配置 `llm.pricing`（每百万 token 的 `inputPerMillion` / `outputPerMillion` 与可选 `currency`），未配置时只统计 token、费用列显示 `-`；非法单价在配置装载时告警并忽略。
+
+```jsonc
+{
+  "llm": {
+    // 可选：每百万 token 单价，配置后用量表格展示费用估算
+    "pricing": {
+      "inputPerMillion": 2,
+      "outputPerMillion": 8,
+      "currency": "¥"
+    }
+  }
+}
+```
+
 ### 流式渲染
 
 `renderer.ts` 用 `lastStreamKind`（`reasoning` / `content` / undefined=行首）跟踪当前输出流，实现思考与正文的分流：
