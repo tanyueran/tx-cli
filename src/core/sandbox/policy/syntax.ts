@@ -13,6 +13,7 @@ import { compileGlob } from "../utils/glob";
 const RULE_NAME_ALIASES: ReadonlyMap<string, string> = new Map([
   ["read", "read_file"],
   ["websearch", "web_search"],
+  ["webfetch", "web_fetch"],
   ["listdir", "list_dir"],
   ["write", "write_file"],
   ["edit", "edit_file"],

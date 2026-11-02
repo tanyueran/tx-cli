@@ -59,7 +59,7 @@ src/
 │   │   ├── executor.ts        #   执行器：参数解析、超时、8KB 截断
 │   │   ├── permission.ts      #   权限门卫包装层（wrapToolWithPermission）
 │   │   └── builtin/           #   内置工具：read_file / list_dir / glob /
-│   │                          #   grep / web_search / write_file / edit_file（写侧，
+│   │                          #   grep / web_search / web_fetch / write_file / edit_file（写侧，
 │   │                          #   受可写边界管控）/ write_todos（agent 模式装配，
 │   │                          #   工厂创建）/ bash（工厂创建，按需拼入）
 │   ├── sandbox/               # 沙箱与权限（四层模型，见下文；模块详情见 src/core/sandbox/README.md）
@@ -276,7 +276,7 @@ interface Tool extends ToolDefinition {
 
 `core/conversation/common/runtime/skill-context.ts` 按固定顺序拼接工具清单，**不支持运行时动态注册**：
 
-1. **内置静态清单**（`tools/builtin/index.ts`）：`read_file`、`list_dir`、`glob`、`grep`、`web_search`、`write_file`、`edit_file` 共 7 个；模式关闭写侧工具时（chat）按名单剔除 `write_file` / `edit_file`；
+1. **内置静态清单**（`tools/builtin/index.ts`）：`read_file`、`list_dir`、`glob`、`grep`、`web_search`、`web_fetch`、`write_file`、`edit_file` 共 8 个；模式关闭写侧工具时（chat）按名单剔除 `write_file` / `edit_file`；
 2. **`load_skill`**：仅当 `discoverSkills()` 扫描到技能时装配——空技能时不多下发无用工具定义；
 3. **`write_todos`**：模式 `todosEnabled` 时装配（agent），工厂创建、状态存工具实例闭包；
 4. **bash**：沙箱上下文存在且模式允许时装配，工厂创建、注入 `SandboxContext`；
@@ -346,7 +346,7 @@ flowchart TD
 - **判定优先级**：`deny`（含内置危险类目）> `ask` > `allow` > 档位默认；bash 复合命令逐段判定，任一段命中 deny 整条拒绝、任一段命中 ask 整条进入审批。
 - **包装穿透**：deny/ask 匹配时剥离 `FOO=bar` / `env` / `nohup` / `xargs` 包装看真实命令（allow 不穿透，防止借包装放行危险命令）。
 - **规则语法**：`Bash(git push:*)` 前缀、`Bash(git status)` 精确、`Bash(git log *)` glob、`Read(/src/**)` 路径、`WebSearch` 整工具。
-- **规则名别名归一化**：`Read`→`read_file`、`WebSearch`→`web_search`、`ListDir`→`list_dir`、`Write`→`write_file`、`Edit`→`edit_file`（Claude Code 风格短名 ↔ 内部工具名），规则键与规则两侧都归一化后匹配。
+- **规则名别名归一化**：`Read`→`read_file`、`WebSearch`→`web_search`、`WebFetch`→`web_fetch`、`ListDir`→`list_dir`、`Write`→`write_file`、`Edit`→`edit_file`（Claude Code 风格短名 ↔ 内部工具名），规则键与规则两侧都归一化后匹配。
 - **MCP 类目**：分 `mcp-read`（`readOnlyHint === true` 且未声明 `destructiveHint`）与 `mcp-tool`（可写）——`mcp-read` 未命中规则时默认放行（`always-ask` 策略下仍询问），`mcp-tool` 默认审批；显式 `ask`/`deny` 规则始终优先。
 - **内置危险类目**（可 `sandbox.builtinDangerRules: false` 关闭）：`rm -rf`、`sudo/su`、`chmod 777`、磁盘写入、`curl|sh`、`git push -f`、保护路径。
 
@@ -366,11 +366,11 @@ flowchart TD
 
 ### 权限纳管范围
 
-bash（exec，串行）、read_file / list_dir / glob / grep（fs.read，规则键以绝对路径为主体）、write_file / edit_file（fs.write，串行，read-only 档被可写边界拒绝）、web_search（net，规则键 `web_search(关键词)`）、MCP 工具（整工具级键 `mcp__server__tool`，按 `readOnlyHint` 区分只读/可写，只读仅标注 net，其余保守标注 net+exec）。无沙箱会话（`sandbox` 为 undefined）不包装、行为不变。
+bash（exec，串行）、read_file / list_dir / glob / grep（fs.read，规则键以绝对路径为主体）、write_file / edit_file（fs.write，串行，read-only 档被可写边界拒绝）、web_search（net，规则键 `web_search(关键词)`）、web_fetch（net，规则键 `web_fetch(url)`）、MCP 工具（整工具级键 `mcp__server__tool`，按 `readOnlyHint` 区分只读/可写，只读仅标注 net，其余保守标注 net+exec）。无沙箱会话（`sandbox` 为 undefined）不包装、行为不变。
 
 ### capabilities 禁网语义
 
-工具声明的能力（如 net）随 guard 链路传入规则判定；read-only 档承诺禁网，net 工具未命中规则时默认 ask——OS 沙箱只拦子进程，进程内网络调用不受边界约束，故由审批层兜底（`never` 策略下直接 deny）；声明 `readOnlySafe` 的无副作用只读检索工具（`web_search`）例外，口径对齐 mcp-read 默认 allow（`always-ask` 仍 ask）。
+工具声明的能力（如 net）随 guard 链路传入规则判定；read-only 档承诺禁网，net 工具未命中规则时默认 ask——OS 沙箱只拦子进程，进程内网络调用不受边界约束，故由审批层兜底（`never` 策略下直接 deny）；声明 `readOnlySafe` 的无副作用只读检索工具（`web_search` / `web_fetch`）例外，口径对齐 mcp-read 默认 allow（`always-ask` 仍 ask）。
 
 ### 信任模型（防自证信任）
 

@@ -3,6 +3,7 @@ import { globTool } from "./glob";
 import { grepTool } from "./grep";
 import { listDirTool } from "./list-dir";
 import { readFileTool } from "./read-file";
+import { webFetchTool } from "./web-fetch";
 import { webSearchTool } from "./web-search";
 import { writeFileTool } from "./write-file";
 import { createTodoTool } from "./write-todos";
@@ -32,6 +33,7 @@ export const builtinTools: Tool[] = [
   globTool,
   grepTool,
   webSearchTool,
+  webFetchTool,
   writeFileTool,
   editFileTool,
 ];
