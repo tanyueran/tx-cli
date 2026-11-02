@@ -121,7 +121,7 @@ tx-cli commit-fix "#532311 优化属性设置 https://ones.x.cn/abc"
 与大模型轻量只读问答，支持任何 OpenAI 兼容接口（DeepSeek、Kimi、GLM、OpenAI 等）。
 
 - 传入问题：单次问答，流式输出回答后退出；不传参数（或纯空白，如 `tx chat ""`）：进入多轮对话模式（`exit`/`quit` 退出）
-- 工具调用默认开启：内置 `read_file`、`list_dir`、`glob`、`grep`、`web_search` 等只读固定工具集，可读取检索本地文件、联网搜索（只读语义由代码强制：固定不装配 bash、MCP 与写侧工具，创建或修改文件请用 `agent`）
+- 工具调用默认开启：内置 `read_file`、`list_dir`、`glob`、`grep`、`web_search`、`web_fetch` 等只读固定工具集，可读取检索本地文件、联网搜索与抓取网页（`web_fetch` 仅支持公网 http/https、禁止内网地址，长页面可用 `offset` 续读；只读语义由代码强制：固定不装配 bash、MCP 与写侧工具，创建或修改文件请用 `agent`）
 - 支持技能（skills）：自动扫描 `~/.tx-cli/skills` 与 `./.tx-cli/skills` 中的 `SKILL.md` 技能手册，多轮对话可用 `/skills` 查看清单
 - 思考档位 `--think off|low|medium|high`（兜底 `low`），多轮对话可用 `/think` 随时切换
 - 会话管理：多轮对话可用 `/clear` 清空历史与累计用量重新开始，`/export` 将当前会话导出为 Markdown 存档（写入当前目录）
@@ -195,5 +195,5 @@ tx-cli agent
 - [x] `/clear` 内联命令（一键清空当前会话历史重开）
 - [x] Token 用量统计（每轮/累计 token 与费用估算，REPL 就绪面板展示；费用需配置 `llm.pricing`）
 - [x] `/export` 会话导出（当前会话导出为 Markdown 存档）
-- [ ] `web_fetch` 工具（抓取 URL 网页转 Markdown 给模型，补齐联网闭环）
+- [x] `web_fetch` 工具（抓取 URL 网页转 Markdown 给模型，补齐联网闭环）
 - [ ] 回答 Markdown 渲染（REPL 中正文按 Markdown 渲染）

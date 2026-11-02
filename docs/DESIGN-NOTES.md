@@ -50,7 +50,7 @@
 |---|---|---|
 | 读查 | `read_file` / `list_dir` / `glob` / `grep` | 本地文件读取与检索 |
 | 写 | `write_file` / `edit_file` | 整体写入 / 精确字符串替换（片段不唯一即失败，防误改）；受沙箱可写边界管控 |
-| 联网 | `web_search` | 搜索实时信息 |
+| 联网 | `web_search` / `web_fetch` | 搜索实时信息 / 抓取 URL 网页转 Markdown |
 | 执行 | `bash` | 仅 agent 装配，受沙箱与审批管控 |
 | 规划 | `write_todos` | 任务清单，仅 agent 装配 |
 

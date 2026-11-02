@@ -105,10 +105,10 @@ tx-cli agent --no-bash 梳理这个仓库的模块结构
 ### 权限规则（rules）
 
 - 判定优先级：`deny`（含内置危险类目）> `ask` > `allow` > 档位默认；bash 复合命令逐段判定，任一段命中 deny 则整条拒绝，任一段命中 ask 则整条进入审批
-- 规则语法：`工具名` 整工具生效（如 `web_search`）；`工具名(模式)` 细粒度生效（如 `Bash(git push:*)`、`Read(/src/**)`）；规则名不区分大小写，支持 `Read`、`Write`、`Edit`、`ListDir`、`WebSearch` 等短名（自动映射到内部工具名）
+- 规则语法：`工具名` 整工具生效（如 `web_search`）；`工具名(模式)` 细粒度生效（如 `Bash(git push:*)`、`Read(/src/**)`）；规则名不区分大小写，支持 `Read`、`Write`、`Edit`、`ListDir`、`WebSearch`、`WebFetch` 等短名（自动映射到内部工具名）
 - 模式三种写法：`cmd` 精确匹配、`prefix:*` 前缀匹配、含 `*` 的 glob 通配
 - `sandbox.rules` 管 bash 与内置工具；MCP 工具规则写在顶层 `mcp.rules` 段，支持 `服务器名__*` 通配整组放行/审批/拒绝（兼容旧写法 `mcp__服务器名__*`，两层规则加载后合并判定）
-- `read-only` 档下，除声明无副作用的只读检索工具（`web_search`，口径对齐 MCP 只读工具）默认放行外，其余联网工具未命中规则时默认进入审批（该档承诺禁网，进程内网络调用不受沙箱边界约束）
+- `read-only` 档下，除声明无副作用的只读检索工具（`web_search` / `web_fetch`，口径对齐 MCP 只读工具）默认放行外，其余联网工具未命中规则时默认进入审批（该档承诺禁网，进程内网络调用不受沙箱边界约束）
 - 审批时选择「始终允许」会把授权规则写入项目配置 `<cwd>/.tx-cli/config.json`（MCP 授权落 `mcp.rules.allow`，其余落 `sandbox.rules.allow`，仅对当前项目生效）
 
 ### 信任目录（trustDirectories）
@@ -143,7 +143,7 @@ bash 命令的所有网络访问都经沙箱代理强制走域名白名单，未
 
 > 注意：代理通过 `HTTP_PROXY`/`HTTPS_PROXY` 环境变量下发，`curl` 会读取、Node 的 `fetch` 默认不读取；CLI 会为 bash 子进程注入 `NODE_USE_ENV_PROXY=1`（用户已显式设置时不覆盖），因此 `node` 脚本联网同样受白名单管控，无需在命令里自行加前缀。
 
-> 注意：`web_search` 工具是进程内网络请求，不经沙箱代理，不受此白名单管控。
+> 注意：`web_search` / `web_fetch` 工具是进程内网络请求，不经沙箱代理，不受此白名单管控；`web_fetch` 自身另做协议与内网地址校验（仅公网 http/https，逐跳校验重定向目标）。
 
 ## MCP 服务器
 
