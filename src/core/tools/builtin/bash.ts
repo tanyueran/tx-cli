@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import type { SandboxContext } from "../../sandbox/runtime/sandbox-context";
+import { BASH_TOOL_NAME } from "../registry";
 import type { Tool, ToolOutput } from "../types";
 
 /** bash 参数中 timeout 的下限（毫秒） */
@@ -146,7 +147,7 @@ function formatOutput(spawnResult: SpawnResult): string {
  */
 export function createBashTool(sandbox: SandboxContext): Tool {
   return {
-    name: "bash",
+    name: BASH_TOOL_NAME,
     description:
       "执行 bash 命令并返回输出。受沙箱管控：非只读操作可能被拦截，被拦截时会返回违规说明，可据此调整命令或说明需要用户授权",
     timeoutMs: EXECUTOR_TIMEOUT_MS,

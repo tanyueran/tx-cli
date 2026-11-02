@@ -1,5 +1,6 @@
 import { readdir, stat } from "node:fs/promises";
 import { resolveFromCwd } from "../../../shared/paths";
+import { LIST_DIR_TOOL_NAME } from "../registry";
 import type { Tool, ToolOutput } from "../types";
 
 /**
@@ -7,7 +8,7 @@ import type { Tool, ToolOutput } from "../types";
  * 目录名以 / 结尾，便于模型区分文件与目录；相对路径基于当前工作目录解析
  */
 export const listDirTool: Tool = {
-  name: "list_dir",
+  name: LIST_DIR_TOOL_NAME,
   description:
     "列出指定目录下的文件与子目录（单层，不递归），目录名以 / 结尾，便于了解目录结构",
   parameters: {

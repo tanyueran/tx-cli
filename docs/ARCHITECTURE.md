@@ -201,10 +201,11 @@ LLM 调用走 OpenAI 兼容 Responses API 的**无状态模式**（`core/llm/cli
 `agent` 模式额外装配 `delegate_task`（实现见 `turn/sub-agent.ts`）：主模型把边界清晰的子任务交出去，子 Agent 用**独立历史**跑自己的 agentic loop，中间的工具调用与输出都不进入主上下文，只有最终结论作为工具结果回传。
 
 - **上下文隔离**：每次派生新建 `history`，结束即丢弃；子 Agent 使用独立人设（`SUB_AGENT_PROMPT` + 技能元数据），只依赖 `task` 与 `context` 两个参数，因此 `task` 必须自包含（目标、涉及路径、期望产出）。
-- **工具继承与裁剪**：子 Agent 继承主会话工具（已过权限门卫，沙箱边界与审批链完全不变），但剔除 `write_todos`（其工具实例闭包持有主会话共享清单，会污染 `/todos`）与 `delegate_task` 自身（防无限递归派生）；MCP 折叠状态一并继承（执行侧 `tools` 与下发侧 `advertisedTools` 分别传递）。
-- **静默执行**：子 Agent 的正文与思考增量不渲染，终端只在派发开始与结束时各打一行提示；结论按工具输出回传主模型，避免中间过程刷屏与污染主会话。
+- **工具继承与裁剪**：子 Agent 继承主会话工具（已过权限门卫，沙箱边界与审批链完全不变），但剔除 `write_todos`（其工具实例闭包持有主会话共享清单，会污染 `/todos`）与 `delegate_task` 自身（防无限递归派生）；MCP 折叠模式下一并继承，且 `delegate_task` **原地追加**进执行侧与下发侧两份工具列表——`discover_mcp_tools` 的激活机制依赖与请求层共享同一数组引用，复制列表会让 agent 模式下激活的 MCP 工具到不了请求层；同时为子 Agent 重绑独立的 discovery 实例，子 Agent 内的激活只写入自己的下发列表。
+- **静默执行**：子 Agent 的正文与思考增量不渲染，终端只在派发开始、结束与软收敛时各打一行弱化提示；结论按工具输出回传主模型，避免中间过程刷屏与污染主会话。
 - **轮数与超时**：子 Agent 轮数上限 20（`DEFAULT_SUB_AGENT_MAX_ITERATIONS`），`delegate_task` 声明 10 分钟超时（内层工具仍各自 30s，审批等待期间内层计时暂停）。
-- **失败与取消**：子任务失败转为 `ok:false` 工具结果回传主模型自纠；用户取消（`CancelError`）原样上抛——嵌套 loop 各自持有回合取消上下文，经 `delegate_task` 透传到主 loop 后置位主回合取消，整轮中止。
+- **上下文压缩**：子 Agent 循环内接入与主会话同口径的压缩（配置 `llm.context.maxContextTokens` 后生效），但采用 `tool-rounds` 切分策略（`findSubAgentCompactionSplit`）——子 Agent 历史只有一条用户消息，按用户消息切分的策略永不触发；该策略保留子任务消息与最近 N 轮工具交互，切分点落在调用块边界，不拆散 `function_call` / `function_call_output` 配对。
+- **失败与取消**：子任务失败转为 `ok:false` 工具结果回传主模型自纠；用户取消（`CancelError`）原样上抛——嵌套 loop **复用**主回合的取消上下文（`runWithTurnCancellation` 检测到已有上下文时不再新建），任一方向的取消都置位同一标记并短路整轮：子 Agent 内的取消中止主回合，主回合的取消也能拦住仍在运行的子 Agent（排队任务与审批弹窗全部短路），不会孤儿续跑。
 - **用量统计**：子 Agent 每次 LLM 请求的 usage 经会话层每轮设置的 `setUsageReporter` 计入「本轮 / 累计」，但不更新 `lastInputTokens`，避免子 Agent 的上下文规模影响主会话压缩阈值判定。
 - **装配位置**：与 `write_todos` 不同，`delegate_task` 依赖 LLM 配置与当前思考档位，因此在会话入口（`one-shot.ts` / `repl.ts`）装配，通过 `subAgentEnabled` 模式开关控制；REPL 中扩展字段闭包读取当前档位，`/think` 切换后子 Agent 同步生效。
 

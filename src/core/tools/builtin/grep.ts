@@ -3,6 +3,7 @@ import { basename, join } from "node:path";
 import { walkDir } from "../../../shared/fs";
 import { resolveFromCwd } from "../../../shared/paths";
 import { findTextMatches } from "../../../shared/text";
+import { GREP_TOOL_NAME } from "../registry";
 import type { Tool, ToolOutput } from "../types";
 
 /** 最多返回的匹配行数：防止结果过多撑爆上下文 */
@@ -21,7 +22,7 @@ interface SearchTarget {
  * 返回 `相对路径:行号: 命中行` 形式的结果；相对路径基于当前工作目录解析，默认跳过 node_modules 与 .git
  */
 export const grepTool: Tool = {
-  name: "grep",
+  name: GREP_TOOL_NAME,
   description:
     "按正则在文件内容中搜索，返回 `文件路径:行号: 命中行` 形式的结果，用于定位代码位置",
   parameters: {

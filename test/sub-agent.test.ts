@@ -8,13 +8,26 @@ import {
   SUB_AGENT_TOOL_NAME,
 } from "../src/core/conversation/common/turn/sub-agent";
 import type { SubAgentRunner } from "../src/core/conversation/common/turn/sub-agent";
+import { createMcpDiscoveryTool } from "../src/core/mcp/discovery-tool";
 import type { Tool } from "../src/core/tools";
 import type { LlmConfig, TokenUsage } from "../src/core/llm/types";
 
-// 子 Agent 复用主会话的 streamResponse：测试中替换为可编程的假实现
+// 子 Agent 复用主会话的 streamResponse：测试中替换为可编程的假实现。
+// 需同时 mock barrel 与 client 两个入口：回合函数（responses-turn）经 barrel 导入，
+// 摘要生成器（llm/context）直接从 ./client 导入，只 mock barrel 会让压缩摘要请求走真实网络
 const { streamResponseMock } = vi.hoisted(() => ({
   streamResponseMock: vi.fn(),
 }));
+
+vi.mock("../src/core/llm/client", async (importOriginal) => {
+  const actual = await importOriginal<
+    typeof import("../src/core/llm/client")
+  >();
+  return {
+    ...actual,
+    streamResponse: (...args: unknown[]) => streamResponseMock(...args),
+  };
+});
 
 vi.mock("../src/core/llm", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/core/llm")>();
@@ -305,10 +318,101 @@ describe("createSubAgentRunner", () => {
 
     expect(result.output).toContain("未给出文字结论");
   });
+
+  it("达到压缩阈值时按工具轮次压缩子 Agent 历史", async () => {
+    // 极小阈值：首轮请求的 input token 即超过阈值，第二轮工具交互完成后触发压缩
+    const compactLlm: LlmConfig = {
+      ...llmConfig,
+      context: { maxContextTokens: 1000, compactAt: 0.5, keepRecentTurns: 1 },
+    };
+    const snapshots: unknown[] = [];
+    const capture = (options: Record<string, unknown>): void => {
+      snapshots.push(JSON.parse(JSON.stringify(options.input)));
+    };
+    const bigUsage: TokenUsage = { ...usage, inputTokens: 100_000, totalTokens: 100_020 };
+    streamResponseMock
+      .mockImplementationOnce(async (options: Record<string, unknown>) => {
+        capture(options);
+        return {
+          reply: "",
+          toolCalls: [{ callId: "call_1", name: "read_file", arguments: "{}" }],
+          usage: bigUsage,
+        };
+      })
+      .mockImplementationOnce(async (options: Record<string, unknown>) => {
+        capture(options);
+        return {
+          reply: "",
+          toolCalls: [{ callId: "call_2", name: "read_file", arguments: "{}" }],
+          usage: bigUsage,
+        };
+      })
+      // 摘要生成请求：生成器经 onDelta 累积摘要文本
+      .mockImplementationOnce(async (options: Record<string, unknown>) => {
+        (options.onDelta as ((text: string) => void) | undefined)?.(
+          "此前已读取配置文件并确认字段结构",
+        );
+        return { reply: "", toolCalls: [], usage };
+      })
+      .mockImplementationOnce(async (options: Record<string, unknown>) => {
+        capture(options);
+        return { reply: "结论", toolCalls: [], usage };
+      });
+
+    const runner = createSubAgentRunner({
+      llmConfig: compactLlm,
+      tools: [makeTool("read_file")],
+    });
+    const result = await runner({ task: "读取配置" });
+
+    expect(result.output).toBe("结论");
+    // 两次工具请求 + 一次摘要请求 + 一次最终请求
+    expect(streamResponseMock).toHaveBeenCalledTimes(4);
+    // 压缩后的最终请求：任务消息与摘要在前，最近一轮工具交互保持原文（配对完整）
+    const input = snapshots[2] as Array<Record<string, unknown>>;
+    expect(input).toHaveLength(4);
+    expect(input[0]).toMatchObject({ role: "user", content: "子任务：读取配置" });
+    expect(JSON.stringify(input[1])).toContain("此前对话已压缩为以下摘要");
+    expect(input[2]).toMatchObject({ type: "function_call", callId: "call_2" });
+    expect(input[3]).toMatchObject({
+      type: "function_call_output",
+      callId: "call_2",
+    });
+  });
+
+  it("子 Agent 达到轮数上限进入软收敛时输出提示，且软收敛轮不下发工具定义", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      streamResponseMock
+        .mockResolvedValueOnce({
+          reply: "",
+          toolCalls: [{ callId: "call_1", name: "read_file", arguments: "{}" }],
+          usage,
+        })
+        .mockResolvedValueOnce({ reply: "结论", toolCalls: [], usage });
+      const runner = createSubAgentRunner({
+        llmConfig,
+        tools: [makeTool("read_file")],
+        maxIterations: 1,
+      });
+
+      const result = await runner({ task: "任务" });
+
+      expect(result.output).toBe("结论");
+      const softLog = logSpy.mock.calls.find((args) =>
+        String(args[0]).includes("轮上限"),
+      );
+      expect(softLog).toBeDefined();
+      // 软收敛轮不下发工具定义，迫使模型基于已有信息作答
+      expect(callArg(1).tools).toBeUndefined();
+    } finally {
+      logSpy.mockRestore();
+    }
+  });
 });
 
 describe("attachSubAgentTools", () => {
-  it("追加 delegate_task 到全量与下发列表，且不改动原数组", () => {
+  it("原地追加 delegate_task 到全量与下发列表，保持与 MCP 激活机制共享引用", () => {
     const mainTools = [makeTool("read_file"), makeTool("write_todos")];
     const mainAdvertised = [makeTool("read_file")];
 
@@ -318,16 +422,93 @@ describe("attachSubAgentTools", () => {
       advertisedTools: mainAdvertised,
     });
 
-    expect(mainTools.map((tool) => tool.name)).toEqual(["read_file", "write_todos"]);
-    expect(attached.tools.map((tool) => tool.name)).toEqual([
+    // 原地追加：返回原数组引用（discover_mcp_tools 的激活依赖与请求层共享同一数组）
+    expect(attached.tools).toBe(mainTools);
+    expect(attached.advertisedTools).toBe(mainAdvertised);
+    expect(mainTools.map((tool) => tool.name)).toEqual([
       "read_file",
       "write_todos",
       SUB_AGENT_TOOL_NAME,
     ]);
-    expect(attached.advertisedTools.map((tool) => tool.name)).toEqual([
+    expect(mainAdvertised.map((tool) => tool.name)).toEqual([
       "read_file",
       SUB_AGENT_TOOL_NAME,
     ]);
     expect(attached.handle.tool.name).toBe(SUB_AGENT_TOOL_NAME);
+  });
+
+  it("MCP 折叠模式下激活的工具写入会话下发列表（请求层可见）", async () => {
+    // 构造折叠场景：下发列表只含 discover_mcp_tools，执行侧持有全部 MCP 工具
+    const pool = Array.from({ length: 3 }, (_, i) =>
+      makeTool(`mcp__srv__tool${i}`),
+    );
+    const advertised: Tool[] = [makeTool("read_file")];
+    advertised.push(createMcpDiscoveryTool(pool, advertised));
+    const tools = [...advertised, ...pool];
+
+    const attached = attachSubAgentTools({
+      llmConfig,
+      tools,
+      advertisedTools: advertised,
+    });
+    expect(attached.advertisedTools).toBe(advertised);
+
+    const discovery = advertised.find(
+      (tool) => tool.name === "discover_mcp_tools",
+    );
+    expect(discovery?.execute).toBeDefined();
+    if (!discovery?.execute) {
+      return;
+    }
+
+    const result = await discovery.execute({ activate: ["mcp__srv__tool1"] });
+    expect(result.ok).toBe(true);
+    // 激活的工具进入会话下发列表（同一数组引用），下一轮请求即可携带其定义
+    expect(advertised.some((tool) => tool.name === "mcp__srv__tool1")).toBe(
+      true,
+    );
+  });
+
+  it("MCP 折叠模式下子 Agent 使用重绑的 discovery，激活只写入自己的下发列表", async () => {
+    const pool = Array.from({ length: 3 }, (_, i) =>
+      makeTool(`mcp__srv__tool${i}`),
+    );
+    const advertised: Tool[] = [makeTool("read_file")];
+    advertised.push(createMcpDiscoveryTool(pool, advertised));
+    const tools = [...advertised, ...pool];
+
+    const attached = attachSubAgentTools({
+      llmConfig,
+      tools,
+      advertisedTools: advertised,
+    });
+
+    // 子 Agent 首次请求的工具清单应含重绑的 discovery 实例（非主会话实例）
+    streamResponseMock.mockResolvedValue({ reply: "ok", toolCalls: [], usage });
+    await attached.handle.tool.execute({ task: "调用 MCP 工具" });
+    const firstCallTools = (callArg(0).tools as Tool[]) ?? [];
+    const subDiscovery = firstCallTools.find(
+      (tool) => tool.name === "discover_mcp_tools",
+    );
+    expect(subDiscovery).toBeDefined();
+    expect(subDiscovery).not.toBe(
+      advertised.find((tool) => tool.name === "discover_mcp_tools"),
+    );
+    if (!subDiscovery?.execute) {
+      return;
+    }
+
+    // 子 Agent 内激活：写入子 Agent 自己的下发列表，主会话列表不受影响
+    await subDiscovery.execute({ activate: ["mcp__srv__tool2"] });
+    streamResponseMock.mockClear();
+    streamResponseMock.mockResolvedValue({ reply: "ok", toolCalls: [], usage });
+    await attached.handle.tool.execute({ task: "再次派生" });
+    const secondCallTools = (callArg(0).tools as Tool[]) ?? [];
+    expect(
+      secondCallTools.some((tool) => tool.name === "mcp__srv__tool2"),
+    ).toBe(true);
+    expect(advertised.some((tool) => tool.name === "mcp__srv__tool2")).toBe(
+      false,
+    );
   });
 });

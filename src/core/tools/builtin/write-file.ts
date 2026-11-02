@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { resolveFromCwd } from "../../../shared/paths";
+import { WRITE_FILE_TOOL_NAME } from "../registry";
 import type { Tool, ToolOutput } from "../types";
 
 /**
@@ -22,7 +23,7 @@ function parseWritePath(args: Record<string, unknown>): string {
  * 避免同轮多个写调用并发竞态
  */
 export const writeFileTool: Tool = {
-  name: "write_file",
+  name: WRITE_FILE_TOOL_NAME,
   description:
     "创建或覆盖文本文件：写入完整内容（整体替换，非追加），父目录不存在时自动创建。" +
     "修改已有文件的小片段时优先改用 edit_file（精确字符串替换），避免整体覆盖引入意外改动",

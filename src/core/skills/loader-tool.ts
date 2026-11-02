@@ -1,4 +1,5 @@
 import { dirname } from "node:path";
+import { LOAD_SKILL_TOOL_NAME } from "../tools/registry";
 import type { Tool, ToolOutput } from "../tools/types";
 import type { SkillCatalog } from "./catalog";
 import type { SkillMeta } from "./discovery";
@@ -37,7 +38,7 @@ function parseLineParam(
  */
 export function createLoadSkillTool(catalog: SkillCatalog): Tool {
   return {
-    name: "load_skill",
+    name: LOAD_SKILL_TOOL_NAME,
     description:
       "加载指定技能手册的内容。当任务匹配某个技能的描述时，先调用本工具加载该手册，再按手册指引执行。超长正文按行分页返回（用 offset 续读），并附带 frontmatter 声明的依赖技能清单",
     parameters: {

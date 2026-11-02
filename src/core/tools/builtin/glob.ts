@@ -2,6 +2,7 @@ import { stat } from "node:fs/promises";
 import { walkDir } from "../../../shared/fs";
 import { resolveFromCwd } from "../../../shared/paths";
 import { globToRegExp } from "../../../shared/text";
+import { GLOB_TOOL_NAME } from "../registry";
 import type { Tool, ToolOutput } from "../types";
 
 /** 单次 glob 返回的最大文件数：防止结果过多撑爆上下文 */
@@ -12,7 +13,7 @@ const MAX_MATCHES = 200;
  * 相对路径基于当前工作目录解析，默认跳过 node_modules 与 .git
  */
 export const globTool: Tool = {
-  name: "glob",
+  name: GLOB_TOOL_NAME,
   description:
     "按 glob 模式查找文件，支持 ** 递归匹配、* 与 ?。返回匹配文件的相对路径（每行一个）",
   parameters: {

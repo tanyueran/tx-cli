@@ -1,3 +1,4 @@
+import { WEB_SEARCH_TOOL_NAME } from "../registry";
 import type { Tool, ToolOutput } from "../types";
 
 /** Exa 托管 MCP 服务的无状态端点：无需 initialize 握手，匿名可用（付费场景经 Authorization 请求头传 Key） */
@@ -61,7 +62,7 @@ function extractContentText(rpcResponse: any): string {
  * 适用于模型知识截止日期之后的问题与实时信息（天气、新闻、版本发布等）
  */
 export const webSearchTool: Tool = {
-  name: "web_search",
+  name: WEB_SEARCH_TOOL_NAME,
   description:
     '搜索互联网获取实时或最新信息（如天气、新闻、新版本发布等），返回"标题+URL+内容摘要"形式的结果',
   parameters: {

@@ -1,6 +1,7 @@
 import { writeFile } from "node:fs/promises";
 import { readTextFile } from "../../../shared/fs";
 import { resolveFromCwd } from "../../../shared/paths";
+import { EDIT_FILE_TOOL_NAME } from "../registry";
 import type { Tool, ToolOutput } from "../types";
 
 /**
@@ -37,7 +38,7 @@ function countOccurrences(content: string, needle: string): number {
  * 串行执行（serial）：读-改-写流程并发会互相覆盖，进会话级队列依次执行
  */
 export const editFileTool: Tool = {
-  name: "edit_file",
+  name: EDIT_FILE_TOOL_NAME,
   description:
     "编辑文本文件：把 old_string 精确替换为 new_string（一次一处）。" +
     "old_string 必须与文件内容完全一致（含空白、缩进与换行），且在文件中唯一出现，" +
