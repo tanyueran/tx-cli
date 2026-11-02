@@ -91,7 +91,7 @@ src/
 flowchart LR
     A["chat-command<br/>解析 --think（模式兜底 low）"] --> B["runOneShotConversation /<br/>runReplConversation<br/>会话生命周期"]
     A2["agent-command<br/>解析 --think/--no-mcp/<br/>--sandbox 等"] --> B
-    B --> C["createConversationRuntime<br/>MCP / 沙箱 / 技能装配<br/>（setupSkillContext）"]
+    B --> C["createConversationRuntime<br/>MCP / 沙箱 / 会话装配<br/>（assembleSessionContext）"]
     C --> D["executeConversationTurn<br/>渲染器 + Responses 回合<br/>+ runAgentLoop"]
     D --> E["Responses API<br/>（无状态，历史本地维护）"]
     D --> F["executeToolCall<br/>参数解析/超时/截断"]
@@ -313,9 +313,9 @@ interface Tool extends ToolDefinition {
 }
 ```
 
-### 工具装配（setupSkillContext）
+### 工具装配（assembleSessionContext）
 
-`core/conversation/common/runtime/skill-context.ts` 按固定顺序拼接工具清单，**不支持运行时动态注册**：
+`core/conversation/common/runtime/session-assembly.ts` 按固定顺序拼接工具清单，**不支持运行时动态注册**：
 
 1. **内置静态清单**（`tools/builtin/index.ts`）：`read_file`、`list_dir`、`glob`、`grep`、`web_search`、`web_fetch`、`write_file`、`edit_file` 共 8 个；模式关闭写侧工具时（chat）按名单剔除 `write_file` / `edit_file`；
 2. **`load_skill`**：仅当 `discoverSkills()` 扫描到技能时装配——空技能时不多下发无用工具定义；

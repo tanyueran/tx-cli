@@ -1,4 +1,13 @@
-import { createLoadSkillTool, discoverSkills, SkillCatalog } from "../../../skills";
+/**
+ * 会话装配：发现技能并装配对话所需的 system 提示词与工具带
+ * 工具带来源固定拼接：内置工具 + load_skill + write_todos + bash + 外部工具（如 MCP），
+ * 技能仅贡献 load_skill 工具与提示词中的技能元数据清单
+ */
+import {
+  createLoadSkillTool,
+  discoverSkills,
+  SkillCatalog,
+} from "../../../skills";
 import {
   builtinTools,
   createTodoTool,
@@ -16,8 +25,8 @@ import { CliError } from "../../../../shared/errors";
 /** MCP 工具内联下发阈值：超过该数量时折叠为 discover_mcp_tools 按需激活，避免每轮请求背负全部 schema */
 export const MCP_INLINE_TOOL_LIMIT = 8;
 
-/** 技能装配结果：system 提示词、工具列表、技能目录、扫描警告 */
-export interface SkillContext {
+/** 会话装配结果：system 提示词、工具带、技能目录、扫描警告 */
+export interface SessionAssembly {
   /** 组装后的 system 提示词（含技能元数据清单） */
   systemPrompt: string;
   /** 会话可执行工具列表（全量，含未激活的 MCP 工具）：内置工具 + load_skill + write_todos + bash + 外部工具 */
@@ -54,8 +63,8 @@ function ensureUniqueToolNames(tools: Tool[]): void {
   }
 }
 
-/** 技能装配选项：按模式裁剪工具带 */
-export interface SkillAssemblyOptions {
+/** 会话工具带装配选项：按模式裁剪 */
+export interface SessionAssemblyOptions {
   /** bash 工具是否装配；缺省 true（跟随沙箱存在性），三态约定见 ConversationModeConfig.bashEnabled（runtime/mode.ts） */
   bashEnabled?: boolean;
   /** 任务清单工具（write_todos）是否装配；缺省 false，agent 模式传 true */
@@ -67,8 +76,8 @@ export interface SkillAssemblyOptions {
   writeToolsEnabled?: boolean;
 }
 
-/** setupSkillContext 入参对象 */
-export interface SetupSkillContextOptions {
+/** assembleSessionContext 入参对象 */
+export interface AssembleSessionContextOptions {
   /** 场景基础提示词（chat、agent 等命令各自定义人设） */
   basePrompt: string;
   /** 追加并入的外部工具（如 MCP 工具，缺省为空） */
@@ -76,7 +85,7 @@ export interface SetupSkillContextOptions {
   /** 会话级沙箱上下文（可选；存在时启用权限门卫） */
   sandbox?: SandboxContext;
   /** 装配选项（bash 开关、write_todos 开关等，缺省全部关闭/跟随沙箱） */
-  assembly?: SkillAssemblyOptions;
+  assembly?: SessionAssemblyOptions;
 }
 
 /**
@@ -85,15 +94,15 @@ export interface SetupSkillContextOptions {
  * 不再支持运行时动态注册工具；
  * 仅当存在可用技能时才装配 load_skill，避免空技能场景多下发一个无用工具定义；
  * 传入沙箱上下文时对声明了 permission 的工具做权限门卫包装（chat 模式只读工具继续受 fs 边界管控）
- * @param {SetupSkillContextOptions} options - 入参对象（basePrompt/extraTools/sandbox/assembly 字段说明见接口定义）
- * @returns {SkillContext} 装配结果
+ * @param {AssembleSessionContextOptions} options - 入参对象（basePrompt/extraTools/sandbox/assembly 字段说明见接口定义）
+ * @returns {SessionAssembly} 装配结果
  */
-export function setupSkillContext({
+export function assembleSessionContext({
   basePrompt,
   extraTools = [],
   sandbox,
   assembly,
-}: SetupSkillContextOptions): SkillContext {
+}: AssembleSessionContextOptions): SessionAssembly {
   const { skills, warnings: skillWarnings } = discoverSkills();
   const catalog = new SkillCatalog(skills);
   let todoHandle: TodoToolHandle | undefined;
@@ -112,7 +121,8 @@ export function setupSkillContext({
     internalTools.push(todoHandle.tool);
   }
   // bash 依赖沙箱执行：无沙箱或显式关闭（chat 模式 / --no-bash）时不装配
-  const bashAssembled = sandbox !== undefined && (assembly?.bashEnabled ?? true);
+  const bashAssembled =
+    sandbox !== undefined && (assembly?.bashEnabled ?? true);
   if (bashAssembled) {
     internalTools.push(createBashTool(sandbox));
   }

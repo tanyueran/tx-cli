@@ -7,7 +7,7 @@ import type { ConversationModeConfig } from "./common/runtime/mode";
 import type { SandboxCliOptions } from "../sandbox";
 import type { LlmConfig, ThinkingLevel } from "../llm/types";
 
-/** agent 命令的基础 system 提示词（人设），经 setupSkillContext 组装技能清单后下发 */
+/** agent 命令的基础 system 提示词（人设），经 assembleSessionContext 组装技能清单后下发 */
 export const SYSTEM_PROMPT =
   "你是 tx-cli 的任务执行 Agent。收到任务后自主拆解步骤，按需使用工具（读写文件、" +
   "执行 bash 命令、检索、MCP）逐步完成；创建或修改文件优先使用 write_file / edit_file 工具" +

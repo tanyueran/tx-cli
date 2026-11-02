@@ -37,7 +37,7 @@ function isJsonObject(inputSchema: unknown): inputSchema is Record<string, unkno
  * 命名规则 mcp__<server>__<tool>，与内置工具天然隔离；描述带来源前缀帮助模型区分；
  * inputSchema 来自第三方进程且协议仅为约定：非法形状兜底为空对象 schema，
  * 避免非法定义一路透传到 LLM 请求时才炸出难懂的接口报错；
- * 声明 permission（整工具级规则键）：在 setupSkillContext 装配沙箱时经权限门卫包装，
+ * 声明 permission（整工具级规则键）：在 assembleSessionContext 装配沙箱时经权限门卫包装，
  * 无沙箱会话（sandbox 为 undefined）不包装、行为不变
  * @param {string} serverName - 所属服务器名（配置中的键名）
  * @param {Client} client - 已连接的服务器客户端

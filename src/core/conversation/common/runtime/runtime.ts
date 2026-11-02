@@ -3,11 +3,11 @@ import type { McpConnectSummary, McpManager } from "../../../mcp";
 import { createSandboxContext } from "../../../sandbox";
 import type { SandboxCliOptions } from "../../../sandbox";
 import type { SandboxContext } from "../../../sandbox/runtime/sandbox-context";
-import { setupSkillContext } from "./skill-context";
-import type { SkillContext } from "./skill-context";
+import { assembleSessionContext } from "./session-assembly";
+import type { SessionAssembly } from "./session-assembly";
 
 /**
- * 对话会话运行时：MCP 连接、沙箱上下文与技能装配结果的组合体
+ * 对话会话运行时：MCP 连接、沙箱上下文与会话装配结果的组合体
  * 随会话创建（createConversationRuntime）与释放（disposeConversationRuntime）
  */
 export interface ConversationRuntime {
@@ -15,8 +15,8 @@ export interface ConversationRuntime {
   mcpManager: McpManager | undefined;
   /** 会话级沙箱上下文（未启用沙箱时为 undefined） */
   sandbox: SandboxContext | undefined;
-  /** 技能装配结果（system 提示词、工具列表、技能目录、扫描警告） */
-  skill: SkillContext;
+  /** 会话装配结果（system 提示词、工具带、技能目录、扫描警告） */
+  assembly: SessionAssembly;
   /** MCP 连接状态摘要（禁用或未配置服务器时为 undefined，就绪面板展示） */
   mcpSummary: McpConnectSummary | undefined;
   /** 装配阶段警告（沙箱装载、MCP 连接等），由 REPL 就绪面板统一展示 */
@@ -38,7 +38,7 @@ export interface ConversationOptions {
 }
 
 /**
- * 装配对话会话运行时：创建沙箱上下文 → 连接 MCP 服务器（stdio 进程直启裸跑，审批/规则链控制其工具调用）→ 装配技能（提示词与工具列表）
+ * 装配对话会话运行时：创建沙箱上下文 → 连接 MCP 服务器（stdio 进程直启裸跑，审批/规则链控制其工具调用）→ 装配会话（提示词与工具带）
  * 任一步失败时按相反顺序释放已建立的资源，避免 MCP stdio 子进程残留；
  * 成功后的释放由调用方经 disposeConversationRuntime 完成；
  * 工具带按模式裁剪：bash 与写侧内置工具的开关约定见 ConversationModeConfig（runtime/mode.ts），
@@ -67,7 +67,8 @@ export async function createConversationRuntime(
       buildMcpRoots(sandbox?.level, sandbox?.rootDir ?? process.cwd()),
     );
     mcpManager = mcpConnectResult.manager;
-    const skill = setupSkillContext({
+    // 装配会话（提示词与工具带）
+    const assembly = assembleSessionContext({
       basePrompt,
       extraTools: mcpConnectResult.tools,
       sandbox,
@@ -80,7 +81,7 @@ export async function createConversationRuntime(
     return {
       mcpManager,
       sandbox,
-      skill,
+      assembly,
       mcpSummary: mcpConnectResult.summary,
       bootWarnings: [...sandboxWarnings, ...mcpConnectResult.warnings],
     };
