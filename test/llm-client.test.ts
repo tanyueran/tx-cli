@@ -154,6 +154,84 @@ describe("streamResponse", () => {
     );
   });
 
+  it("收集 response.completed 的 token 用量与明细", async () => {
+    mockResponsesStream([
+      { type: "response.output_text.delta", delta: "ok" },
+      {
+        type: "response.completed",
+        response: {
+          usage: {
+            input_tokens: 120,
+            output_tokens: 30,
+            total_tokens: 150,
+            input_tokens_details: {
+              cache_write_tokens: 0,
+              cached_tokens: 40,
+            },
+            output_tokens_details: { reasoning_tokens: 5 },
+          },
+        },
+      },
+    ]);
+
+    const result = await streamResponse({
+      llmConfig,
+      input: [{ type: "message", role: "user", content: "问题" }],
+      onDelta: vi.fn(),
+    });
+
+    expect(result.usage).toEqual({
+      inputTokens: 120,
+      outputTokens: 30,
+      totalTokens: 150,
+      cachedTokens: 40,
+      reasoningTokens: 5,
+    });
+  });
+
+  it("服务未返回 usage 时用量为 undefined", async () => {
+    mockResponsesStream([
+      { type: "response.output_text.delta", delta: "ok" },
+    ]);
+
+    const result = await streamResponse({
+      llmConfig,
+      input: [{ type: "message", role: "user", content: "问题" }],
+      onDelta: vi.fn(),
+    });
+
+    expect(result.usage).toBeUndefined();
+  });
+
+  it("total_tokens 缺失或字段非数字时按可用字段兜底", async () => {
+    mockResponsesStream([
+      {
+        type: "response.completed",
+        response: {
+          usage: {
+            input_tokens: 10,
+            output_tokens: 5,
+            total_tokens: undefined,
+          },
+        },
+      },
+    ]);
+
+    const result = await streamResponse({
+      llmConfig,
+      input: [{ type: "message", role: "user", content: "问题" }],
+      onDelta: vi.fn(),
+    });
+
+    expect(result.usage).toEqual({
+      inputTokens: 10,
+      outputTokens: 5,
+      totalTokens: 15,
+      cachedTokens: 0,
+      reasoningTokens: 0,
+    });
+  });
+
   it("网络失败映射为可读的 CliError", async () => {
     responsesCreate.mockRejectedValue(new Error("fetch failed"));
 

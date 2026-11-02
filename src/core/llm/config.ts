@@ -8,7 +8,12 @@ import {
 import { mergeRecords } from "../../shared/config-merge";
 import { runSetupWizard } from "./config-wizard";
 import { parseThinkingLevel, parseThinkingStyle } from "./thinking";
-import type { LlmConfig, ThinkingLevel, ThinkingStyle } from "./types";
+import type {
+  LlmConfig,
+  LlmPricing,
+  ThinkingLevel,
+  ThinkingStyle,
+} from "./types";
 
 /** 配置文件结构：llm 段存放大模型接入配置，其余段位预留给后续功能 */
 interface LlmFileConfig {
@@ -41,6 +46,38 @@ function readLlmFileConfig(configPath: string): LlmFileConfig {
  */
 function normalizeText(configValue: string | undefined): string | undefined {
   return configValue ? configValue : undefined;
+}
+
+/**
+ * 校验并归一化费用单价配置：只保留有限非负数的单价字段
+ * 无任何有效单价时返回 undefined（仅统计 token，不估算费用）
+ * @param {LlmPricing | undefined} raw - 配置文件中的原始 pricing 段
+ * @returns {LlmPricing | undefined} 归一化后的单价配置
+ */
+function normalizePricing(raw: LlmPricing | undefined): LlmPricing | undefined {
+  if (!raw || typeof raw !== "object") {
+    return undefined;
+  }
+  const pricing: LlmPricing = {};
+  let hasPrice = false;
+  for (const key of ["inputPerMillion", "outputPerMillion"] as const) {
+    const value = raw[key];
+    if (value === undefined) {
+      continue;
+    }
+    if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
+      pricing[key] = value;
+      hasPrice = true;
+    } else {
+      console.warn(
+        pico.yellow(`llm.pricing.${key} 配置非法（需为非负数），已忽略`),
+      );
+    }
+  }
+  if (typeof raw.currency === "string" && raw.currency.trim()) {
+    pricing.currency = raw.currency.trim();
+  }
+  return hasPrice ? pricing : undefined;
 }
 
 /**
@@ -78,6 +115,8 @@ function resolveConfigFromSources(
             projectLlm?.thinkingEffortMap ?? {},
           )
         : undefined,
+    // 单价配置整体覆盖（项目 > 全局），非法字段在校验时丢弃
+    pricing: normalizePricing(projectLlm?.pricing ?? globalLlm?.pricing),
   };
 }
 
@@ -115,6 +154,8 @@ export async function loadLlmConfig(
     ...(partialLlmConfig.thinkingEffortMap
       ? { thinkingEffortMap: partialLlmConfig.thinkingEffortMap }
       : {}),
+    // 可选费用单价不参与引导，装载时原样保留
+    ...(partialLlmConfig.pricing ? { pricing: partialLlmConfig.pricing } : {}),
   };
   if (
     partialLlmConfig.apiKey &&

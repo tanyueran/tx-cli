@@ -50,6 +50,10 @@ tx-cli chat --think low
 
 多轮对话模式支持内联命令 `/think`：无参查看当前档位，带参切换（如 `/think high`，下一轮生效），非法档位提示后保留原档位。
 
+## Token 用量与费用估算
+
+`chat` 与 `agent` 共用同一套统计与展示逻辑（每轮 / 累计用量、费用估算），实现与计费口径见 [项目架构 · Token 用量统计与费用估算](./ARCHITECTURE.md#token-用量统计与费用估算)。
+
 ## 配置
 
 首次使用需配置接入信息，任选一种方式：
@@ -69,6 +73,7 @@ tx-cli chat --think low
 | `thinkingLevel` | 否 | 全局默认思考档位：`off` \| `low` \| `medium` \| `high`；未配置时随命令兜底（`chat` 为 `low`，`agent` 为 `medium`） |
 | `thinkingStyle` | 否 | 思考协议风格：`reasoning_effort` \| `thinking` \| `enable_thinking` \| `none`，缺省按 `baseUrl` 推断（见上方协议风格表） |
 | `thinkingEffortMap` | 否 | 档位 → 服务端实际值映射（适配仅支持部分档位的服务） |
+| `pricing` | 否 | 费用单价（每百万 token 的 `inputPerMillion` / `outputPerMillion`、可选 `currency`），未配置时只统计 token（说明见 [项目架构](./ARCHITECTURE.md#token-用量统计与费用估算)） |
 
 `llm` 段示例（写入 `~/.tx-cli/config.json`，项目配置可覆盖/合并同名字段）：
 

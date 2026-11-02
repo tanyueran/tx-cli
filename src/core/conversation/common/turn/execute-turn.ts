@@ -12,6 +12,7 @@ import type {
   ResponseHistoryItem,
   ThinkingLevel,
   ThinkingStyle,
+  TokenUsage,
 } from "../../../llm/types";
 
 /** executeConversationTurn 入参对象 */
@@ -34,6 +35,8 @@ export interface ConversationTurnOptions {
   advertisedTools: Tool[];
   /** 工具调用轮数上限，超出后软收敛为直接作答；缺省 DEFAULT_MAX_ITERATIONS */
   maxIterations?: number;
+  /** token 用量回调（可选）：每次 LLM 请求返回 usage 时触发，供调用方累计展示 */
+  onUsage?: (usage: TokenUsage) => void;
 }
 
 /**
@@ -60,6 +63,7 @@ export async function executeConversationTurn(
     tools: options.advertisedTools,
     onDelta: renderer.onDelta,
     onReasoningDelta: renderer.onReasoningDelta,
+    onUsage: options.onUsage,
   });
   const maxIterations = options.maxIterations ?? DEFAULT_MAX_ITERATIONS;
   return runAgentLoop({
