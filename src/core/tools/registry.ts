@@ -1,7 +1,7 @@
 /**
  * 工具注册表：全 CLI 已知工具的名称常量与「消费者 → 工具裁剪集合」的唯一维护点。
  *
- * 消费者 → 可用工具总览（装配逻辑分别在 runtime/skill-context.ts 与 conversation 层
+ * 消费者 → 可用工具总览（装配逻辑分别在 runtime/session-assembly.ts 与 conversation 层
  * sub-agent.ts，本文件集中维护其中跨模块引用的名称常量与裁剪集合）：
  * - chat 命令：内置工具（剔除 WRITE_TOOL_NAMES）+ load_skill；固定不装配 bash、MCP、
  *   write_todos 与 delegate_task（只读问答）

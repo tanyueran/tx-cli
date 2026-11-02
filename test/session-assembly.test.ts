@@ -2,8 +2,8 @@ import { describe, it, expect } from "vitest";
 
 import {
   MCP_INLINE_TOOL_LIMIT,
-  setupSkillContext,
-} from "../src/core/conversation/common/runtime/skill-context";
+  assembleSessionContext,
+} from "../src/core/conversation/common/runtime/session-assembly";
 import type { Tool } from "../src/core/tools/types";
 
 /**
@@ -47,7 +47,7 @@ function getDiscovery(context: { tools: Tool[] }): Tool {
 
 describe("MCP 工具按需暴露", () => {
   it("MCP 工具数不超过阈值时全量下发，不装配发现工具", () => {
-    const context = setupSkillContext({
+    const context = assembleSessionContext({
       basePrompt: "测试",
       extraTools: makeMcpTools(MCP_INLINE_TOOL_LIMIT),
     });
@@ -65,7 +65,7 @@ describe("MCP 工具按需暴露", () => {
 
   it("MCP 工具数超过阈值时折叠为发现工具，执行侧仍持全量", () => {
     const total = MCP_INLINE_TOOL_LIMIT + 1;
-    const context = setupSkillContext({
+    const context = assembleSessionContext({
       basePrompt: "测试",
       extraTools: makeMcpTools(total),
     });
@@ -85,7 +85,7 @@ describe("MCP 工具按需暴露", () => {
   });
 
   it("发现工具支持关键词与服务器过滤", async () => {
-    const context = setupSkillContext({
+    const context = assembleSessionContext({
       basePrompt: "测试",
       extraTools: [
         makeMcpTool("mcp__chrome__navigate", "chrome"),
@@ -106,7 +106,7 @@ describe("MCP 工具按需暴露", () => {
   });
 
   it("激活后工具进入下发清单且幂等，未知名称给出提示", async () => {
-    const context = setupSkillContext({
+    const context = assembleSessionContext({
       basePrompt: "测试",
       extraTools: makeMcpTools(MCP_INLINE_TOOL_LIMIT + 1),
     });
@@ -127,7 +127,7 @@ describe("MCP 工具按需暴露", () => {
   });
 
   it("未激活的 MCP 工具仍可被执行侧直接调用", async () => {
-    const context = setupSkillContext({
+    const context = assembleSessionContext({
       basePrompt: "测试",
       extraTools: makeMcpTools(MCP_INLINE_TOOL_LIMIT + 1),
     });

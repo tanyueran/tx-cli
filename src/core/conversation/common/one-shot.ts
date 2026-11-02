@@ -6,21 +6,22 @@ import {
 import type { ConversationModeConfig } from "./runtime/mode";
 import { printWarnings } from "../../../shared/warnings";
 import {
-  resolveThinkingLevel,
-  resolveThinkingStyle,
-  resolveResponsesThinkingFields,
-  warnThinkingFallback,
-  addUsage,
-  createEmptyUsage,
+  createUsageAccumulator,
   formatUsageTable,
   isEmptyUsage,
+  resolveResponsesThinkingFields,
+  resolveThinkingLevel,
+  resolveThinkingStyle,
+  warnThinkingFallback,
 } from "../../llm";
-import { attachSubAgentTools } from "./turn/sub-agent";
+import { attachSubAgentIfEnabled } from "./turn/sub-agent";
 import type { SandboxCliOptions } from "../../sandbox";
 import type {
   LlmConfig,
+  LlmPricing,
   ResponseHistoryItem,
   ThinkingLevel,
+  ThinkingStyle,
   TokenUsage,
 } from "../../llm/types";
 
@@ -40,11 +41,69 @@ export interface OneShotConversationOptions {
   cliSandboxOptions?: SandboxCliOptions;
 }
 
+/** 单次会话的思考配置：档位、协议风格与 Responses 扩展字段（一次性解析，会话内不变） */
+interface OneShotThinking {
+  /** 生效思考档位 */
+  level: ThinkingLevel;
+  /** 思考协议风格 */
+  style: ThinkingStyle;
+  /** Responses API 思考扩展字段 */
+  fields: Record<string, unknown> | undefined;
+}
+
+/**
+ * 解析单次会话的思考配置：CLI 档位 → 配置默认 → 人设缺省，
+ * 并打印服务能力折算警告（服务不支持分档思考时避免用户误以为档位真实生效）
+ * @param {LlmConfig} llmConfig - LLM 接入配置
+ * @param {ConversationModeConfig} modeConfig - 模式配置（提供默认档位回退）
+ * @param {ThinkingLevel} [cliLevel] - 命令行指定的思考档位
+ * @returns {OneShotThinking} 解析后的思考配置
+ */
+function resolveOneShotThinking(
+  llmConfig: LlmConfig,
+  modeConfig: ConversationModeConfig,
+  cliLevel?: ThinkingLevel,
+): OneShotThinking {
+  const level = resolveThinkingLevel({
+    cliLevel,
+    llmConfig,
+    fallback: modeConfig.defaultThinkingLevel,
+  });
+  const style = resolveThinkingStyle(llmConfig);
+  warnThinkingFallback(level, style);
+  return {
+    level,
+    style,
+    fields: resolveResponsesThinkingFields({
+      thinkingLevel: level,
+      thinkingStyle: style,
+      thinkingEffortMap: llmConfig.thinkingEffortMap,
+    }),
+  };
+}
+
+/**
+ * 单次会话收尾：补换行避免后续输出粘在残缺的流式输出之后，再打印本次用量表格
+ * 服务未返回 usage（无有效用量）时不输出噪音
+ * @param {TokenUsage} usage - 本次会话累计用量（含子 Agent）
+ * @param {LlmPricing} [pricing] - 费用单价配置
+ * @returns {void}
+ */
+function printOneShotUsage(usage: TokenUsage, pricing?: LlmPricing): void {
+  process.stdout.write("\n");
+  if (!isEmptyUsage(usage)) {
+    console.log(
+      formatUsageTable([{ label: "本次", usage, emphasis: true }], pricing),
+    );
+  }
+}
+
 /**
  * 单次会话（chat、agent 命令共用的单次入口）：走 Responses API（无状态模式）+ agentic loop
  *
+ * 执行步骤：解析思考配置 → 创建会话运行时 → 输出装配警告 → 装配会话工具带
+ * → 执行对话回合 → 收尾（用量表格 + 释放运行时）；
  * 对话历史仅在本函数内存活，会话结束即丢弃；
- * 服务不支持分档思考时先打印折算警告，避免用户误以为档位真实生效；
  * 技能扫描与装配阶段警告（沙箱降级、Provider 不可用、MCP 连接失败等）在对话开始前一并输出
  *
  * @param {OneShotConversationOptions} options - 入参对象（字段说明见接口定义）
@@ -58,14 +117,9 @@ export async function runOneShotConversation({
   mcpEnabled = true,
   cliSandboxOptions,
 }: OneShotConversationOptions): Promise<void> {
-  const effectiveThinkingLevel = resolveThinkingLevel({
-    cliLevel: thinkingLevel,
-    llmConfig: llmConfig,
-    fallback: modeConfig.defaultThinkingLevel,
-  });
-  const thinkingStyle = resolveThinkingStyle(llmConfig);
-  warnThinkingFallback(effectiveThinkingLevel, thinkingStyle);
-  // 会话运行时（MCP 连接与沙箱）随会话创建，finally 中统一释放；工具带装配由模式决定
+  // 步骤 1：解析思考配置（档位回退 + 协议风格 + 扩展字段）
+  const thinking = resolveOneShotThinking(llmConfig, modeConfig, thinkingLevel);
+  // 步骤 2：创建会话运行时（MCP 连接与沙箱），finally 中统一释放；工具带装配由模式决定
   const runtime = await createConversationRuntime(modeConfig.basePrompt, {
     mcpEnabled,
     bashEnabled: modeConfig.bashEnabled,
@@ -73,67 +127,39 @@ export async function runOneShotConversation({
     writeToolsEnabled: modeConfig.writeToolsEnabled,
     cliSandboxOptions,
   });
-  // 本次会话的 token 用量：agentic 循环的多次请求经回调累加
-  let totalUsage: TokenUsage = createEmptyUsage();
+  // 本次会话的 token 用量：主循环与子 Agent 等多来源经累加器汇入
+  const usage = createUsageAccumulator();
   try {
-    const {
-      systemPrompt,
-      tools: runtimeTools,
-      advertisedTools: runtimeAdvertisedTools,
-      scanWarnings,
-      catalog,
-    } = runtime.skill;
-    // 与 REPL 面板保持一致：技能扫描警告与装配阶段警告一并输出
-    printWarnings([...scanWarnings, ...runtime.bootWarnings]);
-    // 子 Agent 工具按模式装配：单次会话的思考档位固定，扩展字段直接闭包捕获
-    const thinkingFields = resolveResponsesThinkingFields({
-      thinkingLevel: effectiveThinkingLevel,
-      thinkingStyle,
-      thinkingEffortMap: llmConfig.thinkingEffortMap,
+    // 步骤 3：输出装配阶段警告（与 REPL 面板保持一致）
+    printWarnings([...runtime.assembly.scanWarnings, ...runtime.bootWarnings]);
+    // 步骤 4：装配会话工具带（子 Agent 按模式开关；单次会话档位固定，扩展字段直接闭包捕获）
+    const { tools, advertisedTools, handle } = attachSubAgentIfEnabled({
+      enabled: modeConfig.subAgentEnabled,
+      llmConfig,
+      tools: runtime.assembly.tools,
+      advertisedTools: runtime.assembly.advertisedTools,
+      skills: runtime.assembly.catalog.list(),
+      extraBody: () => thinking.fields,
     });
-    const attached = modeConfig.subAgentEnabled
-      ? attachSubAgentTools({
-          llmConfig,
-          tools: runtimeTools,
-          advertisedTools: runtimeAdvertisedTools,
-          skills: catalog.list(),
-          extraBody: () => thinkingFields,
-        })
-      : undefined;
-    const tools = attached?.tools ?? runtimeTools;
-    const advertisedTools = attached?.advertisedTools ?? runtimeAdvertisedTools;
     // 子 Agent 的 LLM 用量计入「本次」统计
-    attached?.handle.setUsageReporter((usage) => {
-      totalUsage = addUsage(totalUsage, usage);
-    });
-    // 单次会话的历史仅在本函数内存活：不跨次共享，会话结束即丢弃
+    handle?.setUsageReporter((delta) => usage.add(delta));
+    // 步骤 5：执行唯一的对话回合；历史仅在本函数内存活，不跨次共享
     const history: ResponseHistoryItem[] = [];
     await executeConversationTurn({
       llmConfig,
-      thinkingLevel: effectiveThinkingLevel,
-      thinkingStyle,
+      thinkingLevel: thinking.level,
+      thinkingStyle: thinking.style,
       history,
       userInput,
-      instructions: systemPrompt,
+      instructions: runtime.assembly.systemPrompt,
       tools,
       advertisedTools,
       maxIterations: modeConfig.maxIterations,
-      onUsage: (usage) => {
-        totalUsage = addUsage(totalUsage, usage);
-      },
+      onUsage: (delta) => usage.add(delta),
     });
   } finally {
-    // 成功与异常路径都先补换行，避免后续输出（错误提示等）粘在残缺的流式输出之后
-    process.stdout.write("\n");
-    // 有用量时打印本次会话的 token 与费用估算（服务未返回 usage 时不输出噪音）
-    if (!isEmptyUsage(totalUsage)) {
-      console.log(
-        formatUsageTable(
-          [{ label: "本次", usage: totalUsage, emphasis: true }],
-          llmConfig.pricing,
-        ),
-      );
-    }
+    // 步骤 6：收尾（补换行 + 用量表格），随后释放运行时
+    printOneShotUsage(usage.current, llmConfig.pricing);
     await disposeConversationRuntime(runtime);
   }
 }

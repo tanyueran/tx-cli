@@ -17,7 +17,7 @@ export type { ReplOptions, ReplConversationOptions } from "./repl/repl";
 export { runOneShotConversation } from "./one-shot";
 export type { OneShotConversationOptions } from "./one-shot";
 export type { ConversationModeConfig } from "./runtime/mode";
-export { setupSkillContext } from "./runtime/skill-context";
+export { assembleSessionContext } from "./runtime/session-assembly";
 export {
   attachSubAgentTools,
   createSubAgentRunner,
@@ -33,10 +33,10 @@ export type {
   SubAgentToolHandle,
 } from "./turn/sub-agent";
 export type {
-  SkillContext,
-  SkillAssemblyOptions,
-  SetupSkillContextOptions,
-} from "./runtime/skill-context";
+  SessionAssembly,
+  SessionAssemblyOptions,
+  AssembleSessionContextOptions,
+} from "./runtime/session-assembly";
 export {
   createConversationRuntime,
   disposeConversationRuntime,

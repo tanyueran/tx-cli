@@ -130,6 +130,6 @@
 - **静默运行**：子 Agent 的正文与思考不渲染，只在开始/结束/软收敛各打一行弱化提示——否则「隔离输出」的目标就落空了。
 - **压缩按工具轮次切分**：子 Agent 历史只有一条用户消息（任务），按用户消息切分的主会话策略永不触发；`tool-rounds` 策略保留子任务消息与最近 N 轮工具交互，切分点落在调用块边界（绝不拆散 `function_call` / `function_call_output` 配对）。检索型子任务正是历史最易膨胀的场景，压缩收益比主会话更大。
 - **用量不丢、也不干扰压缩**：子 Agent 的 usage 通过会话层每轮注入的 `setUsageReporter` 计入「本轮 / 累计」，但刻意不更新主会话的 `lastInputTokens`：压缩阈值只应按主会话请求的口径判断，子 Agent 的上下文规模是另一个独立维度。
-- **装配在会话入口而非技能装配层**：`delegate_task` 依赖 `llmConfig` 与当前思考档位，无法在 `setupSkillContext`（只有沙箱信息）阶段创建，因此由 `one-shot.ts` / `repl.ts` 装配；REPL 用闭包读取当前档位，`/think` 切换后子 Agent 的思考档位同步变化。
+- **装配在会话入口而非技能装配层**：`delegate_task` 依赖 `llmConfig` 与当前思考档位，无法在 `assembleSessionContext`（只有沙箱信息）阶段创建，因此由 `one-shot.ts` / `repl.ts` 装配；REPL 用闭包读取当前档位，`/think` 切换后子 Agent 的思考档位同步变化。
 
 **代价**：`task` 必须自包含（子 Agent 看不到主会话历史），主模型的描述负担变重；且子 Agent 继承写权限，误操作风险与主会话相同（仍受审批与沙箱约束）。
