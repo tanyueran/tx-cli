@@ -38,6 +38,14 @@ interface AgentLoopOptions {
   onToolCall?: (call: ToolCall, tool?: Tool) => void;
   /** 首次进入软收敛轮（达到轮数上限）时的回调，用于向用户提示模型将被迫直接作答 */
   onSoftConverge?: () => void;
+  /**
+   * 每次迭代发起请求前的回调（iteration 从 0 起），用于在安全点压缩上下文：
+   * 此时上一轮工具调用结果已回传、历史中不存在未配对的 function_call
+   * @param {number} iteration - 当前迭代序号（0 为首轮）
+   * @param {ToolResult[]} toolResults - 即将回传给模型的工具结果（首轮为空）
+   * @returns {Promise<void>}
+   */
+  beforeIteration?: (iteration: number, toolResults: ToolResult[]) => Promise<void>;
 }
 
 /**
@@ -62,6 +70,8 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<string> {
     let toolResults: ToolResult[] = [];
 
     for (let iteration = 0; ; iteration++) {
+      // 每次请求前的安全点：上一轮工具结果已回传，可压缩历史而不破坏工具调用配对
+      await options.beforeIteration?.(iteration, toolResults);
       // 超出轮数上限后禁用工具，软收敛为直接作答
       const toolsDisabled = iteration >= maxIterations;
       if (toolsDisabled) {

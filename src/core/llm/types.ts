@@ -16,6 +16,27 @@ export interface LlmConfig {
   thinkingEffortMap?: Partial<Record<ThinkingLevel, string>>;
   /** 费用单价配置（可选）：未配置时只统计 token，不估算费用 */
   pricing?: LlmPricing;
+  /** 上下文自动压缩配置（可选）：未配置 maxContextTokens 时不启用压缩 */
+  context?: LlmContextConfig;
+}
+
+/**
+ * 上下文自动压缩配置
+ * OpenAI 兼容端点不返回模型上下文窗口元数据，因此窗口上限需显式配置；
+ * 未配置 maxContextTokens 时整个压缩功能关闭（保持原有行为）
+ */
+export interface LlmContextConfig {
+  /** 模型上下文窗口上限（token）：压缩判定的基准 */
+  maxContextTokens?: number;
+  /**
+   * 触发压缩的阈值：0-1 之间按窗口上限的比例折算，大于 1 视为绝对 token 数
+   * 缺省 0.7（达到窗口的 70% 时压缩）
+   */
+  compactAt?: number;
+  /** 压缩后保留的最近对话轮数（按用户提问计，至少 1 轮），缺省 4 轮 */
+  keepRecentTurns?: number;
+  /** 摘要最大字符数，缺省 2000；超出截断，避免摘要本身撑大上下文 */
+  summaryMaxChars?: number;
 }
 
 /**

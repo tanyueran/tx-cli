@@ -75,6 +75,7 @@ tx-cli chat --think low
 | `thinkingStyle` | 否 | 思考协议风格：`reasoning_effort` \| `thinking` \| `enable_thinking` \| `none`，缺省按 `baseUrl` 推断（见上方协议风格表） |
 | `thinkingEffortMap` | 否 | 档位 → 服务端实际值映射（适配仅支持部分档位的服务） |
 | `pricing` | 否 | 费用单价（每百万 token 的 `inputPerMillion` / `outputPerMillion`、可选 `currency`），未配置时只统计 token（说明见 [项目架构](./ARCHITECTURE.md#token-用量统计与费用估算)） |
+| `context` | 否 | 上下文自动压缩：`maxContextTokens`（必填，模型上下文窗口，缺省不启用）、`compactAt`（触发比例，缺省 `0.7`；`>1` 视为绝对 token 阈值）、`keepRecentTurns`（保留最近轮数，缺省 `4`）、`summaryMaxChars`（摘要字数上限，缺省 `2000`）（说明见 [项目架构](./ARCHITECTURE.md#上下文自动压缩)） |
 
 `llm` 段示例（写入 `~/.tx-cli/config.json`，项目配置可覆盖/合并同名字段）：
 
@@ -89,7 +90,14 @@ tx-cli chat --think low
     // 思考协议风格，缺省按 baseUrl 推断
     "thinkingStyle": "reasoning_effort",
     // 可选：档位 → 服务端实际值的高级映射（适配仅支持部分档位的服务）
-    "thinkingEffortMap": { "low": "high", "medium": "high", "high": "high" }
+    "thinkingEffortMap": { "low": "high", "medium": "high", "high": "high" },
+    // 可选：上下文自动压缩（不配置 maxContextTokens 则不启用，chat / agent 共用）
+    "context": {
+      "maxContextTokens": 128000,
+      "compactAt": 0.7,
+      "keepRecentTurns": 4,
+      "summaryMaxChars": 2000
+    }
   }
 }
 ```
