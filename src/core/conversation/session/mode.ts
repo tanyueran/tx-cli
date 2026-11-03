@@ -1,4 +1,4 @@
-import type { ThinkingLevel } from "../../../llm/types";
+import type { ThinkingLevel } from "../../llm/types";
 
 /** 对话模式配置：chat、agent 命令的模式差异项，会话入口（单次/多轮）据此装配运行时 */
 export interface ConversationModeConfig {
@@ -16,8 +16,9 @@ export interface ConversationModeConfig {
   /** 任务清单工具（write_todos）是否装配；agent 模式开启，chat 只读问答不装配 */
   todosEnabled?: boolean;
   /**
-   * 子 Agent 工具（delegate_task）是否装配；agent 模式开启，chat 只读问答不装配
-   * 装配后模型可派生独立上下文的子任务，仅结论回传主上下文
+   * 子 Agent 工具带（delegate_task + task_status + task_stop）是否装配；
+   * agent 模式开启，chat 只读问答不装配
+   * 装配后模型可派生独立上下文的子任务（同步等结论或后台转执行），仅结论回传主上下文
    */
   subAgentEnabled?: boolean;
   /** 写侧内置工具（write_file / edit_file）是否装配；未指定时装配（由沙箱档位兜底），chat 模式固定传 false */

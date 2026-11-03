@@ -7,15 +7,15 @@ import {
 } from "./renderer";
 import { formatCompactionNotice, maybeCompactHistory } from "./compaction";
 import { runAgentLoop, DEFAULT_MAX_ITERATIONS, type RunTurn } from "./loop";
-import { resolveCompactionConfig, resolveResponsesThinkingFields } from "../../../llm";
-import type { Tool } from "../../../tools";
+import { resolveCompactionConfig, resolveResponsesThinkingFields } from "../../llm";
+import type { Tool } from "../../tools";
 import type {
   LlmConfig,
   ResponseHistoryItem,
   ThinkingLevel,
   ThinkingStyle,
   TokenUsage,
-} from "../../../llm/types";
+} from "../../llm/types";
 
 /** executeConversationTurn 入参对象 */
 export interface ConversationTurnOptions {
@@ -39,6 +39,12 @@ export interface ConversationTurnOptions {
   maxIterations?: number;
   /** token 用量回调（可选）：每次 LLM 请求返回 usage 时触发，供调用方累计展示 */
   onUsage?: (usage: TokenUsage) => void;
+  /**
+   * 压缩摘要请求的用量回调（可选）：只供统计累计，不参与 lastInputTokens 口径——
+   * 摘要的 inputTokens ≈ 被压缩段原大小（仍超阈值），若回流到主会话的
+   * lastInputTokens 会让后续压缩判定误判，造成刚生成的摘要被再次压缩
+   */
+  onCompactionUsage?: (usage: TokenUsage) => void;
 }
 
 /**
@@ -103,7 +109,9 @@ export async function executeConversationTurn(
         history: options.history,
         config: compactionConfig,
         lastInputTokens,
-        onUsage: options.onUsage,
+        // 摘要用量走独立回调（只累计），不走 onUsage——后者的语义是「真实请求口径」，
+        // REPL 侧会在其中更新 lastInputTokens，摘要用量回流会引发重复压缩
+        onUsage: options.onCompactionUsage,
       });
       const notice = formatCompactionNotice(outcome);
       if (notice) {

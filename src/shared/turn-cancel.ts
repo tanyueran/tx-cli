@@ -34,6 +34,44 @@ export async function runWithTurnCancellation<T>(
 }
 
 /**
+ * 在脱离当前回合取消上下文的全新上下文中运行回调：
+ * 每个调用持有独立的取消状态，与外层回合的取消标记互不影响
+ * 用途：后台子 Agent（delegate_task background=true）派生时脱离主回合——
+ * 若沿用嵌套复用语义，主回合取消（Ctrl+C）会连带短路后台任务的排队工具与审批点，
+ * 与「后台任务跨回合存活」的语义冲突；后台任务自身的停止由调度器的 shouldStop 钩子负责
+ * @template T - 回调返回值类型
+ * @param {() => Promise<T>} fn - 回调（后台任务的 agentic 循环）
+ * @returns {Promise<T>} 回调结果
+ */
+export function runDetachedFromTurnCancellation<T>(
+  fn: () => Promise<T>,
+): Promise<T> {
+  return turnCancellationStorage.run({ cancelled: false }, fn);
+}
+
+/** 后台任务作用域存储：标记执行链属于后台任务（与主回合抢终端的交互流程互斥） */
+const backgroundScopeStorage = new AsyncLocalStorage<true>();
+
+/**
+ * 在后台任务作用域内运行回调：审批问询等交互点据此拒绝读取 stdin，
+ * 避免后台子任务的审批弹窗与 REPL 输入框抢终端
+ * @template T - 回调返回值类型
+ * @param {() => Promise<T>} fn - 回调（后台任务的 agentic 循环）
+ * @returns {Promise<T>} 回调结果
+ */
+export function runInBackgroundScope<T>(fn: () => Promise<T>): Promise<T> {
+  return backgroundScopeStorage.run(true, fn);
+}
+
+/**
+ * 判断当前执行链是否处于后台任务作用域
+ * @returns {boolean} 后台任务上下文内为 true
+ */
+export function isInBackgroundScope(): boolean {
+  return backgroundScopeStorage.getStore() === true;
+}
+
+/**
  * 标记当前回合已取消：由捕获 CancelError 的回合层调用（loop 的工具执行 wrapper）
  * 当前执行链不在回合上下文内时为 no-op
  * @returns {void}

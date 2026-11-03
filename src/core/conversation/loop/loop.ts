@@ -1,11 +1,11 @@
-import { CancelError, CliError } from "../../../../shared/errors";
+import { CancelError, CliError } from "../../../shared/errors";
 import {
   markTurnCancelled,
   runWithTurnCancellation,
-} from "../../../../shared/turn-cancel";
-import type { ToolCall } from "../../../llm/types";
-import { executeToolCall } from "../../../tools";
-import type { Tool, ToolResult } from "../../../tools";
+} from "../../../shared/turn-cancel";
+import type { ToolCall } from "../../llm/types";
+import { executeToolCall } from "../../tools";
+import type { Tool, ToolResult } from "../../tools";
 
 /** 单回合结果：模型的最终回答，或新的工具调用请求 */
 export type TurnOutcome =

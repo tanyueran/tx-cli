@@ -15,7 +15,7 @@ import {
 import {
   formatCompactionNotice,
   maybeCompactHistory,
-} from "../src/core/conversation/common/turn/compaction";
+} from "../src/core/conversation/loop/compaction";
 import { loadLlmConfig } from "../src/core/llm/config";
 import type {
   LlmConfig,

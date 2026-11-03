@@ -6,7 +6,7 @@ import { createEmptyUsage } from "../src/core/llm";
 import {
   formatSessionMarkdown,
   writeSessionMarkdown,
-} from "../src/core/conversation/common/repl/session-export";
+} from "../src/core/conversation/repl/session-export";
 import type {
   ResponseHistoryItem,
   TokenUsage,

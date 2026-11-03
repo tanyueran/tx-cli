@@ -1,6 +1,6 @@
 import pico from "picocolors";
-import type { ToolCall } from "../../../llm/types";
-import type { Tool } from "../../../tools";
+import type { ToolCall } from "../../llm/types";
+import type { Tool } from "../../tools";
 
 /** 思考/loading 状态行的 spinner 动画帧（Claude Code 风格星形序列） */
 const SPINNER_FRAMES = ["✻", "✽", "✶", "✷", "✸", "✹"];

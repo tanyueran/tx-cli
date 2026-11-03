@@ -52,11 +52,11 @@ export function registerChatCommand(program: Command): void {
   program
     .command("chat [question...]")
     .description(
-      "与大模型轻量只读问答：传入问题为单次问答，不带参数进入多轮对话模式（执行任务请用 agent 命令）",
+      "与大模型轻量只读问答：传入问题为单次问答，不带参数进入多轮对话模式（执行任务请用 agent 命令）；问题文本以 - 开头时需用 -- 分隔，如 tx chat -- --什么是指令",
     )
     .option(
       "--think <level>",
-      `思考档位：${THINKING_LEVELS.join(" | ")}，优先级：命令行 > 项目配置 > 全局配置（chat 最终默认 low，仅对本次对话生效）`,
+      `思考档位：${THINKING_LEVELS.join(" | ")}（大小写不敏感），优先级：命令行 > 项目配置 > 全局配置（chat 最终默认 low，仅对本次对话生效）`,
     )
     .action(async (questionSegments: string[], chatOptions: ChatOptions) => {
       await runChatAction(questionSegments, chatOptions);

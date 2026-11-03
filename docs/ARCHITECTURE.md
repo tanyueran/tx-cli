@@ -51,10 +51,14 @@ src/
 │   ├── conversation/          # 对话编排（chat / agent 命令共用机制，模式即配置）
 │   │   ├── chat.ts            #   chat 命令实现：CHAT_MODE + one-shot（单次）/ repl（多轮）入口
 │   │   ├── agent.ts           #   agent 命令实现：AGENT_MODE + one-shot（单次）/ repl（多轮）入口
-│   │   └── common/            #   会话机制：one-shot / repl 入口、turn/（execute-turn 回合
-│   │                          #   wiring、agentic loop、Responses 适配、流式渲染、上下文压缩、
-│   │                          #   子 Agent）、runtime/（运行时装配、模式配置、技能装配）、
-│   │                          #   repl/（输入与斜杠命令）
+│   │   ├── one-shot.ts        #   单次会话入口（one-shot，agent / chat 共用）
+│   │   ├── session/           #   会话装配层：运行时装配（runtime）、模式配置（mode）、
+│   │   │                      #   技能与提示词装配（session-assembly / prompt）
+│   │   ├── loop/              #   回合执行层：execute-turn 回合 wiring、agentic loop、
+│   │   │                      #   Responses 适配、流式渲染、上下文压缩
+│   │   ├── sub-agent/         #   子 Agent：attach（执行核 runner）、dispatcher（调度器）、
+│   │   │                      #   tools（delegate_task / task_status / task_stop 工具壳）
+│   │   └── repl/              #   多轮终端交互：主循环、输入、斜杠命令、会话导出
 │   ├── tools/                 # 工具系统
 │   │   ├── types.ts           #   Tool 接口（含 permission 权限声明、renderCall 调用渲染扩展点）
 │   │   ├── executor.ts        #   执行器：参数解析、超时、8KB 截断
@@ -101,7 +105,7 @@ flowchart LR
 
 ### 模式即配置
 
-chat 与 agent 共用同一套会话机制（单次 one-shot / 多轮 repl、agentic loop、流式渲染、技能装配），两个命令的差异全部收敛为一份 `ConversationModeConfig`（`core/conversation/common/runtime/mode.ts`），由 `chat.ts` / `agent.ts` 各自提供，传给公共的 `runOneShotConversation` / `runReplConversation`——新增一种模式不需要新写编排逻辑。
+chat 与 agent 共用同一套会话机制（单次 one-shot / 多轮 repl、agentic loop、流式渲染、技能装配），两个命令的差异全部收敛为一份 `ConversationModeConfig`（`core/conversation/session/mode.ts`），由 `chat.ts` / `agent.ts` 各自提供，传给公共的 `runOneShotConversation` / `runReplConversation`——新增一种模式不需要新写编排逻辑。
 
 **配置字段：**
 
@@ -132,7 +136,7 @@ chat 与 agent 共用同一套会话机制（单次 one-shot / 多轮 repl、age
 
 ### agentic loop（runAgentLoop）
 
-`core/conversation/common/turn/loop.ts` 的 `runAgentLoop` 是所有会话的心脏：整体运行在回合级取消上下文中（见下文），循环体不感知任何 LLM 细节，每轮通过 `runTurn(toolResults, toolsDisabled)` 回调向模式适配器（`responses-turn.ts`）要结果。单次会话与 REPL 每轮都经共用入口 `executeConversationTurn`（`turn/execute-turn.ts`）完成「渲染器 + Responses 回合 + agentic loop」的统一 wiring：
+`core/conversation/loop/loop.ts` 的 `runAgentLoop` 是所有会话的心脏：整体运行在回合级取消上下文中（见下文），循环体不感知任何 LLM 细节，每轮通过 `runTurn(toolResults, toolsDisabled)` 回调向模式适配器（`responses-turn.ts`）要结果。单次会话与 REPL 每轮都经共用入口 `executeConversationTurn`（`loop/execute-turn.ts`）完成「渲染器 + Responses 回合 + agentic loop」的统一 wiring：
 
 1. **请求回合**：`runTurn` 把上一轮的工具结果追加进历史、调用 LLM，返回两种 `TurnOutcome` 之一——`reply`（纯文本回答）或 `tool_calls`（工具调用清单）。
 2. **正常退出**：收到 `reply` 即结束循环，返回最终回复。
@@ -315,7 +319,7 @@ interface Tool extends ToolDefinition {
 
 ### 工具装配（assembleSessionContext）
 
-`core/conversation/common/runtime/session-assembly.ts` 按固定顺序拼接工具清单，**不支持运行时动态注册**：
+`core/conversation/session/session-assembly.ts` 按固定顺序拼接工具清单，**不支持运行时动态注册**：
 
 1. **内置静态清单**（`tools/builtin/index.ts`）：`read_file`、`list_dir`、`glob`、`grep`、`web_search`、`web_fetch`、`write_file`、`edit_file` 共 8 个；模式关闭写侧工具时（chat）按名单剔除 `write_file` / `edit_file`；
 2. **`load_skill`**：仅当 `discoverSkills()` 扫描到技能时装配——空技能时不多下发无用工具定义；

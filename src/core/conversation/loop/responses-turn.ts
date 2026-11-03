@@ -1,11 +1,11 @@
-import { streamResponse } from "../../../llm";
+import { streamResponse } from "../../llm";
 import type {
   LlmConfig,
   ResponseHistoryItem,
   TokenUsage,
   ToolDefinition,
-} from "../../../llm/types";
-import type { ToolResult } from "../../../tools";
+} from "../../llm/types";
+import type { ToolResult } from "../../tools";
 import type { RunTurn, TurnOutcome } from "./loop";
 
 /** Responses 回合函数创建参数 */

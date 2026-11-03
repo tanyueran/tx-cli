@@ -3,7 +3,7 @@ import { describe, it, expect } from "vitest";
 import {
   MCP_INLINE_TOOL_LIMIT,
   assembleSessionContext,
-} from "../src/core/conversation/common/runtime/session-assembly";
+} from "../src/core/conversation/session/session-assembly";
 import type { Tool } from "../src/core/tools/types";
 
 /**

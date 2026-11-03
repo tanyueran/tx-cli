@@ -1,4 +1,8 @@
-import type { ApprovalPolicy, SandboxLevel } from "../types";
+import type {
+  ApprovalPolicy,
+  SandboxLevel,
+  SandboxMissingAction,
+} from "../types";
 
 /** 全部合法沙箱档位（配置校验与提示用） */
 export const SANDBOX_LEVELS: readonly SandboxLevel[] = [
@@ -18,6 +22,14 @@ export const APPROVAL_POLICIES: readonly ApprovalPolicy[] = [
   "on-failure",
   // 从不询问
   "never",
+];
+
+/** 全部合法的沙箱不可用处置（CLI choices 与提示用） */
+export const SANDBOX_MISSING_ACTIONS: readonly SandboxMissingAction[] = [
+  // 降级为无隔离执行（规则与审批仍生效）
+  "allow",
+  // 失败关闭
+  "deny",
 ];
 
 /** sandbox 段的文件系统子配置 */

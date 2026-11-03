@@ -16,6 +16,7 @@ export type {
 export {
   SANDBOX_LEVELS,
   APPROVAL_POLICIES,
+  SANDBOX_MISSING_ACTIONS,
   DEFAULT_SANDBOX_CONFIG,
 } from "./config/schema";
 export type {

@@ -1,26 +1,27 @@
 /**
  * 会话装配：发现技能并装配对话所需的 system 提示词与工具带
- * 工具带来源固定拼接：内置工具 + load_skill + write_todos + bash + 外部工具（如 MCP），
- * 技能仅贡献 load_skill 工具与提示词中的技能元数据清单
+ * 工具带按「增量分段 + 统一合并」组织：各装配步骤只产出自己的工具片段，
+ * 在 assembleSessionContext 统一合并为完整工具集；子 Agent 工具（delegate_task 等）
+ * 由 attachSubAgentIfEnabled 在装配后增量并入两份列表
  */
 import {
   createLoadSkillTool,
   discoverSkills,
   SkillCatalog,
-} from "../../../skills";
+} from "../../skills";
 import {
   builtinTools,
   createTodoTool,
   WRITE_TOOL_NAMES,
   type Tool,
-} from "../../../tools";
-import type { TodoToolHandle } from "../../../tools";
-import { createBashTool } from "../../../tools/builtin/bash";
-import { wrapToolWithPermission } from "../../../tools/permission";
-import type { SandboxContext } from "../../../sandbox/runtime/sandbox-context";
-import { createMcpDiscoveryTool } from "../../../mcp/discovery-tool";
+} from "../../tools";
+import type { TodoToolHandle } from "../../tools";
+import { createBashTool } from "../../tools/builtin/bash";
+import { wrapToolWithPermission } from "../../tools/permission";
+import type { SandboxContext } from "../../sandbox/runtime/sandbox-context";
+import { createMcpDiscoveryTool } from "../../mcp/discovery-tool";
 import { buildSystemPrompt } from "./prompt";
-import { CliError } from "../../../../shared/errors";
+import { CliError } from "../../../shared/errors";
 
 /** MCP 工具内联下发阈值：超过该数量时折叠为 discover_mcp_tools 按需激活，避免每轮请求背负全部 schema */
 export const MCP_INLINE_TOOL_LIMIT = 8;
@@ -90,9 +91,10 @@ export interface AssembleSessionContextOptions {
 
 /**
  * 发现技能并装配对话所需的提示词与工具列表
- * 工具来源固定拼接：内置工具（随版本发布，chat 模式剔除 write_file / edit_file）+ load_skill（仅存在技能时）+ write_todos（agent 模式）+ bash（沙箱启用且 bash 开关未关闭时）+ 外部工具（如 MCP），
+ * 工具带按「增量分段 + 统一合并」装配：内置工具（随版本发布，chat 模式剔除 write_file / edit_file）、
+ * load_skill（仅存在技能时，避免空技能场景多下发一个无用工具定义）、write_todos（agent 模式）、
+ * bash（沙箱启用且 bash 开关未关闭时）各自产出片段，在此统一合并后再与外部工具（如 MCP）组合；
  * 不再支持运行时动态注册工具；
- * 仅当存在可用技能时才装配 load_skill，避免空技能场景多下发一个无用工具定义；
  * 传入沙箱上下文时对声明了 permission 的工具做权限门卫包装（chat 模式只读工具继续受 fs 边界管控）
  * @param {AssembleSessionContextOptions} options - 入参对象（basePrompt/extraTools/sandbox/assembly 字段说明见接口定义）
  * @returns {SessionAssembly} 装配结果
@@ -106,32 +108,41 @@ export function assembleSessionContext({
   const { skills, warnings: skillWarnings } = discoverSkills();
   const catalog = new SkillCatalog(skills);
   let todoHandle: TodoToolHandle | undefined;
-  // chat 只读模式剔除写侧工具：使只读语义由代码保证，不随沙箱档位或沙箱开关变化
-  const availableBuiltinTools =
+  // ---- 各装配步骤只产出自己的增量片段，最后统一合并为完整工具带 ----
+  // 片段一：内置静态工具；chat 只读模式剔除写侧工具，使只读语义由代码保证，不随沙箱档位或沙箱开关变化
+  const builtinSegment: Tool[] =
     assembly?.writeToolsEnabled === false
       ? builtinTools.filter((tool) => !WRITE_TOOL_NAMES.has(tool.name))
       : builtinTools;
-  const internalTools: Tool[] = [...availableBuiltinTools];
-  if (skills.length > 0) {
-    internalTools.push(createLoadSkillTool(catalog));
-  }
-  // 任务清单工具（write_todos）：agent 模式装配，工具实例闭包持有会话级清单状态（/todos 读取）
+  // 片段二：load_skill（仅存在技能时装配，避免空技能场景多下发一个无用工具定义）
+  const skillSegment: Tool[] =
+    skills.length > 0 ? [createLoadSkillTool(catalog)] : [];
+  // 片段三：write_todos（agent 模式装配，工具实例闭包持有会话级清单状态，/todos 读取）
+  const todoSegment: Tool[] = [];
   if (assembly?.todosEnabled) {
     todoHandle = createTodoTool();
-    internalTools.push(todoHandle.tool);
+    todoSegment.push(todoHandle.tool);
   }
-  // bash 依赖沙箱执行：无沙箱或显式关闭（chat 模式 / --no-bash）时不装配
+  // 片段四：bash 依赖沙箱执行，无沙箱或显式关闭（chat 模式 / --no-bash）时不装配
   const bashAssembled =
     sandbox !== undefined && (assembly?.bashEnabled ?? true);
-  if (bashAssembled) {
-    internalTools.push(createBashTool(sandbox));
-  }
-  ensureUniqueToolNames([...internalTools, ...extraTools]);
+  const bashSegment: Tool[] = bashAssembled ? [createBashTool(sandbox)] : [];
+  // 片段五：外部工具（如 MCP 工具，由运行时连接后传入）
+  const externalSegment: Tool[] = extraTools;
+
+  // ---- 统一合并：内部片段按固定顺序拼接成完整工具带 ----
+  const internalTools: Tool[] = [
+    ...builtinSegment,
+    ...skillSegment,
+    ...todoSegment,
+    ...bashSegment,
+  ];
+  ensureUniqueToolNames([...internalTools, ...externalSegment]);
   /** 按会话沙箱策略包装单个工具：声明了 permission 的工具经 L2 规则判定 + L3 审批门卫（无沙箱时原样返回） */
   const gate = (tool: Tool): Tool =>
     sandbox ? wrapToolWithPermission(tool, sandbox) : tool;
   const gatedInternal = internalTools.map(gate);
-  const gatedExtra = extraTools.map(gate);
+  const gatedExtra = externalSegment.map(gate);
   // 外部工具（MCP）超过阈值时折叠：常驻只下发 discover_mcp_tools，激活的工具经共享数组引用进入后续请求；
   // 执行侧始终持有全量工具（含未激活项），权限门卫与审批链不变
   const folded = gatedExtra.length > MCP_INLINE_TOOL_LIMIT;

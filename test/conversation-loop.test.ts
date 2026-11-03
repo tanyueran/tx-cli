@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
-import { runAgentLoop } from "../src/core/conversation/common/turn/loop";
-import type { RunTurn, TurnOutcome } from "../src/core/conversation/common/turn/loop";
+import { runAgentLoop } from "../src/core/conversation/loop/loop";
+import type { RunTurn, TurnOutcome } from "../src/core/conversation/loop/loop";
 import type { Tool } from "../src/core/tools";
 import type { ToolCall } from "../src/core/llm/types";
 import { CancelError } from "../src/shared/errors";

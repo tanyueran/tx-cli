@@ -1,10 +1,10 @@
-import { executeConversationTurn } from "./turn/execute-turn";
+import { executeConversationTurn } from "./loop/execute-turn";
 import {
   createConversationRuntime,
   disposeConversationRuntime,
-} from "./runtime/runtime";
-import type { ConversationModeConfig } from "./runtime/mode";
-import { printWarnings } from "../../../shared/warnings";
+} from "./session/runtime";
+import type { ConversationModeConfig } from "./session/mode";
+import { printWarnings } from "../../shared/warnings";
 import {
   createUsageAccumulator,
   formatUsageTable,
@@ -13,9 +13,9 @@ import {
   resolveThinkingLevel,
   resolveThinkingStyle,
   warnThinkingFallback,
-} from "../../llm";
-import { attachSubAgentIfEnabled } from "./turn/sub-agent";
-import type { SandboxCliOptions } from "../../sandbox";
+} from "../llm";
+import { attachSubAgentIfEnabled } from "./sub-agent/attach";
+import type { SandboxCliOptions } from "../sandbox";
 import type {
   LlmConfig,
   LlmPricing,
@@ -23,7 +23,7 @@ import type {
   ThinkingLevel,
   ThinkingStyle,
   TokenUsage,
-} from "../../llm/types";
+} from "../llm/types";
 
 /** runOneShotConversation 入参对象 */
 export interface OneShotConversationOptions {
@@ -132,18 +132,22 @@ export async function runOneShotConversation({
   try {
     // 步骤 3：输出装配阶段警告（与 REPL 面板保持一致）
     printWarnings([...runtime.assembly.scanWarnings, ...runtime.bootWarnings]);
-    // 步骤 4：装配会话工具带（子 Agent 按模式开关；单次会话档位固定，扩展字段直接闭包捕获）
-    const { tools, advertisedTools, handle } = attachSubAgentIfEnabled({
+    // 步骤 4：装配会话工具带（子 Agent 按模式开关，三个工具增量合并进 runtime.assembly 的两份列表；
+    // 单次会话档位固定，扩展字段直接闭包捕获；
+    // 后台派生禁用：单次会话执行完即退出，后台任务无处等待与收割结果）
+    const { handle } = attachSubAgentIfEnabled({
       enabled: modeConfig.subAgentEnabled,
       llmConfig,
       tools: runtime.assembly.tools,
       advertisedTools: runtime.assembly.advertisedTools,
       skills: runtime.assembly.catalog.list(),
       extraBody: () => thinking.fields,
+      backgroundEnabled: false,
     });
     // 子 Agent 的 LLM 用量计入「本次」统计
     handle?.setUsageReporter((delta) => usage.add(delta));
-    // 步骤 5：执行唯一的对话回合；历史仅在本函数内存活，不跨次共享
+    // 步骤 5：执行唯一的对话回合；工具集单一事实源为 runtime.assembly（已含子 Agent 增量），
+    // 历史仅在本函数内存活，不跨次共享
     const history: ResponseHistoryItem[] = [];
     await executeConversationTurn({
       llmConfig,
@@ -152,10 +156,12 @@ export async function runOneShotConversation({
       history,
       userInput,
       instructions: runtime.assembly.systemPrompt,
-      tools,
-      advertisedTools,
+      tools: runtime.assembly.tools,
+      advertisedTools: runtime.assembly.advertisedTools,
       maxIterations: modeConfig.maxIterations,
       onUsage: (delta) => usage.add(delta),
+      // 压缩摘要请求的用量同样计入「本次」统计，且不参与 lastInputTokens 口径
+      onCompactionUsage: (delta) => usage.add(delta),
     });
   } finally {
     // 步骤 6：收尾（补换行 + 用量表格），随后释放运行时

@@ -1,9 +1,9 @@
 /**
  * conversation/agent：agent 命令的任务执行能力（Agent 模式）
- * 模式差异收敛为 AGENT_MODE_CONFIG 配置，单次/多轮机制复用 common
+ * 模式差异收敛为 AGENT_MODE_CONFIG 配置，单次/多轮机制复用 session/loop/repl 分层
  */
-import { runOneShotConversation, runReplConversation } from "./common";
-import type { ConversationModeConfig } from "./common/runtime/mode";
+import { runOneShotConversation, runReplConversation } from ".";
+import type { ConversationModeConfig } from "./session/mode";
 import type { SandboxCliOptions } from "../sandbox";
 import type { LlmConfig, ThinkingLevel } from "../llm/types";
 
@@ -18,6 +18,9 @@ export const SYSTEM_PROMPT =
   "当某个子任务边界清晰、可独立完成且过程会产生大量无关输出（如大范围检索、批量分析）时，" +
   "可调用 delegate_task 派生子 Agent 执行——它看不到主会话历史，只回传结论，" +
   "task 必须自包含（目标、涉及路径、期望产出），简单任务自己做，不必为每一步派生；" +
+  "长耗时且无需立即结论的子任务（大范围检索、批量分析、跑测试）用 background=true 转后台执行：" +
+  "派生后立即返回，继续与用户对话或做其他事，任务完成后结论会自动注入对话，" +
+  "期间可用 task_status 查询进度、task_stop 停止任务；" +
   "完成后简要汇报：做了什么、改了哪些文件、遗留什么风险。";
 
 /**
@@ -47,7 +50,7 @@ interface OneShotAgentOptions {
 }
 
 /**
- * agent 命令的单次任务执行（Agent 模式入口），流程复用 common 的 runOneShotConversation
+ * agent 命令的单次任务执行（Agent 模式入口），流程复用会话机制的 runOneShotConversation
  * @param {OneShotAgentOptions} options - 入参对象（字段说明见接口定义）
  * @returns {Promise<void>}
  */
@@ -81,7 +84,7 @@ interface ReplAgentOptions {
 }
 
 /**
- * agent 命令的多轮任务模式（REPL 入口），会话循环复用 common 的 runReplConversation
+ * agent 命令的多轮任务模式（REPL 入口），会话循环复用会话机制的 runReplConversation
  * @param {ReplAgentOptions} options - 入参对象（字段说明见接口定义）
  * @returns {Promise<void>}
  */

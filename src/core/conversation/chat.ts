@@ -1,9 +1,9 @@
 /**
  * conversation/chat：chat 命令的对话能力（Chat 模式）
- * 模式差异收敛为 CHAT_MODE_CONFIG 配置，单次/多轮机制复用 common
+ * 模式差异收敛为 CHAT_MODE_CONFIG 配置，单次/多轮机制复用 session/loop/repl 分层
  */
-import { runOneShotConversation, runReplConversation } from "./common";
-import type { ConversationModeConfig } from "./common/runtime/mode";
+import { runOneShotConversation, runReplConversation } from ".";
+import type { ConversationModeConfig } from "./session/mode";
 import type { LlmConfig, ThinkingLevel } from "../llm/types";
 
 /** chat 命令的基础 system 提示词（人设），经 assembleSessionContext 组装技能清单后下发 */
@@ -32,7 +32,7 @@ interface OneShotChatOptions {
 }
 
 /**
- * chat 命令的单次问答（Chat 模式入口），流程复用 common 的 runOneShotConversation
+ * chat 命令的单次问答（Chat 模式入口），流程复用会话机制的 runOneShotConversation
  * 只读语义由模式配置强制：固定不装配 bash、MCP 与写侧工具，不依赖沙箱档位配置
  * @param {OneShotChatOptions} options - 入参对象（字段说明见接口定义）
  * @returns {Promise<void>}
@@ -52,7 +52,7 @@ export async function runOneShotChat({
 }
 
 /**
- * chat 命令的多轮对话模式（REPL 入口），会话循环复用 common 的 runReplConversation
+ * chat 命令的多轮对话模式（REPL 入口），会话循环复用会话机制的 runReplConversation
  * 只读语义同单次问答；会话内可用 /think 切换思考档位
  * @param {LlmConfig} llmConfig - LLM 接入配置
  * @param {ThinkingLevel | undefined} thinkingLevel - 初始思考档位，未指定时回退配置默认

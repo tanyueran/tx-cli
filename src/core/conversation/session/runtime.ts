@@ -1,8 +1,8 @@
-import { buildMcpRoots, connectMcpServers } from "../../../mcp";
-import type { McpConnectSummary, McpManager } from "../../../mcp";
-import { createSandboxContext } from "../../../sandbox";
-import type { SandboxCliOptions } from "../../../sandbox";
-import type { SandboxContext } from "../../../sandbox/runtime/sandbox-context";
+import { buildMcpRoots, connectMcpServers } from "../../mcp";
+import type { McpConnectSummary, McpManager } from "../../mcp";
+import { createSandboxContext } from "../../sandbox";
+import type { SandboxCliOptions } from "../../sandbox";
+import type { SandboxContext } from "../../sandbox/runtime/sandbox-context";
 import { assembleSessionContext } from "./session-assembly";
 import type { SessionAssembly } from "./session-assembly";
 
@@ -78,12 +78,20 @@ export async function createConversationRuntime(
         writeToolsEnabled: options.writeToolsEnabled,
       },
     });
+    // 沙箱未启用时写侧内置工具的权限门卫失效（L2 规则与 L3 审批依赖沙箱上下文，无沙箱时原样放行），
+    // 与 agent 命令「默认 read-only 档」的宣称矛盾，装配期明确提示避免静默直通
+    const bootWarnings = [...sandboxWarnings, ...mcpConnectResult.warnings];
+    if (!sandbox && options.writeToolsEnabled !== false) {
+      bootWarnings.push(
+        "沙箱未启用（sandbox.enabled=false 且未传 --sandbox）：write_file / edit_file 将无隔离且不经审批直接生效，如需管控请启用沙箱或传 --sandbox <level>",
+      );
+    }
     return {
       mcpManager,
       sandbox,
       assembly,
       mcpSummary: mcpConnectResult.summary,
-      bootWarnings: [...sandboxWarnings, ...mcpConnectResult.warnings],
+      bootWarnings,
     };
   } catch (err) {
     // 引导中途失败：已建立的资源立即释放，避免泄漏到顶层报错之后

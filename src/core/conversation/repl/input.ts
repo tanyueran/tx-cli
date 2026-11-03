@@ -1,11 +1,11 @@
 import readline from "node:readline";
 import pico from "picocolors";
-import { CancelError } from "../../../../shared/errors";
+import { CancelError } from "../../../shared/errors";
 import {
   displayWidth,
   stripAnsi,
   truncateToWidth,
-} from "../../../../shared/string";
+} from "../../../shared/string";
 
 /** 补全建议项（与 slash-commands 的 SlashSuggestion 结构兼容，可直接传入） */
 export interface ReplSuggestion {
@@ -123,13 +123,19 @@ export class ReplInputController {
   /**
    * @param {(input: string, cursor: number) => ReplSuggestion[]} suggest - 建议回调：按当前输入行与光标位置返回候选
    * @param {readonly string[] | undefined} history - 输入历史（调用方持有并追加的数组引用）
+   * @param {string} [initialInput] - 初始草稿：预填输入行与光标（被打断后还原未提交内容）
    */
   constructor(
     suggest: (input: string, cursor: number) => ReplSuggestion[],
     history?: readonly string[],
+    initialInput?: string,
   ) {
     this.suggest = suggest;
     this.history = history;
+    if (initialInput) {
+      this.input = initialInput;
+      this.cursor = initialInput.length;
+    }
     this.refresh();
   }
 
@@ -530,6 +536,29 @@ export interface AskReplLineOptions {
   suggest: (input: string, cursor: number) => ReplSuggestion[];
   /** 输入历史数组引用（调用方持有并追加；缺省时不支持 ↑/↓ 回溯） */
   history?: string[];
+  /**
+   * 中断信号：abort 时安全收尾输入组件（移除监听、恢复终端）并以
+   * ReplInputAbortedError 拒绝，携带当前草稿供调用方还原；
+   * 用于「后台任务完成自动唤醒」时打断输入等待（仅 TTY 路径支持）
+   */
+  signal?: AbortSignal;
+  /** 初始草稿：预填输入行（后台自动轮打断后还原用户未提交的草稿） */
+  initialInput?: string;
+}
+
+/** 输入等待被外部中断（非用户取消）：携带打断时的草稿，调用方据此还原输入行 */
+export class ReplInputAbortedError extends Error {
+  /** 打断时的输入行草稿（可能为空串） */
+  readonly draft: string;
+
+  /**
+   * @param {string} draft - 打断时的输入行草稿
+   */
+  constructor(draft: string) {
+    super("输入等待被外部中断");
+    this.name = "ReplInputAbortedError";
+    this.draft = draft;
+  }
 }
 
 /**
@@ -543,6 +572,10 @@ export async function askReplLine(
   options: AskReplLineOptions,
 ): Promise<string> {
   const interactive = Boolean(process.stdin.isTTY && process.stdout.isTTY);
+  // 信号已触发：直接以中断失败（携带初始草稿），不再进入等待
+  if (options.signal?.aborted) {
+    throw new ReplInputAbortedError(options.initialInput ?? "");
+  }
   if (!interactive) {
     return askReplLinePlain(options.message);
   }
@@ -591,10 +624,12 @@ async function askReplLineTty({
   message,
   suggest,
   history,
+  signal,
+  initialInput,
 }: AskReplLineOptions): Promise<string> {
   const stdin = process.stdin;
   const stdout = process.stdout;
-  const controller = new ReplInputController(suggest, history);
+  const controller = new ReplInputController(suggest, history, initialInput);
 
   /**
    * 全帧重绘：光标回到行首 → 清屏下方 → 写入整帧 → 上移回输入行 → 按列定位
@@ -645,15 +680,21 @@ async function askReplLineTty({
       }
     };
 
+    /** 是否已落定：防止按键提交与外部中断并发时重复恢复终端（重复换行等） */
+    let settled = false;
+
     /**
-     * 统一收尾：恢复终端（移除监听、退出 raw mode、暂停输入流、关闭 paste）后
-     * 落一行光标，按结果 resolve / reject
-     * @param {boolean} cancelled - 是否为用户取消
+     * 终端恢复：移除监听、退出 raw mode、暂停输入流、关闭 paste、落一行光标
      * @returns {void}
      */
-    const settle = (cancelled: boolean): void => {
+    const teardown = (): void => {
+      if (settled) {
+        return;
+      }
+      settled = true;
       stdin.removeListener("keypress", onKeypress);
       stdout.removeListener("resize", draw);
+      signal?.removeEventListener("abort", onAbort);
       if (stdin.isTTY) {
         stdin.setRawMode(false);
       }
@@ -661,6 +702,15 @@ async function askReplLineTty({
       // 关闭 bracketed paste 模式
       stdout.write("\x1b[?2004l");
       stdout.write("\n");
+    };
+
+    /**
+     * 用户按键收尾（提交或取消）：恢复终端后按结果 resolve / reject
+     * @param {boolean} cancelled - 是否为用户取消
+     * @returns {void}
+     */
+    const settle = (cancelled: boolean): void => {
+      teardown();
       if (cancelled) {
         reject(new CancelError("已取消输入"));
         return;
@@ -668,6 +718,22 @@ async function askReplLineTty({
       resolve(controller.input.trim());
     };
 
+    /**
+     * 外部中断收尾（后台任务完成自动唤醒等）：与用户取消相同的终端恢复，
+     * 但以 ReplInputAbortedError 拒绝并携带当前草稿，调用方据此还原输入行
+     * @returns {void}
+     */
+    const settleByAbort = (): void => {
+      teardown();
+      reject(new ReplInputAbortedError(controller.input));
+    };
+
+    /** 外部中断信号处理 */
+    const onAbort = (): void => {
+      settleByAbort();
+    };
+
+    signal?.addEventListener("abort", onAbort, { once: true });
     stdin.resume();
     // 开启 bracketed paste 模式：终端粘贴整段发送，由状态机单行化，避免粘贴内换行误提交
     stdout.write("\x1b[?2004h");

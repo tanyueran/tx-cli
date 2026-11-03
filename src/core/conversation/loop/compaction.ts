@@ -6,13 +6,13 @@ import {
   generateSummary,
   resolveCompactionConfig,
   shouldCompact,
-} from "../../../llm/context";
-import type { CompactionConfig, SummaryGenerator } from "../../../llm/context";
+} from "../../llm/context";
+import type { CompactionConfig, SummaryGenerator } from "../../llm/context";
 import type {
   LlmConfig,
   ResponseHistoryItem,
   TokenUsage,
-} from "../../../llm/types";
+} from "../../llm/types";
 
 /** 跳过的原因：功能未配置 / 未达阈值 / 可压缩轮次不足 */
 export type CompactionSkipReason = "disabled" | "below-threshold" | "not-enough-turns";

@@ -9,6 +9,7 @@ import { runOneShotAgent, runReplAgent } from "../../core/conversation/agent";
 import {
   APPROVAL_POLICIES,
   SANDBOX_LEVELS,
+  SANDBOX_MISSING_ACTIONS,
   type SandboxCliOptions,
 } from "../../core/sandbox";
 import type {
@@ -109,11 +110,11 @@ export function registerAgentCommand(program: Command): void {
   program
     .command("agent [task...]")
     .description(
-      "让 AI Agent 执行任务（默认 read-only 档：写文件与 bash 需逐次审批或被拒，可用 --sandbox/--approval 放宽）：传入任务为单次执行，不带参数进入多轮任务模式",
+      "让 AI Agent 执行任务（默认 read-only 档：写文件与 bash 需逐次审批或被拒，可用 --sandbox/--approval 放宽）：传入任务为单次执行，不带参数进入多轮任务模式；任务文本以 - 开头时需用 -- 分隔，如 tx agent -- --更新文档",
     )
     .option(
       "--think <level>",
-      `思考档位：${THINKING_LEVELS.join(" | ")}，优先级：命令行 > 项目配置 > 全局配置（最终默认 medium）`,
+      `思考档位：${THINKING_LEVELS.join(" | ")}（大小写不敏感），优先级：命令行 > 项目配置 > 全局配置（最终默认 medium）`,
     )
     .option(
       "--no-mcp",
@@ -133,13 +134,13 @@ export function registerAgentCommand(program: Command): void {
     )
     .option(
       "--no-bash",
-      "禁用 bash 工具（默认读取 ~/.tx-cli/config.json 与 <cwd>/.tx-cli/config.json 的 sandbox.bash.enabled，项目配置优先）",
+      "禁用 bash 工具（默认读取 ~/.tx-cli/config.json 与 <cwd>/.tx-cli/config.json 的 sandbox.bash.enabled，项目配置优先；注意 sandbox.enabled=false 时 bash 恒不装配）",
     )
     .addOption(
       new Option(
         "--sandbox-missing <action>",
-        "沙箱在当前环境不可用时的处置：allow 降级为无隔离执行（规则与审批仍生效，read-only 档的写入隔离同样失效）| deny 失败关闭（默认）",
-      ).choices(["allow", "deny"]),
+        `沙箱在当前环境不可用时的处置：${SANDBOX_MISSING_ACTIONS.join(" | ")}；allow 降级为无隔离执行（规则与审批仍生效，read-only 档的写入隔离同样失效）| deny 失败关闭（默认）`,
+      ).choices([...SANDBOX_MISSING_ACTIONS]),
     )
     .action(async (taskSegments: string[], agentOptions: AgentOptions) => {
       await runAgentAction(taskSegments, agentOptions);
