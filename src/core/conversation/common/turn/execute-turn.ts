@@ -6,7 +6,7 @@ import {
   createSoftConvergeNotice,
 } from "./renderer";
 import { formatCompactionNotice, maybeCompactHistory } from "./compaction";
-import { runAgentLoop, DEFAULT_MAX_ITERATIONS } from "./loop";
+import { runAgentLoop, DEFAULT_MAX_ITERATIONS, type RunTurn } from "./loop";
 import { resolveCompactionConfig, resolveResponsesThinkingFields } from "../../../llm";
 import type { Tool } from "../../../tools";
 import type {
@@ -76,8 +76,19 @@ export async function executeConversationTurn(
     onUsage: handleUsage,
   });
   const maxIterations = options.maxIterations ?? DEFAULT_MAX_ITERATIONS;
+  // 每次模型请求发出前启动 loading 动画（填补请求发出到首个流式增量之间的空窗），
+  // 首个增量到达时由渲染器自动收起；finally 兜底清理请求失败 / 取消等无输出场景，
+  // 避免「思考中…」状态行残留在屏幕上
+  const runTurnWithLoading: RunTurn = async (toolResults, toolsDisabled) => {
+    renderer.startLoading();
+    try {
+      return await runTurn(toolResults, toolsDisabled);
+    } finally {
+      renderer.stopLoading();
+    }
+  };
   return runAgentLoop({
-    runTurn,
+    runTurn: runTurnWithLoading,
     tools: options.tools,
     maxIterations,
     onToolCall: createToolCallLogger(renderer),
