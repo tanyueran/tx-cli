@@ -1,3 +1,32 @@
+## [0.11.0](https://github.com/tanyueran/tx-cli/compare/v0.9.1...v0.11.0) (2026-11-04)
+
+### Features
+
+* mcp 工具超过 8 个时折叠为按需发现，降低每轮请求的工具定义开销 ([794d1c4](https://github.com/tanyueran/tx-cli/commit/794d1c45ac20ea2374e2a8839f35063be749e6b8))
+* 增加 /clear 与 /export 会话命令 ([8042519](https://github.com/tanyueran/tx-cli/commit/8042519e38541ec92ebf3d2c2912358472b593a7))
+* 增加 token 用量统计与费用估算 ([77fa756](https://github.com/tanyueran/tx-cli/commit/77fa756c60065510acaa4b18595300741e7c49b5))
+* 增加 web_fetch 网页抓取工具 ([3a7905f](https://github.com/tanyueran/tx-cli/commit/3a7905f1a45069c4dd8ad9ea3fc1c180f7d6b92d))
+* 增加上下文自动压缩 ([bc99463](https://github.com/tanyueran/tx-cli/commit/bc99463daeaa797cd762b5f1041dbd2fdf742db4))
+* 增加子 Agent 派生与 delegate_task 工具 ([8656f88](https://github.com/tanyueran/tx-cli/commit/8656f88de108b88b1095c75b407b6af9b35a5df2))
+* 子 Agent 支持后台执行，conversation 目录按职责拆分 ([b157478](https://github.com/tanyueran/tx-cli/commit/b157478990f5ede39eab3231b1cec1b6a7fac9f2))
+* 思考流式输出改为折叠状态行并增加 loading 动画 ([1ce5b92](https://github.com/tanyueran/tx-cli/commit/1ce5b925d7118a37879bd41582d2561f6c7dbd60))
+* 补齐子进程代理与工具分页，减少长任务的无效轮次 ([88d4fab](https://github.com/tanyueran/tx-cli/commit/88d4fabf366e7bdea364b1890b1327ad8fad13dc))
+
+### Bug Fixes
+
+* 修复子 Agent 取消隔离与 MCP 激活失效，统一工具注册表 ([48562ad](https://github.com/tanyueran/tx-cli/commit/48562addd5c04e0be723489ed4c3daa5a581e250))
+* 避免递归清理规则误伤沙箱内明确目标 ([9b7d078](https://github.com/tanyueran/tx-cli/commit/9b7d0780363348d05620744b58a6fb602980a0a5))
+
+### Code Refactoring
+
+* 代码优化 ([91fc8e2](https://github.com/tanyueran/tx-cli/commit/91fc8e2819779250f7cf223605166bba2fa1c277))
+* 会话入口步骤化，装配层更名 session-assembly ([4e316c3](https://github.com/tanyueran/tx-cli/commit/4e316c3165cac61def4df16e5f6c66a542c493d3))
+* 新增用量累加器与按模式子 Agent 装配助手 ([7709eb1](https://github.com/tanyueran/tx-cli/commit/7709eb131e9003a97554d1a90d9ab5c4717fb2f2))
+* 目录层级结构修改 ([52da8d2](https://github.com/tanyueran/tx-cli/commit/52da8d21ce645cd8edb0a4aebdd1c3f30dfe9abe))
+
+### Documentation
+
+* 完善文档说明 ([8b2c73e](https://github.com/tanyueran/tx-cli/commit/8b2c73e971d32a41fad23238ed5957df7ca5848d))
 ## [0.10.0](https://github.com/tanyueran/tx-cli/compare/v0.9.1...v0.10.0) (2026-10-30)
 
 ### Features
