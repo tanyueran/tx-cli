@@ -28,7 +28,7 @@ const registrars = [
 export function createProgram(): Command {
   const program = new Command();
   program
-    .name("tx cli")
+    .name("tx-cli")
     .description("一个简单CLI 工具")
     .version(getVersion());
   registrars.forEach((register) => register(program));

@@ -5,13 +5,14 @@
 ## 基本用法
 
 - 传入任务：单次执行，完成后退出
-- 不传参数（或纯空白，如 `tx agent ""`）：进入多轮任务模式，持续输入任务，输入 `exit`/`quit` 或按 `Ctrl+C` 退出
+- 不传参数（或纯空白，如 `tx-cli agent ""`）：进入多轮任务模式，持续输入任务，输入 `exit`/`quit` 或按 `Ctrl+C` 退出
 - 工具带为全量：在 `chat` 工具集之外额外装配 `bash`（受沙箱与审批管控）与 `write_todos`（任务清单）工具，并接入 MCP 服务器（`chat` 不装配），模型创建/修改文件优先使用 `write_file`（整体写入）与 `edit_file`（精确字符串替换，片段不唯一即失败）；技能、Responses 无状态模式等机制与 `chat` 一致（详见 [chat 命令详解](./CHAT.md)）；多轮模式支持 `/think`、`/skill`、`/skills`、`/clear`、`/export`、`/todos`、`/permissions`、`/help` 内联命令，输入行首 `/` 弹出命令与技能补全面板，行中「空格 + /」弹出技能补全
 - 任务清单：对 3 步以上的任务，模型会先用 `write_todos` 建立清单并随进度更新（调用时打印清单视图：`☐` 待办 / `◐` 进行中 / `☑` 已完成），多轮模式可用 `/todos` 随时查看
 - 单轮任务的工具调用轮数上限为 40 轮（chat 为 8 轮），达到上限后模型将基于已有信息直接作答（黄字提示）
 - Token 用量：每轮任务结束以表格展示「本轮 / 累计」用量，单次任务展示「本次」用量；统计与费用估算与 chat 共用，详见 [项目架构 · Token 用量统计与费用估算](./ARCHITECTURE.md#token-用量统计与费用估算)
 - 上下文自动压缩：与 chat 共用同一机制，配置 `llm.context.maxContextTokens` 后，历史达阈值时自动摘要压缩早期轮次（agentic loop 在每次请求前判定），详见 [项目架构 · 上下文自动压缩](./ARCHITECTURE.md#上下文自动压缩)
-- 子 Agent：装配 `delegate_task` 工具，把边界清晰、过程会产生大量无关输出的子任务交给独立上下文的子 Agent 执行，中间过程不进入主会话、仅结论回传（子 Agent 轮数上限 20 轮、单次超时 10 分钟），详见 [项目架构 · 子 Agent](./ARCHITECTURE.md#子-agentdelegate_task)
+- 子 Agent：装配 `delegate_task` / `task_status` / `task_stop`，把边界清晰、过程会产生大量无关输出的子任务交给独立上下文的子 Agent，中间过程不进入主会话、仅结论回传（子 Agent 轮数上限 20 轮、任务超时 10 分钟）。`delegate_task` 默认同步等待；仅多轮 REPL 支持 `background=true` 后台执行，最多 3 个并发，完成事件会注入主会话并触发自动续轮（连续最多 3 轮）；`task_status` / `task_stop` 是模型工具，不提供 `/tasks` 斜杠命令，详见 [项目架构 · 子 Agent](./ARCHITECTURE.md#子-agentdelegate_task)
+- 任务文本以 `-` 开头时，在命令选项与任务之间加 `--`，例如 `tx-cli agent -- --更新文档`，避免被解析为命令行选项
 
 **选项：**
 
@@ -19,10 +20,10 @@
 |---|---|
 | `--think <level>` | 思考档位：`off` \| `low` \| `medium` \| `high`，优先级同 `chat`（agent 最终默认 `medium`） |
 | `--no-mcp` | 本次任务禁用 MCP 服务器（缺省启用） |
-| `--sandbox <level>` | bash 沙箱档位：`read-only`（默认，全禁写）\| `workspace-write`（可写工作空间）\| `danger-full-access`（无隔离）；显式传入时同时启用沙箱（覆盖配置 `sandbox.enabled=false`） |
+| `--sandbox <level>` | 工具执行与文件读写的沙箱档位：`read-only`（默认，全禁写）\| `workspace-write`（可写工作空间）\| `danger-full-access`（无隔离）；显式传入时同时启用沙箱（覆盖配置 `sandbox.enabled=false`） |
 | `--approval <policy>` | 审批策略：`always-ask`（每次询问）\| `on-failure`（默认，沙箱拦截失败时询问）\| `never`（从不询问） |
 | `--no-bash` | 本次任务禁用 bash 工具 |
-| `--sandbox-missing <action>` | 沙箱在当前环境不可用时的处置：`deny`（默认，失败关闭）\| `allow`（降级为无隔离执行，规则与审批仍生效） |
+| `--sandbox-missing <action>` | 沙箱在当前环境不可用时的处置：`deny`（默认，失败关闭）\| `allow`（bash 降级为无隔离执行，规则与审批仍生效，进程内 fs 工具边界不变） |
 
 ```bash
 # 单次执行任务（默认 read-only 沙箱，bash 仅能执行只读操作）
@@ -40,7 +41,7 @@ tx-cli agent --no-bash 梳理这个仓库的模块结构
 
 ## 沙箱
 
-沙箱档位与审批策略的优先级均为：命令行 > 项目配置 `sandbox` 段 > 全局配置 `sandbox` 段 > 内置默认（能力感知合并：项目配置仅可收紧沙箱能力，放宽类字段被忽略并告警，收紧类数组并集叠加，详见下方「项目沙箱配置」），也可写入 `~/.tx-cli/config.json` 或 `<cwd>/.tx-cli/config.json` 的 `sandbox` 段持久化（档位、审批、文件系统边界、权限规则等）。
+沙箱档位与审批策略的优先级均为：命令行 > 项目配置 `sandbox` 段 > 全局配置 `sandbox` 段 > 内置默认（能力感知合并：项目配置的档位、审批与多数放宽类字段仅可收紧，违规项被忽略并告警，收紧类数组并集叠加；`provider` 等例外见下方「项目沙箱配置」），也可写入 `~/.tx-cli/config.json` 或 `<cwd>/.tx-cli/config.json` 的 `sandbox` 段持久化（档位、审批、文件系统边界、权限规则等）。
 
 ### 三档语义
 
@@ -121,8 +122,10 @@ tx-cli agent --no-bash 梳理这个仓库的模块结构
 
 ### 项目沙箱配置（能力感知合并）
 
-- 项目 `<cwd>/.tx-cli/config.json` 的 sandbox 段仅可收紧沙箱能力、不可放宽：放宽档位/审批、关闭沙箱/内置危险规则/审计、开启 bash，以及 `trustDirectories`、`filesystem.writableRoots`、`network.allowedDomains` 等放宽类字段来自项目配置时会被忽略并告警
-- 收紧类字段正常生效：`filesystem.denyRead` / `denyWrite`、`rules.ask` / `deny` 并集叠加，`rules.allow` 保持并集（承载会话中「始终允许」授权的落盘），`provider` / `bash.timeoutMs` 等中性选项项目覆盖全局
+- 项目 `<cwd>/.tx-cli/config.json` 的 sandbox 段对档位、审批与多数放宽项仅可收紧：放宽档位/审批、关闭沙箱/内置危险规则/审计、开启 bash，以及 `trustDirectories`、`filesystem.writableRoots`、`network.allowedDomains` 等放宽类字段来自项目配置时会被忽略并告警
+- 收紧类字段正常生效：`filesystem.denyRead` / `denyWrite`、`rules.ask` / `deny` 并集叠加，`rules.allow` 保持并集（承载会话中「始终允许」授权的落盘）；`provider` / `bash.timeoutMs` 当前由项目覆盖全局，其中 `provider` 会改变 bash 隔离实现，不属于安全中性的例外
+
+> 安全边界：上述收紧规则不代表项目配置整体可信。项目 `llm.baseUrl` 可能与全局 `apiKey` 组合使用，项目 stdio `mcpServers` 会在连接时启动本地进程，项目 `mcp.rules.allow` 也会并入审批规则。在克隆仓库中运行 `chat` / `agent` 前应先审查 `.tx-cli/config.json`；`agent --no-mcp` 可阻止 MCP 启动，但不能替代对 LLM 与 `sandbox.provider` 配置的审查。
 
 ### 审计日志（audit）
 

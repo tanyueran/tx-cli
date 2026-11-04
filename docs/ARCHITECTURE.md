@@ -113,9 +113,9 @@ chat 与 agent 共用同一套会话机制（单次 one-shot / 多轮 repl、age
 |---|---|
 | `basePrompt` | 模式人设（system 提示词底稿，技能元数据由 `buildSystemPrompt` 追加） |
 | `modeLabel` | REPL 就绪面板展示标签 |
-| `bashEnabled?` | bash 装配三态开关（单一说明源即本字段注释，见 `runtime/mode.ts`）：缺省跟随 CLI/配置/沙箱存在性；`false` 强制不装配，同时跳过 bash 专用 Provider 装载并抑制 bash 相关警告 |
+| `bashEnabled?` | bash 装配三态开关（单一说明源即本字段注释，见 `session/mode.ts`）：缺省跟随 CLI/配置/沙箱存在性；`false` 强制不装配，同时跳过 bash 专用 Provider 装载并抑制 bash 相关警告 |
 | `todosEnabled?` | 是否装配 `write_todos` 任务清单 |
-| `subAgentEnabled?` | 是否装配 `delegate_task` 子 Agent 工具（agent 模式开启，chat 不装配） |
+| `subAgentEnabled?` | 是否装配 `delegate_task` / `task_status` / `task_stop` 子 Agent 工具带（agent 模式开启，chat 不装配） |
 | `writeToolsEnabled?` | 是否装配 `write_file` / `edit_file`（缺省装配） |
 | `maxIterations?` | 工具调用轮数上限（缺省 8） |
 | `defaultThinkingLevel?` | 思考档位兜底 |
@@ -128,7 +128,7 @@ chat 与 agent 共用同一套会话机制（单次 one-shot / 多轮 repl、age
 | 写侧文件工具 | 代码强制剔除（`writeToolsEnabled: false`，只读语义写死在模式配置，不依赖沙箱档位） | 装配 |
 | bash | 强制不装配（`bashEnabled: false`，跳过 Provider 装载；沙箱上下文仍创建，只读工具照常受 fs 边界管控） | 缺省装配（跟随 CLI/配置，受沙箱与审批管控，`--no-bash` 可关） |
 | `write_todos` | 不装配 | 装配 |
-| `delegate_task`（子 Agent） | 不装配 | 装配 |
+| 子 Agent 工具带 | 不装配 | 装配 `delegate_task` / `task_status` / `task_stop`；后台派生仅限多轮 REPL |
 | MCP | 硬编码关闭 | 缺省开启（`--no-mcp` 按次关闭） |
 | 工具调用轮数上限 | 8 | 40 |
 | 思考档位兜底 | `low` | `medium` |
@@ -202,16 +202,19 @@ LLM 调用走 OpenAI 兼容 Responses API 的**无状态模式**（`core/llm/cli
 
 ### 子 Agent（delegate_task）
 
-`agent` 模式额外装配 `delegate_task`（实现见 `turn/sub-agent.ts`）：主模型把边界清晰的子任务交出去，子 Agent 用**独立历史**跑自己的 agentic loop，中间的工具调用与输出都不进入主上下文，只有最终结论作为工具结果回传。
+`agent` 模式额外装配 `delegate_task` / `task_status` / `task_stop`（实现见 `sub-agent/attach.ts`、`dispatcher.ts` 与 `tools.ts`）：主模型把边界清晰的子任务交出去，子 Agent 用**独立历史**跑自己的 agentic loop，中间的工具调用与输出都不进入主上下文，只有最终结论回传。
 
 - **上下文隔离**：每次派生新建 `history`，结束即丢弃；子 Agent 使用独立人设（`SUB_AGENT_PROMPT` + 技能元数据），只依赖 `task` 与 `context` 两个参数，因此 `task` 必须自包含（目标、涉及路径、期望产出）。
-- **工具继承与裁剪**：子 Agent 继承主会话工具（已过权限门卫，沙箱边界与审批链完全不变），但剔除 `write_todos`（其工具实例闭包持有主会话共享清单，会污染 `/todos`）与 `delegate_task` 自身（防无限递归派生）；MCP 折叠模式下一并继承，且 `delegate_task` **原地追加**进执行侧与下发侧两份工具列表——`discover_mcp_tools` 的激活机制依赖与请求层共享同一数组引用，复制列表会让 agent 模式下激活的 MCP 工具到不了请求层；同时为子 Agent 重绑独立的 discovery 实例，子 Agent 内的激活只写入自己的下发列表。
-- **静默执行**：子 Agent 的正文与思考增量不渲染，终端只在派发开始、结束与软收敛时各打一行弱化提示；结论按工具输出回传主模型，避免中间过程刷屏与污染主会话。
-- **轮数与超时**：子 Agent 轮数上限 20（`DEFAULT_SUB_AGENT_MAX_ITERATIONS`），`delegate_task` 声明 10 分钟超时（内层工具仍各自 30s，审批等待期间内层计时暂停）。
+- **同步与后台**：`delegate_task` 默认同步等待结论，单次模式仅支持此方式；多轮 REPL 可传 `background=true` 立即返回任务 ID，由调度器管理后台节点，最多 3 个并发。`task_status` 查询状态与结论，`task_stop` 请求停止；两者都是模型工具，没有对应的 `/tasks` 斜杠命令。
+- **完成回传与自动续轮**：后台任务终态事件在回合安全点注入主历史；TTY REPL 空闲等待时会被完成事件唤醒并自动续轮，非 TTY 仅在后续回合边界收割，连续自动续轮最多 3 轮。用户正在编辑的草稿会在唤醒后恢复。
+- **退出与清理**：REPL 退出时等待运行中的后台任务结束并打印终态，不再触发模型总结；`/clear` 只清会话历史、用量、输入历史与 TODO，不停止后台任务。
+- **工具继承与裁剪**：子 Agent 继承主会话工具（已过权限门卫，沙箱边界与审批链完全不变），但剔除 `write_todos`（避免污染主会话 `/todos`）与 `delegate_task` / `task_status` / `task_stop`（防递归派生和跨任务管理）；三个子 Agent 工具由装配层**原地追加**进执行侧与下发侧两份工具列表——`discover_mcp_tools` 的激活机制依赖与请求层共享同一数组引用，复制列表会让 agent 模式下激活的 MCP 工具到不了请求层；同时为子 Agent 重绑独立的 discovery 实例，子 Agent 内的激活只写入自己的下发列表。
+- **静默执行**：子 Agent 的正文与思考增量不渲染，终端只在派发开始、结束与软收敛时各打一行弱化提示；结论按工具输出或后台事件回传主模型，避免中间过程刷屏与污染主会话。
+- **轮数与超时**：子 Agent 轮数上限 20（`DEFAULT_SUB_AGENT_MAX_ITERATIONS`），任务超时 10 分钟；后台停止与超时均为协作式，在下一迭代安全点生效（内层工具仍各自 30s，审批等待期间内层计时暂停）。
 - **上下文压缩**：子 Agent 循环内接入与主会话同口径的压缩（配置 `llm.context.maxContextTokens` 后生效），但采用 `tool-rounds` 切分策略（`findSubAgentCompactionSplit`）——子 Agent 历史只有一条用户消息，按用户消息切分的策略永不触发；该策略保留子任务消息与最近 N 轮工具交互，切分点落在调用块边界，不拆散 `function_call` / `function_call_output` 配对。
-- **失败与取消**：子任务失败转为 `ok:false` 工具结果回传主模型自纠；用户取消（`CancelError`）原样上抛——嵌套 loop **复用**主回合的取消上下文（`runWithTurnCancellation` 检测到已有上下文时不再新建），任一方向的取消都置位同一标记并短路整轮：子 Agent 内的取消中止主回合，主回合的取消也能拦住仍在运行的子 Agent（排队任务与审批弹窗全部短路），不会孤儿续跑。
+- **失败与取消**：同步子任务失败转为 `ok:false` 工具结果回传主模型自纠；用户取消（`CancelError`）原样上抛——同步嵌套 loop **复用**主回合的取消上下文，任一方向的取消都短路整轮。后台任务则脱离主回合取消上下文，由调度器独立管理停止与终态。
 - **用量统计**：子 Agent 每次 LLM 请求的 usage 经会话层每轮设置的 `setUsageReporter` 计入「本轮 / 累计」，但不更新 `lastInputTokens`，避免子 Agent 的上下文规模影响主会话压缩阈值判定。
-- **装配位置**：与 `write_todos` 不同，`delegate_task` 依赖 LLM 配置与当前思考档位，因此在会话入口（`one-shot.ts` / `repl.ts`）装配，通过 `subAgentEnabled` 模式开关控制；REPL 中扩展字段闭包读取当前档位，`/think` 切换后子 Agent 同步生效。
+- **装配位置**：与 `write_todos` 不同，子 Agent 工具带依赖 LLM 配置与当前思考档位，因此在会话入口（`one-shot.ts` / `repl.ts`）装配，通过 `subAgentEnabled` 模式开关控制；REPL 中扩展字段闭包读取当前档位，`/think` 切换后子 Agent 同步生效。
 
 ### 流式渲染
 
@@ -238,7 +241,7 @@ LLM 调用走 OpenAI 兼容 Responses API 的**无状态模式**（`core/llm/cli
 
 REPL 在会话内本地持有对话历史、累计用量、输入历史与任务清单句柄；斜杠命令注册表是补全面板、`/help`、就绪面板与分发的单一事实来源。
 
-- `/clear`：清空对话历史、累计用量、输入历史与任务清单，保留运行时（system 提示词、工具、MCP、沙箱）立即重开；命令在回合之间执行，不存在切断未配对工具调用的风险。
+- `/clear`：清空对话历史、累计用量、输入历史与任务清单，保留运行时（system 提示词、工具、MCP、沙箱）立即重开；命令在回合之间执行，不存在切断未配对工具调用的风险。后台子任务由独立调度器管理，不受 `/clear` 影响。
 - `/export`：把当前历史序列化为 Markdown（`repl/session-export.ts`），头部包含模式、模型、思考档位、导出时间与累计用量；消息按原序输出，工具调用参数美化，结果按 `callId` 标注工具名，超长工具输出截断（4000 字符）；文件写入当前工作目录，命名为 `tx-cli-session-<时间戳>.md`，无历史时提示不落盘。
 
 ### 任务清单与 MCP 生命周期
@@ -367,7 +370,7 @@ interface Tool extends ToolDefinition {
 
 ```mermaid
 flowchart TD
-    L1["L1 装配（bootstrap/create-context.ts）<br/>CLI > 项目配置 > 全局配置（项目配置仅可收紧）<br/>目录信任确认（写入全局配置缓存）/ 降级 / Provider 可用性探测"]
+    L1["L1 装配（bootstrap/create-context.ts）<br/>CLI > 项目配置 > 全局配置（项目配置多数放宽项受限）<br/>目录信任确认（写入全局配置缓存）/ 降级 / Provider 可用性探测"]
     L2["L2 规则（policy/evaluate.ts）<br/>deny（含内置危险类目）> ask > allow > 档位默认<br/>复合命令逐段判定，包装穿透"]
     L3["L3 审批（runtime/sandbox-context.ts）<br/>一次 / 本会话 / 始终（MCP 为服务器级：mcp__server__*）<br/>授权落项目 .tx-cli/config.json；非 TTY 时 ask→deny；JSONL 审计"]
     L4["L4 执行（bash.ts + Provider）<br/>wrapCommand → spawn → 违规标注回传<br/>on-failure 升级重跑"]
@@ -378,7 +381,7 @@ flowchart TD
 
 沙箱上下文随会话创建，流程：
 
-1. **配置装载**：加载全局 `~/.tx-cli/config.json` + 项目 `<cwd>/.tx-cli/config.json` 两份 sandbox 配置，按能力感知语义合并（项目仅可收紧，见下文「信任模型」）；生效档位/审批取 `CLI 选项 ?? 配置文件值`，即优先级 **CLI > 项目配置 > 全局配置**（链路说明源 `bootstrap/options.ts` 的 `ResolvedOptions`）。
+1. **配置装载**：加载全局 `~/.tx-cli/config.json` + 项目 `<cwd>/.tx-cli/config.json` 两份 sandbox 配置，按能力感知语义合并（项目多数放宽项受限，`provider` 等例外见下文「信任模型」）；生效档位/审批取 `CLI 选项 ?? 配置文件值`，即优先级 **CLI > 项目配置 > 全局配置**（链路说明源 `bootstrap/options.ts` 的 `ResolvedOptions`）。
 2. **enabled 开关**：配置关闭沙箱时不装配 bash、上下文返回 undefined；但 CLI 显式传 `--sandbox <level>` 视为强制启用（覆盖配置的关闭），此时再传 `--approval` 等选项会警告不生效。bash 装配开关与沙箱上下文解耦：`--no-bash` 只移除 bash 工具，fs 门卫对其他工具照常生效；chat 等强制无 bash 的模式经 `bashForcedOff` 跳过 Provider 装载并抑制 bash 相关警告。
 3. **目录信任确认**：仅当 `danger-full-access` 档 / `never` 审批**来自配置文件**（CLI 未显式传入）且当前目录不在信任目录内时触发交互确认——确认则去重写入全局 `trustDirectories` 缓存并按原值生效；拒绝/取消/非交互则降级（full → workspace-write、never → on-failure）并黄字告警。
 4. **Provider 探测**：`danger-full-access` 直通 noop；否则按配置取 Provider 并探测 `isAvailable()` + `initialize()`——不可用时默认 fail-closed（bash 返回失败并提示），`--sandbox-missing allow` 显式降级为 noop 无隔离执行（规则与审批仍生效）。
@@ -419,7 +422,7 @@ bash（exec，串行）、read_file / list_dir / glob / grep（fs.read，规则�
 
 ### 信任模型（防自证信任）
 
-项目 `.tx-cli/config.json` 随仓库分发，不可作为权限放大的凭据——两级合并为能力感知语义：项目配置仅可收紧（放宽档位/审批、关沙箱/内置危险规则/审计、开 bash 及 `trustDirectories` / `writableRoots` / `allowedDomains` 等放宽项被忽略并告警；`rules.allow` 保持并集以承载会话授权落盘）；信任目录仅全局配置可提供，配置文件来源的 `danger-full-access` / `never` 在非信任目录时先交互确认信任（流程见 L1 第 3 步），未确认则降级；CLI 显式传入的危险值视为用户本人意图，不降级不询问。
+项目 `.tx-cli/config.json` 随仓库分发，不可直接作为权限放大的凭据——sandbox 两级合并采用能力感知语义：项目配置的档位、审批与多数放宽项仅可收紧（放宽档位/审批、关沙箱/内置危险规则/审计、开 bash 及 `trustDirectories` / `writableRoots` / `allowedDomains` 等放宽项被忽略并告警；`rules.allow` 保持并集以承载会话授权落盘）；信任目录仅全局配置可提供，配置文件来源的 `danger-full-access` / `never` 在非信任目录时先交互确认信任（流程见 L1 第 3 步），未确认则降级；CLI 显式传入的危险值视为用户本人意图，不降级不询问。当前 `provider` 仍允许项目覆盖全局，且该模型不延伸到 LLM / MCP 配置，因此不能把不可信仓库的配置整体视为安全输入。
 
 ### Provider 插拔（核心解耦）
 

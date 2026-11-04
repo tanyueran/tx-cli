@@ -17,7 +17,7 @@ interface ChatOptions {
  *
  * CLI 选项必须先于 loadLlmConfig 处理：配置缺失时后者会进入交互向导并写盘，
  * 档位非法值需在写盘前报错退出（校验口径与 agent 命令一致）。
- * 空白问题（如 tx chat ""）按未传参处理，进入多轮对话而非向模型发送空消息。
+ * 空白问题（如 tx-cli chat ""）按未传参处理，进入多轮对话而非向模型发送空消息。
  *
  * @param {string[]} questionSegments - 命令位置参数（可变参数）
  * @param {ChatOptions} chatOptions - 命令行选项
@@ -52,7 +52,7 @@ export function registerChatCommand(program: Command): void {
   program
     .command("chat [question...]")
     .description(
-      "与大模型轻量只读问答：传入问题为单次问答，不带参数进入多轮对话模式（执行任务请用 agent 命令）；问题文本以 - 开头时需用 -- 分隔，如 tx chat -- --什么是指令",
+      "与大模型轻量只读问答：传入问题为单次问答，不带参数进入多轮对话模式（执行任务请用 agent 命令）；问题文本以 - 开头时需用 -- 分隔，如 tx-cli chat -- --什么是指令",
     )
     .option(
       "--think <level>",

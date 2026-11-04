@@ -118,15 +118,16 @@ tx-cli commit-fix "#532311 优化属性设置 https://ones.x.cn/abc"
 
 ### `chat [question...]`
 
-与大模型轻量只读问答，支持任何 OpenAI 兼容接口（DeepSeek、Kimi、GLM、OpenAI 等）。
+与大模型轻量只读问答，接入支持 Responses API 的 OpenAI 兼容接口。
 
-- 传入问题：单次问答，流式输出回答后退出；不传参数（或纯空白，如 `tx chat ""`）：进入多轮对话模式（`exit`/`quit` 退出）
+- 传入问题：单次问答，流式输出回答后退出；不传参数（或纯空白，如 `tx-cli chat ""`）：进入多轮对话模式（`exit`/`quit` 退出）
 - 工具调用默认开启：内置 `read_file`、`list_dir`、`glob`、`grep`、`web_search`、`web_fetch` 等只读固定工具集，可读取检索本地文件、联网搜索与抓取网页（`web_fetch` 仅支持公网 http/https、禁止内网地址，长页面可用 `offset` 续读；只读语义由代码强制：固定不装配 bash、MCP 与写侧工具，创建或修改文件请用 `agent`）
 - 支持技能（skills）：自动扫描 `~/.tx-cli/skills` 与 `./.tx-cli/skills` 中的 `SKILL.md` 技能手册，多轮对话可用 `/skills` 查看清单
 - 思考档位 `--think off|low|medium|high`（兜底 `low`），多轮对话可用 `/think` 随时切换
 - 会话管理：多轮对话可用 `/clear` 清空历史与累计用量重新开始，`/export` 将当前会话导出为 Markdown 存档（写入当前目录）
 - 上下文自动压缩：配置 `llm.context.maxContextTokens` 后，历史接近阈值时自动把早期轮次摘要压缩，长会话不再撑爆上下文（`chat` / `agent` 共用，单次与多轮均生效）
 - 走 Responses API 无状态模式，多轮历史由本地维护；不支持 MCP，需要接入外部工具请用 `agent`
+- 问题文本以 `-` 开头时，在命令选项与问题之间加 `--`，避免被解析为命令行选项
 
 ```bash
 # 单次问答（可直接让模型读取本地文件）
@@ -141,14 +142,16 @@ tx-cli chat
 
 首次使用需配置 `apiKey` / `baseUrl` / `model`（交互式引导或写入 `~/.tx-cli/config.json`）。深度思考协议适配、`llm` 段配置与分层合并等细节见 [docs/CHAT.md](docs/CHAT.md)。
 
+> 在克隆仓库中运行 `chat` / `agent` 前，请先审查 `.tx-cli/config.json`：项目配置会影响模型服务地址、MCP 服务器和部分沙箱实现选项。
+
 ### `agent [task...]`
 
-让 AI Agent 执行任务（对标 Codex CLI / Claude Code 的执行模式）：在 `chat` 工具集之外额外装配 `bash`（受沙箱与审批管控）与 `write_todos`（任务清单），并接入 MCP 服务器。
+让 AI Agent 执行任务（对标 Codex CLI / Claude Code 的执行模式）：在 `chat` 的只读工具集之外装配 `write_file` / `edit_file`、`write_todos` 与子 Agent 工具，按需装配 `bash`（受沙箱与审批管控）并接入 MCP 服务器。
 
-- 传入任务：单次执行，完成后退出；不传参数（或纯空白，如 `tx agent ""`）：进入多轮任务模式（支持 `/think`、`/skill`、`/skills`、`/clear`、`/export`、`/todos`、`/permissions`、`/help` 内联命令）
+- 传入任务：单次执行，完成后退出；不传参数（或纯空白，如 `tx-cli agent ""`）：进入多轮任务模式（支持 `/think`、`/skill`、`/skills`、`/clear`、`/export`、`/todos`、`/permissions`、`/help` 内联命令）
 - 任务清单：对 3 步以上的任务，模型会先用 `write_todos` 建立清单并随进度更新
 - 单轮任务的工具调用轮数上限为 40 轮（chat 为 8 轮），达到上限后基于已有信息直接作答
-- 子 Agent：装配 `delegate_task` 工具，把边界清晰、过程会产生大量无关输出的子任务交给独立上下文的子 Agent 执行，中间过程不进入主会话，仅结论回传（子 Agent 轮数上限 20 轮）
+- 子 Agent：装配 `delegate_task` / `task_status` / `task_stop`，把边界清晰、过程会产生大量无关输出的子任务交给独立上下文的子 Agent，中间过程不进入主会话；默认同步等待结论，多轮模式可用 `background=true` 后台执行（最多 3 个并发），完成后自动注入结果
 - 上下文自动压缩：与 `chat` 共用同一机制，配置 `llm.context.maxContextTokens` 后长任务会在阈值处自动摘要早期轮次
 
 **选项：**
@@ -156,11 +159,11 @@ tx-cli chat
 | 选项 | 说明 |
 |---|---|
 | `--think <level>` | 思考档位：`off` \| `low` \| `medium` \| `high`（兜底 `medium`），同 `chat` |
-| `--sandbox <level>` | bash 沙箱档位：`read-only`（默认，全禁写）\| `workspace-write`（可写工作空间）\| `danger-full-access`（无隔离） |
+| `--sandbox <level>` | 工具执行与文件读写的沙箱档位：`read-only`（默认，全禁写）\| `workspace-write`（可写工作空间）\| `danger-full-access`（无隔离） |
 | `--approval <policy>` | 审批策略：`always-ask` \| `on-failure`（默认）\| `never` |
 | `--no-mcp` | 本次任务禁用 MCP 服务器（缺省启用） |
 | `--no-bash` | 本次任务禁用 bash 工具 |
-| `--sandbox-missing <action>` | 沙箱不可用时的处置：`deny`（默认，失败关闭）\| `allow`（降级无隔离执行） |
+| `--sandbox-missing <action>` | 沙箱不可用时的处置：`deny`（默认，失败关闭）\| `allow`（bash 降级为无隔离执行） |
 
 ```bash
 # 单次执行任务（默认 read-only 沙箱，bash 仅能执行只读操作）
@@ -168,6 +171,9 @@ tx-cli agent 统计 src 下各目录的代码行数并汇总
 
 # 允许写入工作空间
 tx-cli agent --sandbox workspace-write 修复 src/utils.ts 里的类型错误
+
+# 任务文本以 - 开头时，用 -- 分隔选项与任务
+tx-cli agent -- --更新文档
 
 # 多轮任务模式
 tx-cli agent
@@ -193,7 +199,7 @@ tx-cli agent
 - [x] copy 命令（复制文件，支持过滤某些文件）`tx-cli copy <src> <dest> --filter <filter>`
 - [x] agent 命令（让 AI Agent 执行任务，bash 受沙箱与审批管控，单次/多轮两种模式）
 - [x] 子 Agent（agent 派生独立上下文的子任务，仅摘要结果回传主上下文，避免中间输出污染主会话）
-- [ ] 子 Agent 并行编排（一次派生多个子 agent 并行执行独立子任务并汇总结果）
+- [x] 子 Agent 后台并行编排（多轮模式最多 3 个后台子任务并发，完成结果自动回传主会话）
 - [x] 上下文自动压缩（历史超阈值时摘要压缩早期轮次，长任务不爆上下文）
 - [x] `/clear` 内联命令（一键清空当前会话历史重开）
 - [x] Token 用量统计（每轮/累计 token 与费用估算，REPL 就绪面板展示；费用需配置 `llm.pricing`）

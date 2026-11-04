@@ -65,7 +65,7 @@ export function buildSandboxOptions(
  *
  * CLI 选项必须先于 loadLlmConfig 处理：配置缺失时后者会进入交互向导并写盘，
  * 思考档位等非法值需在写盘前报错退出（沙箱枚举已由 commander choices() 提前拦截）。
- * 空白任务（如 tx agent ""）按未传参处理，进入多轮任务模式而非向模型发送空任务。
+ * 空白任务（如 tx-cli agent ""）按未传参处理，进入多轮任务模式而非向模型发送空任务。
  * 只读问答请用 chat 命令，Agent 模式为全量工具带（bash 受沙箱与审批管控）。
  *
  * @param {string[]} taskSegments - 命令位置参数（可变参数）
@@ -110,7 +110,7 @@ export function registerAgentCommand(program: Command): void {
   program
     .command("agent [task...]")
     .description(
-      "让 AI Agent 执行任务（默认 read-only 档：写文件与 bash 需逐次审批或被拒，可用 --sandbox/--approval 放宽）：传入任务为单次执行，不带参数进入多轮任务模式；任务文本以 - 开头时需用 -- 分隔，如 tx agent -- --更新文档",
+      "让 AI Agent 执行任务（默认 read-only 档，可用 --sandbox/--approval 调整隔离与审批）：传入任务为单次执行，不带参数进入多轮任务模式；任务文本以 - 开头时需用 -- 分隔，如 tx-cli agent -- --更新文档",
     )
     .option(
       "--think <level>",
@@ -123,7 +123,7 @@ export function registerAgentCommand(program: Command): void {
     .addOption(
       new Option(
         "--sandbox <level>",
-        `bash 命令的沙箱档位：${SANDBOX_LEVELS.join(" | ")}，优先级：命令行 > 项目配置 > 全局配置（最终默认 read-only）；显式传入时同时启用沙箱（覆盖配置 sandbox.enabled=false）`,
+        `工具执行与文件读写的沙箱档位：${SANDBOX_LEVELS.join(" | ")}，优先级：命令行 > 项目配置 > 全局配置（最终默认 read-only）；显式传入时同时启用沙箱（覆盖配置 sandbox.enabled=false）`,
       ).choices([...SANDBOX_LEVELS]),
     )
     .addOption(
@@ -139,7 +139,7 @@ export function registerAgentCommand(program: Command): void {
     .addOption(
       new Option(
         "--sandbox-missing <action>",
-        `沙箱在当前环境不可用时的处置：${SANDBOX_MISSING_ACTIONS.join(" | ")}；allow 降级为无隔离执行（规则与审批仍生效，read-only 档的写入隔离同样失效）| deny 失败关闭（默认）`,
+        `沙箱在当前环境不可用时的处置：${SANDBOX_MISSING_ACTIONS.join(" | ")}；allow 将 bash 降级为无隔离执行（规则与审批仍生效，read-only 档的 bash 写入隔离同样失效）| deny 失败关闭（默认）`,
       ).choices([...SANDBOX_MISSING_ACTIONS]),
     )
     .action(async (taskSegments: string[], agentOptions: AgentOptions) => {
