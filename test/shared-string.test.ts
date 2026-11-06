@@ -5,7 +5,7 @@ import {
   displayWidth,
   padToWidth,
   truncateToWidth,
-} from "../src/shared/string";
+} from "@tx-cli/shared/string";
 
 describe("toPascalCase", () => {
   it("连字符分隔转大驼峰", () => {

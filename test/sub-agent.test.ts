@@ -1,34 +1,34 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { CancelError, CliError } from "../src/shared/errors";
+import { CancelError, CliError } from "@tx-cli/shared/errors";
 import {
   markTurnCancelled,
   runWithTurnCancellation,
   throwIfTurnCancelled,
-} from "../src/shared/turn-cancel";
+} from "@tx-cli/shared/turn-cancel";
 import {
   attachSubAgentIfEnabled,
   attachSubAgentTools,
   createSubAgentRunner,
   filterSubAgentTools,
   SUB_AGENT_TOOL_NAME,
-} from "../src/core/conversation/sub-agent/attach";
-import type { SubAgentRunner } from "../src/core/conversation/sub-agent/attach";
+} from "@tx-cli/core/conversation/sub-agent/attach";
+import type { SubAgentRunner } from "@tx-cli/core/conversation/sub-agent/attach";
 import {
   createSubAgentDispatcher,
-} from "../src/core/conversation/sub-agent/dispatcher";
-import type { SubAgentDispatcher } from "../src/core/conversation/sub-agent/dispatcher";
+} from "@tx-cli/core/conversation/sub-agent/dispatcher";
+import type { SubAgentDispatcher } from "@tx-cli/core/conversation/sub-agent/dispatcher";
 import {
   createDelegateTaskTool,
   createTaskStatusTool,
   createTaskStopTool,
-} from "../src/core/conversation/sub-agent/tools";
+} from "@tx-cli/core/conversation/sub-agent/tools";
 import {
   TASK_STATUS_TOOL_NAME,
   TASK_STOP_TOOL_NAME,
-} from "../src/core/tools/registry";
-import { createMcpDiscoveryTool } from "../src/core/mcp/discovery-tool";
-import type { Tool } from "../src/core/tools";
-import type { LlmConfig, TokenUsage } from "../src/core/llm/types";
+} from "@tx-cli/core/tools/registry";
+import { createMcpDiscoveryTool } from "@tx-cli/core/mcp/discovery-tool";
+import type { Tool } from "@tx-cli/core/tools";
+import type { LlmConfig, TokenUsage } from "@tx-cli/core/llm/types";
 
 // 子 Agent 复用主会话的 streamResponse：测试中替换为可编程的假实现。
 // 需同时 mock barrel 与 client 两个入口：回合函数（responses-turn）经 barrel 导入，
@@ -37,9 +37,9 @@ const { streamResponseMock } = vi.hoisted(() => ({
   streamResponseMock: vi.fn(),
 }));
 
-vi.mock("../src/core/llm/client", async (importOriginal) => {
+vi.mock("@tx-cli/core/llm/client", async (importOriginal) => {
   const actual = await importOriginal<
-    typeof import("../src/core/llm/client")
+    typeof import("@tx-cli/core/llm/client")
   >();
   return {
     ...actual,
@@ -47,8 +47,8 @@ vi.mock("../src/core/llm/client", async (importOriginal) => {
   };
 });
 
-vi.mock("../src/core/llm", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../src/core/llm")>();
+vi.mock("@tx-cli/core/llm", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@tx-cli/core/llm")>();
   return {
     ...actual,
     streamResponse: (...args: unknown[]) => streamResponseMock(...args),

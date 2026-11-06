@@ -1,0 +1,31 @@
+{
+  "name": "@tx-cli/scaffold",
+  "version": "0.11.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "type-check": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@tx-cli/shared": "workspace:*",
+    "handlebars": "4.7.7",
+    "fs-extra": "11.1.1",
+    "simple-git": "3.28.0",
+    "connect": "^3.7.0",
+    "serve-static": "^2.2.0",
+    "open": "^10.2.0"
+  },
+  "devDependencies": {
+    "@types/connect": "^3.4.38",
+    "@types/serve-static": "^1.15.8",
+    "@types/fs-extra": "11.0.4",
+    "@types/node": "^26.4.1",
+    "typescript": "5.9.2"
+  }
+}

@@ -1,35 +1,28 @@
 {
-  "name": "@tanyueran/cli",
+  "name": "tx-cli-monorepo",
+  "private": true,
   "version": "0.11.1",
   "description": "一个cli工具，支持创建项目，添加模版，与大模型对话",
-  "main": "./dist/cli.js",
-  "bin": {
-    "tx-cli": "./bin/tx-cli"
-  },
-  "files": [
-    "bin",
-    "dist",
-    "template"
-  ],
   "engines": {
     "node": ">=20.11.0"
   },
   "scripts": {
-    "dev": "tsx ./src/cli.ts",
-    "build": "rollup --config rollup.config.mjs",
-    "publish-pkg": "node ./script/publish.cjs",
-    "changelog": "conventional-changelog -n ./changelog.config.mjs -i CHANGELOG.md -s",
-    "type-check": "tsc --noEmit",
+    "dev": "pnpm --filter @tx-cli/cli dev",
+    "build": "pnpm --filter @tx-cli/cli build",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "lint": "eslint src/ test/",
-    "lint:fix": "eslint src/ test/ --fix",
+    "type-check": "tsc --noEmit && pnpm --filter @tx-cli/* --if-present type-check",
+    "lint": "eslint packages/ test/",
+    "lint:fix": "eslint packages/ test/ --fix",
+    "clean": "pnpm --filter @tx-cli/* --if-present clean",
+    "publish-pkg": "node ./script/publish.cjs",
+    "changelog": "conventional-changelog -n ./changelog.config.mjs -i CHANGELOG.md -s",
     "prepare": "husky"
   },
   "lint-staged": {
-    "src/**/*.ts": "eslint --fix",
-    "test/**/*.ts": "eslint --fix"
+    "packages/**/*.ts": "eslint --fix --config ./eslint.config.mjs --no-warn-ignored",
+    "test/**/*.ts": "eslint --fix --config ./eslint.config.mjs --no-warn-ignored"
   },
   "keywords": [
     "cli"

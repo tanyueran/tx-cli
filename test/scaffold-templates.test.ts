@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { loadTemplates } from "../src/core/scaffold/templates";
+import { loadTemplates } from "@tx-cli/scaffold/scaffold/templates";
 
 describe("loadTemplates", () => {
   it("扫描出 project 模板，且不含未注册的空目录", () => {

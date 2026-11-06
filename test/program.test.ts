@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { createProgram } from "../src/program";
+import { createProgram } from "@tx-cli/cli";
 
 describe("createProgram", () => {
   it("注册了全部命令，且顺序与注册器列表一致", () => {

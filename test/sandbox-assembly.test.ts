@@ -5,8 +5,8 @@ import { join } from "node:path";
 import {
   grantGlobalTrust,
   resolveUntrustedFallback,
-} from "../src/core/sandbox/bootstrap/trust";
-import type { UntrustedFallbackInput } from "../src/core/sandbox/bootstrap/trust";
+} from "@tx-cli/core/sandbox/bootstrap/trust";
+import type { UntrustedFallbackInput } from "@tx-cli/core/sandbox/bootstrap/trust";
 
 /** 测试用临时目录 */
 let dir: string;

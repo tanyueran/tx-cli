@@ -3,7 +3,7 @@ import {
   markTurnCancelled,
   runWithTurnCancellation,
   throwIfTurnCancelled,
-} from "../src/shared/turn-cancel";
+} from "@tx-cli/shared/turn-cancel";
 
 describe("runWithTurnCancellation", () => {
   it("顶层调用创建全新取消状态", async () => {

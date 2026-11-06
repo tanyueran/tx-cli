@@ -4,9 +4,9 @@ import {
   ReplInputController,
   renderReplFrame,
   PANEL_LIMIT,
-} from "../src/core/conversation/repl/input";
-import type { ReplSuggestion } from "../src/core/conversation/repl/input";
-import { stripAnsi } from "../src/shared/string";
+} from "@tx-cli/core/conversation/repl/input";
+import type { ReplSuggestion } from "@tx-cli/core/conversation/repl/input";
+import { stripAnsi } from "@tx-cli/shared/string";
 
 /** 构造固定候选的 suggest 回调 */
 function suggestOf(suggestions: ReplSuggestion[]) {

@@ -1,13 +1,13 @@
 import { describe, it, expect, vi } from "vitest";
-import { runAgentLoop } from "../src/core/conversation/loop/loop";
-import type { RunTurn, TurnOutcome } from "../src/core/conversation/loop/loop";
-import type { Tool } from "../src/core/tools";
-import type { ToolCall } from "../src/core/llm/types";
-import { CancelError } from "../src/shared/errors";
-import { markTurnCancelled } from "../src/shared/turn-cancel";
-import { wrapToolWithPermission } from "../src/core/tools/permission";
-import { SerialQueue } from "../src/shared/serial-queue";
-import type { SandboxContext } from "../src/core/sandbox/runtime/sandbox-context";
+import { runAgentLoop } from "@tx-cli/core/conversation/loop/loop";
+import type { RunTurn, TurnOutcome } from "@tx-cli/core/conversation/loop/loop";
+import type { Tool } from "@tx-cli/core/tools";
+import type { ToolCall } from "@tx-cli/core/llm/types";
+import { CancelError } from "@tx-cli/shared/errors";
+import { markTurnCancelled } from "@tx-cli/shared/turn-cancel";
+import { wrapToolWithPermission } from "@tx-cli/core/tools/permission";
+import { SerialQueue } from "@tx-cli/shared/serial-queue";
+import type { SandboxContext } from "@tx-cli/core/sandbox/runtime/sandbox-context";
 
 /**
  * 构造一个用于测试的假工具，execute 直接返回预设输出

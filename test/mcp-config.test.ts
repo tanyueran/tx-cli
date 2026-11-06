@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { loadMcpServers } from "../src/core/mcp";
+import { loadMcpServers } from "@tx-cli/core/mcp";
 
 /** 配置文件所在临时目录 */
 let dir: string;

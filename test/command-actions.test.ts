@@ -1,27 +1,27 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { loadLlmConfig } from "../src/core/llm";
-import { runOneShotChat, runReplChat } from "../src/core/conversation/chat";
-import { runOneShotAgent, runReplAgent } from "../src/core/conversation/agent";
-import { runChatAction } from "../src/program/command/chat-command";
+import { loadLlmConfig } from "@tx-cli/core/llm";
+import { runOneShotChat, runReplChat } from "@tx-cli/core/conversation/chat";
+import { runOneShotAgent, runReplAgent } from "@tx-cli/core/conversation/agent";
+import { runChatAction } from "@tx-cli/cli/program/command/chat-command";
 import {
   buildSandboxOptions,
   runAgentAction,
-} from "../src/program/command/agent-command";
-import type { LlmConfig } from "../src/core/llm/types";
+} from "@tx-cli/cli/program/command/agent-command";
+import type { LlmConfig } from "@tx-cli/core/llm/types";
 
 // loadLlmConfig 保留真实签名但替换实现（真实实现会进入交互向导并写盘），parseThinkingLevel 等保持真实逻辑
-vi.mock("../src/core/llm", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../src/core/llm")>();
+vi.mock("@tx-cli/core/llm", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@tx-cli/core/llm")>();
   return { ...actual, loadLlmConfig: vi.fn() };
 });
 
 // 会话层整体替换：命令执行体只负责分流，conversation 层行为不属于本文件测试范围
-vi.mock("../src/core/conversation/chat", () => ({
+vi.mock("@tx-cli/core/conversation/chat", () => ({
   runOneShotChat: vi.fn(),
   runReplChat: vi.fn(),
 }));
 
-vi.mock("../src/core/conversation/agent", () => ({
+vi.mock("@tx-cli/core/conversation/agent", () => ({
   runOneShotAgent: vi.fn(),
   runReplAgent: vi.fn(),
 }));

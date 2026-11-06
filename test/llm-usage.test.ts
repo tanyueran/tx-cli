@@ -8,9 +8,9 @@ import {
   formatUsageSummary,
   formatUsageTable,
   isEmptyUsage,
-} from "../src/core/llm/usage";
-import { stripAnsi } from "../src/shared/string";
-import type { LlmPricing, TokenUsage } from "../src/core/llm/types";
+} from "@tx-cli/core/llm/usage";
+import { stripAnsi } from "@tx-cli/shared/string";
+import type { LlmPricing, TokenUsage } from "@tx-cli/core/llm/types";
 
 /**
  * 构造测试用量

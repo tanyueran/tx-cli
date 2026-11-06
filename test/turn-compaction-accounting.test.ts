@@ -5,11 +5,11 @@
  * 摘要的 inputTokens ≈ 被压缩段原大小（仍超阈值），回流会让后续压缩判定误判而重复压缩
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { executeConversationTurn } from "../src/core/conversation/loop/execute-turn";
-import { createSubAgentRunner } from "../src/core/conversation/sub-agent/attach";
-import type { SubAgentRunner } from "../src/core/conversation/sub-agent/attach";
-import type { Tool } from "../src/core/tools";
-import type { LlmConfig, TokenUsage } from "../src/core/llm/types";
+import { executeConversationTurn } from "@tx-cli/core/conversation/loop/execute-turn";
+import { createSubAgentRunner } from "@tx-cli/core/conversation/sub-agent/attach";
+import type { SubAgentRunner } from "@tx-cli/core/conversation/sub-agent/attach";
+import type { Tool } from "@tx-cli/core/tools";
+import type { LlmConfig, TokenUsage } from "@tx-cli/core/llm/types";
 
 // 子 Agent 与主会话复用同一 streamResponse；同时 mock barrel 与 client 两个入口
 // （回合函数经 barrel 导入，摘要生成器从 ./client 导入）。
@@ -19,9 +19,9 @@ const { streamResponseMock, maybeCompactHistoryMock } = vi.hoisted(() => ({
   maybeCompactHistoryMock: vi.fn(),
 }));
 
-vi.mock("../src/core/llm/client", async (importOriginal) => {
+vi.mock("@tx-cli/core/llm/client", async (importOriginal) => {
   const actual = await importOriginal<
-    typeof import("../src/core/llm/client")
+    typeof import("@tx-cli/core/llm/client")
   >();
   return {
     ...actual,
@@ -29,17 +29,17 @@ vi.mock("../src/core/llm/client", async (importOriginal) => {
   };
 });
 
-vi.mock("../src/core/llm", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../src/core/llm")>();
+vi.mock("@tx-cli/core/llm", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@tx-cli/core/llm")>();
   return {
     ...actual,
     streamResponse: (...args: unknown[]) => streamResponseMock(...args),
   };
 });
 
-vi.mock("../src/core/conversation/loop/compaction", async (importOriginal) => {
+vi.mock("@tx-cli/core/conversation/loop/compaction", async (importOriginal) => {
   const actual = await importOriginal<
-    typeof import("../src/core/conversation/loop/compaction")
+    typeof import("@tx-cli/core/conversation/loop/compaction")
   >();
   return {
     ...actual,

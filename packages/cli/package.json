@@ -1,0 +1,39 @@
+{
+  "name": "@tx-cli/cli",
+  "version": "0.11.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "bin": {
+    "tx-cli": "./bin/tx-cli"
+  },
+  "files": ["bin", "dist"],
+  "scripts": {
+    "dev": "tsx ./src/cli.ts",
+    "build": "rollup --config rollup.config.mjs",
+    "type-check": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@tx-cli/core": "workspace:*",
+    "@tx-cli/scaffold": "workspace:*",
+    "@tx-cli/shared": "workspace:*",
+    "@anthropic-ai/sandbox-runtime": "^0.0.80",
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "commander": "12.1.0",
+    "connect": "^3.7.0",
+    "fs-extra": "11.1.1",
+    "handlebars": "4.7.7",
+    "open": "^10.2.0",
+    "openai": "7.32.0",
+    "picocolors": "1.1.1",
+    "prompts": "2.4.2",
+    "serve-static": "^2.2.0",
+    "simple-git": "3.28.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.4.1",
+    "@types/prompts": "2.4.2",
+    "typescript": "5.9.2",
+    "tsx": "^4.23.13"
+  }
+}

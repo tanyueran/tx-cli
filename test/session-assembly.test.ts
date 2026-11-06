@@ -3,10 +3,10 @@ import { describe, it, expect } from "vitest";
 import {
   MCP_INLINE_TOOL_LIMIT,
   assembleSessionContext,
-} from "../src/core/conversation/session/session-assembly";
-import { attachSubAgentIfEnabled } from "../src/core/conversation/sub-agent/attach";
-import type { LlmConfig } from "../src/core/llm/types";
-import type { Tool } from "../src/core/tools/types";
+} from "@tx-cli/core/conversation/session/session-assembly";
+import { attachSubAgentIfEnabled } from "@tx-cli/core/conversation/sub-agent/attach";
+import type { LlmConfig } from "@tx-cli/core/llm/types";
+import type { Tool } from "@tx-cli/core/tools/types";
 
 /** 测试用 LLM 配置（仅保留必填字段） */
 const llmConfig: LlmConfig = {

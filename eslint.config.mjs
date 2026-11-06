@@ -5,7 +5,7 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    ignores: ["dist/", "template/", "script/", "bin/"],
+    ignores: ["dist/", "coverage/", "script/", "packages/*/dist/", "packages/*/dist-debug/", "packages/scaffold/template/"],
   },
   {
     rules: {

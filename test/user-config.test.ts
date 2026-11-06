@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   readGlobalConfig,
   updateConfigSection,
-} from "../src/shared/user-config";
+} from "@tx-cli/shared/user-config";
 
 /** 配置文件所在临时目录 */
 let dir: string;

@@ -2,15 +2,15 @@ import { describe, expect, it } from "vitest";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createEmptyUsage } from "../src/core/llm";
+import { createEmptyUsage } from "@tx-cli/core/llm";
 import {
   formatSessionMarkdown,
   writeSessionMarkdown,
-} from "../src/core/conversation/repl/session-export";
+} from "@tx-cli/core/conversation/repl/session-export";
 import type {
   ResponseHistoryItem,
   TokenUsage,
-} from "../src/core/llm/types";
+} from "@tx-cli/core/llm/types";
 
 /**
  * 构造带一次工具调用的示例历史

@@ -1,0 +1,204 @@
+import OpenAI from "openai";
+import { CliError } from "@tx-cli/shared";
+import type {
+  LlmConfig,
+  ResponseHistoryItem,
+  TokenUsage,
+  ToolCall,
+  ToolDefinition,
+} from "./types";
+
+/**
+ * 把 openai SDK / 网络层抛出的原始错误转换为带友好提示的 CliError
+ * @param {unknown} err - 原始错误
+ * @returns {CliError} 可直接向用户展示的业务错误
+ */
+function toCliError(err: unknown): CliError {
+  if (err instanceof OpenAI.APIError) {
+    if (err.status === 401) {
+      return new CliError("API Key 无效或未授权，请检查配置");
+    }
+    if (err.status === 404) {
+      return new CliError("接口地址或模型名称不存在，请检查配置");
+    }
+    if (err.status === 429) {
+      return new CliError("请求过于频繁或额度不足，请稍后再试");
+    }
+    return new CliError(
+      `大模型接口请求失败（HTTP ${err.status ?? "unknown"}）: ${err.message}`,
+    );
+  }
+  // fetch 层网络错误（DNS 解析失败、连接被拒等）在 Node 中的统一表现
+  if (err instanceof Error && err.message === "fetch failed") {
+    return new CliError("网络请求失败，请检查网络连接与 Base URL 是否可达");
+  }
+  return new CliError(
+    `大模型接口请求失败: ${(err as Error)?.message ?? String(err)}`,
+  );
+}
+
+/** 响应式流式对话参数（Responses API，无状态模式） */
+interface StreamResponseOptions {
+  /** LLM 接入配置 */
+  llmConfig: LlmConfig;
+  /** 完整对话历史，含用户/assistant 消息与 function_call / function_call_output 工具轮次 */
+  input: ResponseHistoryItem[];
+  /** system 提示词，每轮请求都需传入 */
+  instructions?: string;
+  /** 协议扩展字段（思考参数等），空对象表示不下发 */
+  extraBody?: Record<string, unknown>;
+  /** 每收到一段增量回答文本时的回调，用于实时渲染 */
+  onDelta: (deltaText: string) => void;
+  /** 每收到一段增量深度思考文本时的回调，模型不输出思考内容（无 reasoning 事件）时不触发 */
+  onReasoningDelta?: (reasoningDelta: string) => void;
+  /** 可供模型调用的工具列表，模型发起调用时通过返回值的 toolCalls 交给调用方执行 */
+  tools?: ToolDefinition[];
+}
+
+/** 响应式流式对话结果 */
+export interface StreamResponseResult {
+  /** 助手的完整回答文本（不含深度思考内容；模型请求工具时可能为空） */
+  reply: string;
+  /** 模型请求的工具调用列表；为空表示模型直接给出了回答 */
+  toolCalls: ToolCall[];
+  /** 本次请求的 token 用量；服务未返回 usage 时为 undefined */
+  usage?: TokenUsage;
+}
+
+/**
+ * 把数值字段归一化为非负有限数：兼容不同兼容服务返回的缺失或非法字段
+ * @param {unknown} value - 服务端原始值
+ * @returns {number} 合法数值或 0
+ */
+function toNumber(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+/**
+ * 把服务端返回的 usage 转换为内部 TokenUsage
+ * @param {OpenAI.Responses.ResponseUsage | undefined} raw - 服务端 usage
+ * @returns {TokenUsage | undefined} 归一化后的用量；未返回 usage 时为 undefined
+ */
+function toTokenUsage(
+  raw: OpenAI.Responses.ResponseUsage | undefined,
+): TokenUsage | undefined {
+  if (!raw) {
+    return undefined;
+  }
+  const inputTokens = toNumber(raw.input_tokens);
+  const outputTokens = toNumber(raw.output_tokens);
+  return {
+    inputTokens,
+    outputTokens,
+    // 部分兼容服务不返回 total_tokens，按输入 + 输出推算
+    totalTokens: toNumber(raw.total_tokens) || inputTokens + outputTokens,
+    cachedTokens: toNumber(raw.input_tokens_details?.cached_tokens),
+    reasoningTokens: toNumber(raw.output_tokens_details?.reasoning_tokens),
+  };
+}
+
+/**
+ * 把内部历史项转换为 Responses API 的 input 输入项
+ * @param {ResponseHistoryItem[]} historyItems - 内部对话历史
+ * @returns {OpenAI.Responses.ResponseInputItem[]} Responses API 格式的输入项数组
+ */
+function toResponsesInput(
+  historyItems: ResponseHistoryItem[],
+): OpenAI.Responses.ResponseInputItem[] {
+  return historyItems.map((historyItem) => {
+    if (historyItem.type === "function_call") {
+      return {
+        type: "function_call" as const,
+        call_id: historyItem.callId,
+        name: historyItem.name,
+        arguments: historyItem.arguments,
+      };
+    }
+    if (historyItem.type === "function_call_output") {
+      return {
+        type: "function_call_output" as const,
+        call_id: historyItem.callId,
+        output: historyItem.output,
+      };
+    }
+    return { role: historyItem.role, content: historyItem.content };
+  });
+}
+
+/**
+ * 发起一次响应式流式对话（Responses API，无状态模式）
+ *
+ * store 置 false：服务端不留存会话，历史由调用方本地维护并每轮全量发送；
+ * 思考参数等协议扩展由 thinking 适配层生成，经 extraBody 原样下发；
+ * 传入 tools 后模型可能以工具调用代替直接回答，调用方执行后需将结果以
+ * function_call_output 历史项追加、连同完整历史再次调用本函数
+ *
+ * @param {StreamResponseOptions} options - 入参对象（字段说明见接口定义）
+ * @returns {Promise<StreamResponseResult>} 回答文本与模型请求的工具调用列表
+ * @throws {CliError} 接口请求或网络失败时抛出
+ */
+export async function streamResponse(
+  options: StreamResponseOptions,
+): Promise<StreamResponseResult> {
+  const client = new OpenAI({
+    apiKey: options.llmConfig.apiKey,
+    baseURL: options.llmConfig.baseUrl,
+  });
+
+  try {
+    const stream = await client.responses.create({
+      model: options.llmConfig.model,
+      input: toResponsesInput(options.input),
+      instructions: options.instructions || undefined,
+      store: false,
+      // strict 置 false：自定义 JSON Schema 不保证满足严格模式的全量约束
+      tools: options.tools?.map((tool) => ({
+        type: "function" as const,
+        name: tool.name,
+        description: tool.description,
+        parameters: tool.parameters,
+        strict: false,
+      })),
+      stream: true,
+      // spread 形式附加协议扩展字段，不触发 SDK 的多余属性检查
+      ...options.extraBody,
+    });
+
+    let reply = "";
+    let usage: TokenUsage | undefined;
+    const toolCalls: ToolCall[] = [];
+    for await (const event of stream) {
+      switch (event.type) {
+        case "response.completed":
+          // 完成事件携带本次请求的 usage；部分兼容服务可能不返回
+          usage = toTokenUsage(event.response.usage);
+          break;
+        // 思考内容：openai 开源系模型走 reasoning_text，官方模型走 reasoning_summary_text
+        case "response.reasoning_text.delta":
+        case "response.reasoning_summary_text.delta":
+          if (options.onReasoningDelta) {
+            options.onReasoningDelta(event.delta);
+          }
+          break;
+        case "response.output_text.delta":
+          reply += event.delta;
+          options.onDelta(event.delta);
+          break;
+        case "response.output_item.done":
+          if (event.item.type === "function_call") {
+            toolCalls.push({
+              callId: event.item.call_id,
+              name: event.item.name,
+              arguments: event.item.arguments,
+            });
+          }
+          break;
+        default:
+          break;
+      }
+    }
+    return { reply, toolCalls, usage };
+  } catch (err) {
+    throw toCliError(err);
+  }
+}
