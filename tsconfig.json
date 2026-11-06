@@ -14,6 +14,6 @@
       "@tx-cli/cli/*": ["packages/cli/src/*"]
     }
   },
-  "include": ["./test/**/*", "./global.d.ts"],
+  "include": ["./packages/*/test/**/*", "./global.d.ts"],
   "exclude": ["node_modules", "coverage"]
 }
