@@ -21,8 +21,7 @@
     "prepare": "husky"
   },
   "lint-staged": {
-    "packages/**/*.ts": "eslint --fix --config ./eslint.config.mjs --no-warn-ignored",
-    "test/**/*.ts": "eslint --fix --config ./eslint.config.mjs --no-warn-ignored"
+    "packages/**/*.ts": "eslint --fix --config ./eslint.config.mjs --no-warn-ignored"
   },
   "keywords": [
     "cli"
