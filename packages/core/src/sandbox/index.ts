@@ -1,0 +1,66 @@
+/**
+ * core/sandbox 模块的桶导出：沙箱装配统一入口
+ * 说明：模块内部文件互相引用时仍直接走具体文件
+ */
+export type {
+  ApprovalChoice,
+  ApprovalPolicy,
+  Approver,
+  RuleDecision,
+  SandboxLevel,
+  SandboxMissingAction,
+  SandboxProvider,
+  SandboxViolationInfo,
+  TierConfig,
+} from "./types";
+export {
+  SANDBOX_LEVELS,
+  APPROVAL_POLICIES,
+  SANDBOX_MISSING_ACTIONS,
+  DEFAULT_SANDBOX_CONFIG,
+} from "./config/schema";
+export type {
+  SandboxBashConfig,
+  SandboxConfigResult,
+  SandboxFileConfig,
+  SandboxFsConfig,
+  SandboxNetworkConfig,
+  SandboxRulesConfig,
+} from "./config/schema";
+export { loadSandboxConfig } from "./config/load";
+export { appendProjectGrant } from "./runtime/approval-grants";
+export { parseRule, matchSpec } from "./policy/syntax";
+export type { ParsedRule } from "./policy/syntax";
+export {
+  splitTopLevel,
+  stripWrappers,
+  normalizeCommand,
+} from "./utils/command";
+export { evaluateCommand, evaluateRuleKey } from "./policy/evaluate";
+export type { RuleEvaluation } from "./policy/evaluate";
+export { BUILTIN_DANGER_RULES, matchDangerRule } from "./policy/danger";
+export type { DangerRule } from "./policy/danger";
+export {
+  buildTierConfig,
+  DEFAULT_DENY_READ,
+  DEFAULT_DENY_WRITE,
+} from "./runtime/tier-config";
+export { matchPathPattern } from "./utils/path";
+export { expandHome } from "@tx-cli/shared";
+export { appendAudit } from "./runtime/audit";
+export type { AuditEntry } from "./runtime/audit";
+export { getProvider, listProviderNames } from "./providers/registry";
+export { landlockProvider, __resetLandlockForTest } from "./providers/landlock";
+export { SandboxContext } from "./runtime/sandbox-context";
+export type {
+  SandboxContextOptions,
+  SandboxEvaluationInput,
+} from "./runtime/sandbox-context";
+export {
+  interactiveApprover,
+  detectInteractive,
+} from "./runtime/interactive-approver";
+export { createSandboxContext } from "./bootstrap/create-context";
+export type { SandboxCliOptions } from "./bootstrap/options";
+export { grantGlobalTrust, resolveUntrustedFallback } from "./bootstrap/trust";
+export type { UntrustedFallbackInput } from "./bootstrap/trust";

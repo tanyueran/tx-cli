@@ -1,15 +1,15 @@
 import { describe, it, expect } from "vitest";
-import { parseRule, matchSpec } from "../src/core/sandbox/policy/syntax";
+import { parseRule, matchSpec } from "@tx-cli/core/sandbox/policy/syntax";
 import {
   splitTopLevel,
   stripWrappers,
-} from "../src/core/sandbox/utils/command";
+} from "@tx-cli/core/sandbox/utils/command";
 import {
   evaluateCommand,
   evaluateRuleKey,
-} from "../src/core/sandbox/policy/evaluate";
-import { BUILTIN_DANGER_RULES } from "../src/core/sandbox/policy/danger";
-import type { SandboxRulesConfig } from "../src/core/sandbox/config/schema";
+} from "@tx-cli/core/sandbox/policy/evaluate";
+import { BUILTIN_DANGER_RULES } from "@tx-cli/core/sandbox/policy/danger";
+import type { SandboxRulesConfig } from "@tx-cli/core/sandbox/config/schema";
 
 /** 空规则集（全部走档位默认） */
 const noRules: SandboxRulesConfig = { allow: [], ask: [], deny: [] };

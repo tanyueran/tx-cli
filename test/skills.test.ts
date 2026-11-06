@@ -7,7 +7,7 @@ import {
   discoverSkills,
   MAX_SKILL_DESCRIPTION_CHARS,
   SkillCatalog,
-} from "../src/core/skills";
+} from "@tx-cli/core/skills";
 
 /** 项目根目录（临时目录），其 .tx-cli/skills 为项目级技能目录 */
 let cwd: string;

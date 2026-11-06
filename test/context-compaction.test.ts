@@ -11,17 +11,17 @@ import {
   resolveCompactionConfig,
   shouldCompact,
   SUMMARY_MARKER,
-} from "../src/core/llm/context";
+} from "@tx-cli/core/llm/context";
 import {
   formatCompactionNotice,
   maybeCompactHistory,
-} from "../src/core/conversation/loop/compaction";
-import { loadLlmConfig } from "../src/core/llm/config";
+} from "@tx-cli/core/conversation/loop/compaction";
+import { loadLlmConfig } from "@tx-cli/core/llm/config";
 import type {
   LlmConfig,
   ResponseHistoryItem,
   TokenUsage,
-} from "../src/core/llm/types";
+} from "@tx-cli/core/llm/types";
 
 /**
  * 构造一轮完整对话：用户提问 → 工具调用与结果 → 助手回答

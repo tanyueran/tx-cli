@@ -4,10 +4,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   loadSandboxConfig,
-} from "../src/core/sandbox/config/load";
-import { appendProjectGrant } from "../src/core/sandbox/runtime/approval-grants";
-import { DEFAULT_SANDBOX_CONFIG } from "../src/core/sandbox/config/schema";
-import { buildTierConfig } from "../src/core/sandbox/runtime/tier-config";
+} from "@tx-cli/core/sandbox/config/load";
+import { appendProjectGrant } from "@tx-cli/core/sandbox/runtime/approval-grants";
+import { DEFAULT_SANDBOX_CONFIG } from "@tx-cli/core/sandbox/config/schema";
+import { buildTierConfig } from "@tx-cli/core/sandbox/runtime/tier-config";
 
 /** 测试用临时目录 */
 let dir: string;

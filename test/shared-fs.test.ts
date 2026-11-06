@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { existsWithExactCase, sliceLines } from "../src/shared/fs";
+import { existsWithExactCase, sliceLines } from "@tx-cli/shared/fs";
 
 let dir: string;
 

@@ -2,8 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { mapFileName, renderTemplate } from "../src/core/scaffold/render";
-import { CliError } from "../src/shared/errors";
+import { mapFileName, renderTemplate } from "@tx-cli/scaffold/scaffold/render";
+import { CliError } from "@tx-cli/shared/errors";
 
 describe("mapFileName", () => {
   it("_gitignore 还原为 .gitignore", () => {

@@ -2,14 +2,14 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { writeFileTool } from "../src/core/tools/builtin/write-file";
-import { editFileTool } from "../src/core/tools/builtin/edit-file";
-import { wrapToolWithPermission } from "../src/core/tools/permission";
-import { SandboxContext } from "../src/core/sandbox/runtime/sandbox-context";
-import { DEFAULT_SANDBOX_CONFIG } from "../src/core/sandbox/config/schema";
-import { noopProvider } from "../src/core/sandbox/providers/noop";
-import type { ApprovalChoice, Approver } from "../src/core/sandbox/types";
-import type { SandboxFileConfig } from "../src/core/sandbox/config/schema";
+import { writeFileTool } from "@tx-cli/core/tools/builtin/write-file";
+import { editFileTool } from "@tx-cli/core/tools/builtin/edit-file";
+import { wrapToolWithPermission } from "@tx-cli/core/tools/permission";
+import { SandboxContext } from "@tx-cli/core/sandbox/runtime/sandbox-context";
+import { DEFAULT_SANDBOX_CONFIG } from "@tx-cli/core/sandbox/config/schema";
+import { noopProvider } from "@tx-cli/core/sandbox/providers/noop";
+import type { ApprovalChoice, Approver } from "@tx-cli/core/sandbox/types";
+import type { SandboxFileConfig } from "@tx-cli/core/sandbox/config/schema";
 
 /** 测试用临时目录（beforeEach 重建，模拟项目根） */
 let dir: string;

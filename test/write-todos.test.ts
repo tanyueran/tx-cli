@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { createTodoTool, formatTodoList } from "../src/core/tools";
-import type { TodoItem } from "../src/core/tools";
+import { createTodoTool, formatTodoList } from "@tx-cli/core/tools";
+import type { TodoItem } from "@tx-cli/core/tools";
 
 /** 构造一条任务项的快捷函数 */
 function todo(content: string, status: TodoItem["status"]): TodoItem {

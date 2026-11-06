@@ -1,23 +1,19 @@
 {
+  "extends": "./tsconfig.base.json",
   "compilerOptions": {
-    "resolveJsonModule": true,
-    "esModuleInterop": true,
-    "module": "esnext",
-    "target": "esnext",
-    "moduleResolution": "bundler" /* Specify how TypeScript looks up a file from a given module specifier. */,
-    "forceConsistentCasingInFileNames": true /* Ensure that casing is correct in imports. */,
-    "strict": true /* Enable all strict type-checking options. */,
-    "noUnusedLocals": true /* Report errors on unused locals. */,
-    "noUnusedParameters": true /* Report errors on unused parameters. */,
-    "noImplicitOverride": true /* Ensure overriding members are marked with an override modifier. */,
-    "noFallthroughCasesInSwitch": true /* Report errors for fallthrough cases in switch statements. */,
-    "skipLibCheck": true /* Skip type checking all .d.ts files. */,
     "types": ["node"],
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
+      "@tx-cli/core": ["packages/core/src"],
+      "@tx-cli/core/*": ["packages/core/src/*"],
+      "@tx-cli/shared": ["packages/shared/src"],
+      "@tx-cli/shared/*": ["packages/shared/src/*"],
+      "@tx-cli/scaffold": ["packages/scaffold/src"],
+      "@tx-cli/scaffold/*": ["packages/scaffold/src/*"],
+      "@tx-cli/cli": ["packages/cli/src"],
+      "@tx-cli/cli/*": ["packages/cli/src/*"]
     }
   },
-  "include": ["./src/**/*", "./test/**/*", "./global.d.ts"],
-  "exclude": ["template", "node_modules", "dist"]
+  "include": ["./test/**/*", "./global.d.ts"],
+  "exclude": ["node_modules", "coverage"]
 }

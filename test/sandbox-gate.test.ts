@@ -2,15 +2,15 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, rmSync, readFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { SandboxContext } from "../src/core/sandbox/runtime/sandbox-context";
-import { DEFAULT_SANDBOX_CONFIG } from "../src/core/sandbox/config/schema";
-import { noopProvider } from "../src/core/sandbox/providers/noop";
+import { SandboxContext } from "@tx-cli/core/sandbox/runtime/sandbox-context";
+import { DEFAULT_SANDBOX_CONFIG } from "@tx-cli/core/sandbox/config/schema";
+import { noopProvider } from "@tx-cli/core/sandbox/providers/noop";
 import type {
   ApprovalAskContext,
   ApprovalChoice,
   Approver,
-} from "../src/core/sandbox/types";
-import type { SandboxFileConfig } from "../src/core/sandbox/config/schema";
+} from "@tx-cli/core/sandbox/types";
+import type { SandboxFileConfig } from "@tx-cli/core/sandbox/config/schema";
 
 /** 测试用临时目录 */
 let dir: string;

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   htmlToMarkdown,
   webFetchTool,
-} from "../src/core/tools/builtin/web-fetch";
+} from "@tx-cli/core/tools/builtin/web-fetch";
 
 /**
  * 构造模拟响应

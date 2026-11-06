@@ -1,0 +1,34 @@
+{
+  "name": "@tx-cli/core",
+  "version": "0.11.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./conversation/*": "./src/conversation/*",
+    "./llm/*": "./src/llm/*",
+    "./tools/*": "./src/tools/*",
+    "./mcp/*": "./src/mcp/*",
+    "./sandbox/*": "./src/sandbox/*",
+    "./skills/*": "./src/skills/*"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "type-check": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@tx-cli/shared": "workspace:*",
+    "@anthropic-ai/sandbox-runtime": "^0.0.80",
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "openai": "7.32.0",
+    "picocolors": "1.1.1",
+    "prompts": "2.4.2"
+  },
+  "devDependencies": {
+    "@types/node": "^26.4.1",
+    "@types/prompts": "2.4.2",
+    "typescript": "5.9.2"
+  }
+}

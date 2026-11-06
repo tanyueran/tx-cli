@@ -2,19 +2,19 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, rmSync, writeFileSync, chmodSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { matchPathPattern } from "../src/core/sandbox/utils/path";
-import { SandboxContext } from "../src/core/sandbox/runtime/sandbox-context";
-import { DEFAULT_SANDBOX_CONFIG } from "../src/core/sandbox/config/schema";
-import { noopProvider } from "../src/core/sandbox/providers/noop";
+import { matchPathPattern } from "@tx-cli/core/sandbox/utils/path";
+import { SandboxContext } from "@tx-cli/core/sandbox/runtime/sandbox-context";
+import { DEFAULT_SANDBOX_CONFIG } from "@tx-cli/core/sandbox/config/schema";
+import { noopProvider } from "@tx-cli/core/sandbox/providers/noop";
 import {
   landlockProvider,
   __resetLandlockForTest,
-} from "../src/core/sandbox/providers/landlock";
-import type { ApprovalChoice, Approver, TierConfig } from "../src/core/sandbox/types";
-import type { SandboxFileConfig } from "../src/core/sandbox/config/schema";
-import { wrapToolWithPermission } from "../src/core/tools/permission";
-import { readFileTool } from "../src/core/tools/builtin/read-file";
-import { webSearchTool } from "../src/core/tools/builtin/web-search";
+} from "@tx-cli/core/sandbox/providers/landlock";
+import type { ApprovalChoice, Approver, TierConfig } from "@tx-cli/core/sandbox/types";
+import type { SandboxFileConfig } from "@tx-cli/core/sandbox/config/schema";
+import { wrapToolWithPermission } from "@tx-cli/core/tools/permission";
+import { readFileTool } from "@tx-cli/core/tools/builtin/read-file";
+import { webSearchTool } from "@tx-cli/core/tools/builtin/web-search";
 
 /** 测试用临时目录 */
 let dir: string;

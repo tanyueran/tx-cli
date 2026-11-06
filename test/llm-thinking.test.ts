@@ -6,8 +6,8 @@ import {
   parseThinkingStyle,
   resolveResponsesThinkingFields,
   resolveThinkingStyle,
-} from "../src/core/llm/thinking";
-import type { LlmConfig } from "../src/core/llm/types";
+} from "@tx-cli/core/llm/thinking";
+import type { LlmConfig } from "@tx-cli/core/llm/types";
 
 /**
  * 构造一份最小可用的 LLM 配置，用于测试思考风格推断

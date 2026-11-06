@@ -10,8 +10,8 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { buildMcpRoots, McpManager } from "../src/core/mcp";
-import type { McpRoot, McpServerConfig } from "../src/core/mcp";
+import { buildMcpRoots, McpManager } from "@tx-cli/core/mcp";
+import type { McpRoot, McpServerConfig } from "@tx-cli/core/mcp";
 import type { Tool as McpTool } from "@modelcontextprotocol/sdk/types.js";
 
 const { capturedStdioParams } = vi.hoisted(() => ({

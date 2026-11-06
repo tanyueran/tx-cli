@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import OpenAI from "openai";
-import { streamResponse } from "../src/core/llm/client";
-import { CliError } from "../src/shared/errors";
-import type { LlmConfig } from "../src/core/llm/types";
+import { streamResponse } from "@tx-cli/core/llm/client";
+import { CliError } from "@tx-cli/shared/errors";
+import type { LlmConfig } from "@tx-cli/core/llm/types";
 
 const { responsesCreate } = vi.hoisted(() => ({
   responsesCreate: vi.fn(),

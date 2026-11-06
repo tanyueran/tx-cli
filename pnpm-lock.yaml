@@ -115,6 +115,160 @@ importers:
         specifier: ^4.1.11
         version: 4.1.11(@types/node@26.4.1)(@vitest/coverage-v8@4.1.11)(vite@8.2.2(@types/node@26.4.1)(esbuild@0.28.2)(jiti@2.6.1)(terser@5.43.1)(tsx@4.23.13)(yaml@2.9.1))
 
+  packages/cli:
+    dependencies:
+      '@anthropic-ai/sandbox-runtime':
+        specifier: ^0.0.80
+        version: 0.0.80
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.32.1
+        version: 1.32.1(zod@4.6.7)
+      '@tx-cli/core':
+        specifier: workspace:*
+        version: link:../core
+      '@tx-cli/scaffold':
+        specifier: workspace:*
+        version: link:../scaffold
+      '@tx-cli/shared':
+        specifier: workspace:*
+        version: link:../shared
+      commander:
+        specifier: 12.1.0
+        version: 12.1.0
+      connect:
+        specifier: ^3.7.0
+        version: 3.7.0
+      fs-extra:
+        specifier: 11.1.1
+        version: 11.1.1
+      handlebars:
+        specifier: 4.7.7
+        version: 4.7.7
+      open:
+        specifier: ^10.2.0
+        version: 10.2.0
+      openai:
+        specifier: 7.32.0
+        version: 7.32.0(zod@4.6.7)
+      picocolors:
+        specifier: 1.1.1
+        version: 1.1.1
+      prompts:
+        specifier: 2.4.2
+        version: 2.4.2
+      serve-static:
+        specifier: ^2.2.0
+        version: 2.2.0
+      simple-git:
+        specifier: 3.28.0
+        version: 3.28.0
+    devDependencies:
+      '@types/node':
+        specifier: ^26.4.1
+        version: 26.4.1
+      '@types/prompts':
+        specifier: 2.4.2
+        version: 2.4.2
+      tsx:
+        specifier: ^4.23.13
+        version: 4.23.13
+      typescript:
+        specifier: 5.9.2
+        version: 5.9.2
+
+  packages/core:
+    dependencies:
+      '@anthropic-ai/sandbox-runtime':
+        specifier: ^0.0.80
+        version: 0.0.80
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.32.1
+        version: 1.32.1(zod@4.6.7)
+      '@tx-cli/shared':
+        specifier: workspace:*
+        version: link:../shared
+      openai:
+        specifier: 7.32.0
+        version: 7.32.0(zod@4.6.7)
+      picocolors:
+        specifier: 1.1.1
+        version: 1.1.1
+      prompts:
+        specifier: 2.4.2
+        version: 2.4.2
+    devDependencies:
+      '@types/node':
+        specifier: ^26.4.1
+        version: 26.4.1
+      '@types/prompts':
+        specifier: 2.4.2
+        version: 2.4.2
+      typescript:
+        specifier: 5.9.2
+        version: 5.9.2
+
+  packages/scaffold:
+    dependencies:
+      '@tx-cli/shared':
+        specifier: workspace:*
+        version: link:../shared
+      connect:
+        specifier: ^3.7.0
+        version: 3.7.0
+      fs-extra:
+        specifier: 11.1.1
+        version: 11.1.1
+      handlebars:
+        specifier: 4.7.7
+        version: 4.7.7
+      open:
+        specifier: ^10.2.0
+        version: 10.2.0
+      serve-static:
+        specifier: ^2.2.0
+        version: 2.2.0
+      simple-git:
+        specifier: 3.28.0
+        version: 3.28.0
+    devDependencies:
+      '@types/connect':
+        specifier: ^3.4.38
+        version: 3.4.38
+      '@types/fs-extra':
+        specifier: 11.0.4
+        version: 11.0.4
+      '@types/node':
+        specifier: ^26.4.1
+        version: 26.4.1
+      '@types/serve-static':
+        specifier: ^1.15.8
+        version: 1.15.8
+      typescript:
+        specifier: 5.9.2
+        version: 5.9.2
+
+  packages/shared:
+    dependencies:
+      fs-extra:
+        specifier: 11.1.1
+        version: 11.1.1
+      prompts:
+        specifier: 2.4.2
+        version: 2.4.2
+    devDependencies:
+      '@types/fs-extra':
+        specifier: 11.0.4
+        version: 11.0.4
+      '@types/node':
+        specifier: ^26.4.1
+        version: 26.4.1
+      '@types/prompts':
+        specifier: 2.4.2
+        version: 2.4.2
+      typescript:
+        specifier: 5.9.2
+        version: 5.9.2
+
 packages:
 
   '@anthropic-ai/sandbox-runtime@0.0.80':
@@ -2660,7 +2814,7 @@ snapshots:
 
   '@kwsites/file-exists@1.1.1':
     dependencies:
-      debug: 4.4.1
+      debug: 4.4.3
     transitivePeerDependencies:
       - supports-color
 
@@ -4174,7 +4328,7 @@ snapshots:
     dependencies:
       '@kwsites/file-exists': 1.1.1
       '@kwsites/promise-deferred': 1.1.1
-      debug: 4.4.1
+      debug: 4.4.3
     transitivePeerDependencies:
       - supports-color
 

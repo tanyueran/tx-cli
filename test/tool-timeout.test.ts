@@ -3,19 +3,19 @@ import {
   pauseToolTimeout,
   resumeToolTimeout,
   withPausableTimeout,
-} from "../src/shared/timeout";
+} from "@tx-cli/shared/timeout";
 import {
   markTurnCancelled,
   runWithTurnCancellation,
-} from "../src/shared/turn-cancel";
-import { CancelError } from "../src/shared/errors";
-import { SandboxContext } from "../src/core/sandbox/runtime/sandbox-context";
-import { DEFAULT_SANDBOX_CONFIG } from "../src/core/sandbox/config/schema";
-import { noopProvider } from "../src/core/sandbox/providers/noop";
+} from "@tx-cli/shared/turn-cancel";
+import { CancelError } from "@tx-cli/shared/errors";
+import { SandboxContext } from "@tx-cli/core/sandbox/runtime/sandbox-context";
+import { DEFAULT_SANDBOX_CONFIG } from "@tx-cli/core/sandbox/config/schema";
+import { noopProvider } from "@tx-cli/core/sandbox/providers/noop";
 import type {
   ApprovalChoice,
   Approver,
-} from "../src/core/sandbox/types";
+} from "@tx-cli/core/sandbox/types";
 
 /**
  * 等待指定毫秒
