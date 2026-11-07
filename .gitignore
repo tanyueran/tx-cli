@@ -20,3 +20,4 @@ pnpm-debug.log*
 
 .npmrc
 .tx-cli/
+.trae/
