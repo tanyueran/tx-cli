@@ -152,7 +152,12 @@ export function assembleSessionContext({
   } else {
     advertisedTools.push(...gatedExtra);
   }
-  const tools = folded ? [...advertisedTools, ...gatedExtra] : advertisedTools;
+  // 两份列表必须是独立数组：子 Agent 装配（attachSubAgentIfEnabled）会向 tools 与
+  // advertisedTools 各 push 一次增量，非折叠场景若共享同一引用会被重复 push，
+  // 导致 delegate_task 等工具定义在请求中重复出现（严格校验的服务端直接 400）
+  const tools = folded
+    ? [...advertisedTools, ...gatedExtra]
+    : [...advertisedTools];
   let systemPrompt = buildSystemPrompt(basePrompt, skills);
   if (folded) {
     systemPrompt += `\n\n外部 MCP 工具共 ${gatedExtra.length} 个，为节省上下文未全部展开定义；需要时先调用 discover_mcp_tools 检索目录并用 activate 激活目标工具，再按工具名调用。`;

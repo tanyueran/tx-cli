@@ -4,7 +4,16 @@ import {
   MCP_INLINE_TOOL_LIMIT,
   assembleSessionContext,
 } from "../src/core/conversation/session/session-assembly";
+import { attachSubAgentIfEnabled } from "../src/core/conversation/sub-agent/attach";
+import type { LlmConfig } from "../src/core/llm/types";
 import type { Tool } from "../src/core/tools/types";
+
+/** 测试用 LLM 配置（仅保留必填字段） */
+const llmConfig: LlmConfig = {
+  apiKey: "sk-test",
+  baseUrl: "https://example.com/v1",
+  model: "test-model",
+};
 
 /**
  * 构造一个 MCP 形态的假工具（名称带 mcp__ 前缀、描述带服务器前缀）
@@ -60,7 +69,12 @@ describe("MCP 工具按需暴露", () => {
       context.advertisedTools.filter((tool) => tool.name.startsWith("mcp__"))
         .length,
     ).toBe(MCP_INLINE_TOOL_LIMIT);
-    expect(context.tools).toBe(context.advertisedTools);
+    // 两份列表内容一致但必须是独立数组：子 Agent 装配会各 push 一次增量，
+    // 共享引用会导致 delegate_task 等工具定义重复下发（严格服务端 400）
+    expect(context.tools).not.toBe(context.advertisedTools);
+    expect(context.tools.map((tool) => tool.name)).toEqual(
+      context.advertisedTools.map((tool) => tool.name),
+    );
   });
 
   it("MCP 工具数超过阈值时折叠为发现工具，执行侧仍持全量", () => {
@@ -138,5 +152,45 @@ describe("MCP 工具按需暴露", () => {
     const result = await (target as Tool).execute({});
     expect(result.ok).toBe(true);
     expect(result.output).toMatch(/已执行/);
+  });
+});
+
+describe("子 Agent 工具装配去重", () => {
+  it("非折叠场景装配子 Agent 后，下发清单中不出现重复工具名", () => {
+    // 回归：非折叠时 tools 与 advertisedTools 曾共享同一数组引用，
+    // 子 Agent 增量被 push 两次，模型侧收到重复的 delegate_task 定义（DashScope 400）
+    const context = assembleSessionContext({
+      basePrompt: "测试",
+      extraTools: makeMcpTools(MCP_INLINE_TOOL_LIMIT),
+    });
+    attachSubAgentIfEnabled({
+      enabled: true,
+      llmConfig,
+      tools: context.tools,
+      advertisedTools: context.advertisedTools,
+    });
+    const names = context.advertisedTools.map((tool) => tool.name);
+    expect(new Set(names).size).toBe(names.length);
+    expect(names.filter((name) => name === "delegate_task").length).toBe(1);
+    // 执行侧同样只含一份增量
+    const execNames = context.tools.map((tool) => tool.name);
+    expect(new Set(execNames).size).toBe(execNames.length);
+  });
+
+  it("折叠场景装配子 Agent 后，下发清单同样无重复工具名", () => {
+    const context = assembleSessionContext({
+      basePrompt: "测试",
+      extraTools: makeMcpTools(MCP_INLINE_TOOL_LIMIT + 1),
+    });
+    attachSubAgentIfEnabled({
+      enabled: true,
+      llmConfig,
+      tools: context.tools,
+      advertisedTools: context.advertisedTools,
+    });
+    const names = context.advertisedTools.map((tool) => tool.name);
+    expect(new Set(names).size).toBe(names.length);
+    const execNames = context.tools.map((tool) => tool.name);
+    expect(new Set(execNames).size).toBe(execNames.length);
   });
 });
