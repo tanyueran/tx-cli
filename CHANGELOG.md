@@ -1,3 +1,12 @@
+## [0.11.1](https://github.com/tanyueran/tx-cli/compare/v0.11.0...v0.11.1) (2026-11-07)
+
+### Bug Fixes
+
+* 修复非折叠场景子 Agent 工具重复下发导致 DashScope 400 ([7d32573](https://github.com/tanyueran/tx-cli/commit/7d3257384759b0fb5df38b8518deb0a5d29a6ce7))
+
+### Miscellaneous Chores
+
+* 添加忽略文件 ([3022c7b](https://github.com/tanyueran/tx-cli/commit/3022c7bd32b479d89e3368a8fb9f51e1bab5a5df))
 ## [0.11.0](https://github.com/tanyueran/tx-cli/compare/v0.9.1...v0.11.0) (2026-11-04)
 
 ### Features
