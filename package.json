@@ -16,7 +16,7 @@
     "lint": "eslint packages/ test/",
     "lint:fix": "eslint packages/ test/ --fix",
     "clean": "pnpm --filter @tx-cli/* --if-present clean",
-    "publish-pkg": "node ./script/publish.cjs",
+    "publish:cli": "node ./script/publish-cli.cjs",
     "changelog": "conventional-changelog -n ./changelog.config.mjs -i CHANGELOG.md -s",
     "prepare": "husky"
   },
