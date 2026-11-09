@@ -12,9 +12,13 @@ const REMOTE = "origin";
 const ACCESS = "public";
 /** 发布流程总步骤数 */
 const TOTAL_STEPS = 6;
+/** 待发布包目录 */
+const PACKAGE_DIR = "packages/cli";
 
 /** 当前发布版本号 */
 let version = "0.0.1";
+/** npm 发布通道 */
+let distTag = "latest";
 
 /**
  * 执行 shell 命令并将输出透传到当前终端
@@ -31,7 +35,15 @@ function run(command, options = {}) {
  * @returns {{ name: string, version: string }} package.json 中的名称与版本信息
  */
 function readPkg() {
-  return JSON.parse(readFileSync("./package.json", "utf-8"));
+  return JSON.parse(readFileSync(`${PACKAGE_DIR}/package.json`, "utf-8"));
+}
+
+/**
+ * 获取当前子包对应的独立 Git tag
+ * @returns {string} 由包名和版本号组成的 tag
+ */
+function getReleaseTag() {
+  return `${readPkg().name}@${version}`;
 }
 
 /**
@@ -73,6 +85,8 @@ async function updateVersion() {
       { onCancel },
     );
 
+    distTag = isRelease ? "latest" : "beta";
+
     if (isRelease) {
       // 选择版本类型（major、minor、patch）
       const { versionType } = await prompts(
@@ -88,9 +102,13 @@ async function updateVersion() {
         },
         { onCancel },
       );
-      run(`npm version ${versionType} --no-git-tag-version`);
+      run(`npm version ${versionType} --no-git-tag-version`, {
+        cwd: PACKAGE_DIR,
+      });
     } else {
-      run("npm version prerelease --preid=beta --no-git-tag-version");
+      run("npm version prerelease --preid=beta --no-git-tag-version", {
+        cwd: PACKAGE_DIR,
+      });
     }
   } catch (err) {
     console.log(pico.red(`更新版本号失败: ${err.message}`));
@@ -104,7 +122,7 @@ async function updateVersion() {
  */
 function generateChangelog() {
   try {
-    run("npm run changelog");
+    run("pnpm run changelog");
     version = readPkg().version;
   } catch (err) {
     console.log(pico.red(`生成 changelog 失败: ${err.message}`));
@@ -118,7 +136,7 @@ function generateChangelog() {
  */
 function build() {
   try {
-    run("npm run build");
+    run("pnpm run build");
     console.log(pico.green("构建完成"));
   } catch (err) {
     console.log(pico.red(`构建失败: ${err.message}`));
@@ -127,10 +145,10 @@ function build() {
 }
 
 /**
- * 发布前校验：确认已登录 npm 且目标版本未被占用
- * @returns {void}
+ * 发布前校验：确认已登录 npm，且目标版本和 Git tag 均未被占用
+ * @returns {Promise<void>}
  */
-function preCheck() {
+async function preCheck() {
   try {
     execSync("npm whoami", { stdio: "ignore" });
   } catch {
@@ -147,6 +165,24 @@ function preCheck() {
     process.exit(1);
   } catch {
     // 查询不到说明版本未被占用，正常继续
+  }
+
+  const releaseTag = getReleaseTag();
+  try {
+    const localTag = await git.raw(["tag", "--list", releaseTag]);
+    const remoteTag = await git.raw([
+      "ls-remote",
+      "--tags",
+      REMOTE,
+      `refs/tags/${releaseTag}`,
+    ]);
+    if (localTag.trim() || remoteTag.trim()) {
+      console.log(pico.yellow(`Git tag ${releaseTag} 已存在，请更换版本号`));
+      process.exit(1);
+    }
+  } catch (err) {
+    console.log(pico.red(`检查 Git tag 失败: ${err.message}`));
+    process.exit(1);
   }
 }
 
@@ -171,10 +207,15 @@ async function publishPkg() {
       process.exit(1);
     }
 
-    console.log("正在发布到 npm...");
-    run(`npm publish --access ${ACCESS}`, {
-      env: { ...process.env, npm_config_otp: otp.trim() },
-    });
+    console.log(`正在发布 ${getReleaseTag()} 到 npm ${distTag} 通道...`);
+    // 版本号和 changelog 已在发布前修改，跳过 pnpm 对脏工作区的重复检查
+    run(
+      `pnpm publish --access ${ACCESS} --tag ${distTag} --no-git-checks`,
+      {
+        cwd: PACKAGE_DIR,
+        env: { ...process.env, npm_config_otp: otp.trim() },
+      },
+    );
     console.log(pico.gray("发布成功!"));
   } catch (err) {
     console.log(pico.red(`发布失败: ${err.message}`));
@@ -188,13 +229,14 @@ async function publishPkg() {
  */
 async function releaseGit() {
   try {
+    const releaseTag = getReleaseTag();
     const { current: branch } = await git.branchLocal();
     await git.add(".");
-    await git.commit(`release: v${version}`);
-    await git.addTag(`v${version}`);
+    await git.commit(`release: ${releaseTag}`);
+    await git.addTag(releaseTag);
     await git.push(REMOTE, branch);
     await git.pushTags(REMOTE);
-    console.log(pico.green("提交、打 tag 并推送完成"));
+    console.log(pico.green(`提交、打 tag ${releaseTag} 并推送完成`));
   } catch (err) {
     console.log(pico.red(`提交失败: ${err.message}`));
     process.exit(1);
@@ -217,7 +259,7 @@ async function start() {
   build();
   // 4. 发布前校验
   logStep(4, "发布前校验");
-  preCheck();
+  await preCheck();
   // 5. 发布到 npm
   logStep(5, "发布到 npm");
   await publishPkg();
@@ -225,7 +267,7 @@ async function start() {
   logStep(6, "提交代码并打 tag");
   await releaseGit();
 
-  console.log(pico.green(`\n🎉 发布成功：v${version}`));
+  console.log(pico.green(`\n🎉 发布成功：${getReleaseTag()}`));
 }
 
 start();
