@@ -5,6 +5,7 @@ import {
   THINKING_LEVELS,
 } from "@tx-cli/core";
 import { runOneShotChat, runReplChat } from "@tx-cli/core";
+import { createCliChannels } from "../../channels";
 
 /** chat 命令执行体的选项入参 */
 interface ChatOptions {
@@ -28,17 +29,20 @@ export async function runChatAction(
   chatOptions: ChatOptions,
 ): Promise<void> {
   const thinkingLevel = parseThinkingLevel(chatOptions.think);
-  const llmConfig = await loadLlmConfig();
+  // 会话通道：终端输入、输出与交互提示的实现（core 只依赖接口）
+  const channels = createCliChannels();
+  const llmConfig = await loadLlmConfig(channels);
   const questionText = questionSegments.join(" ").trim();
   if (questionText) {
     await runOneShotChat({
       llmConfig,
       question: questionText,
       thinkingLevel,
+      channels,
     });
     return;
   }
-  await runReplChat(llmConfig, thinkingLevel);
+  await runReplChat(llmConfig, thinkingLevel, channels);
 }
 
 /**

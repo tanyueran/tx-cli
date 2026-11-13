@@ -17,6 +17,7 @@ import {
   maybeCompactHistory,
 } from "@tx-cli/core/conversation/loop/compaction";
 import { loadLlmConfig } from "@tx-cli/core/llm/config";
+import { createMockChannels } from "./helpers/mock-channels";
 import type {
   LlmConfig,
   ResponseHistoryItem,
@@ -406,7 +407,11 @@ describe("llm.context 配置加载", () => {
       }),
     );
 
-    const config = await loadLlmConfig(globalPath, projectPath);
+    const config = await loadLlmConfig(
+      createMockChannels(),
+      globalPath,
+      projectPath,
+    );
 
     expect(config.context).toEqual({
       maxContextTokens: 128_000,
@@ -423,7 +428,11 @@ describe("llm.context 配置加载", () => {
       }),
     );
 
-    const config = await loadLlmConfig(globalPath, join(dir, "none.json"));
+    const config = await loadLlmConfig(
+      createMockChannels(),
+      globalPath,
+      join(dir, "none.json"),
+    );
 
     expect(config.context).toBeUndefined();
   });

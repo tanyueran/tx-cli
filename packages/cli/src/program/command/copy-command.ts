@@ -4,7 +4,7 @@ import pico from "picocolors";
 import { copyPath, resolveCopyTarget } from "@tx-cli/scaffold";
 import { resolveFromCwd } from "@tx-cli/shared";
 import { CancelError } from "@tx-cli/shared";
-import { askConfirm } from "@tx-cli/shared";
+import { createCliChannels } from "../../channels";
 
 /** copy 命令的选项 */
 interface CopyCommandOptions {
@@ -47,7 +47,8 @@ export function registerCopyCommand(program: Command): void {
       // 先解析出真实目标路径，用于判断是否需要覆盖确认（源不存在时此处即报错）
       const targetPath = await resolveCopyTarget(src, dest);
       if (existsSync(targetPath) && !options.force) {
-        const overwrite = await askConfirm(
+        const channels = createCliChannels();
+        const overwrite = await channels.prompt.confirm(
           `目标路径 ${targetPath} 已存在，继续将覆盖其中的同名文件，确认吗？`
         );
         if (!overwrite) {

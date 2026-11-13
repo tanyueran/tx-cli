@@ -6,6 +6,7 @@ import { runOneShotConversation, runReplConversation } from ".";
 import type { ConversationModeConfig } from "./session/mode";
 import type { SandboxCliOptions } from "../sandbox";
 import type { LlmConfig, ThinkingLevel } from "../llm/types";
+import type { SessionChannels } from "../channels";
 
 /** agent 命令的基础 system 提示词（人设），经 assembleSessionContext 组装技能清单后下发 */
 export const SYSTEM_PROMPT =
@@ -47,6 +48,8 @@ interface OneShotAgentOptions {
   mcpEnabled?: boolean;
   /** CLI 传入的沙箱选项（--sandbox/--approval/--no-bash 等），缺省按配置文件装配 */
   cliSandboxOptions?: SandboxCliOptions;
+  /** 会话通道集合：输入 / 输出 / 交互提示的抽象出口，由各端注入 */
+  channels: SessionChannels;
 }
 
 /**
@@ -60,6 +63,7 @@ export async function runOneShotAgent({
   thinkingLevel,
   mcpEnabled = true,
   cliSandboxOptions,
+  channels,
 }: OneShotAgentOptions): Promise<void> {
   await runOneShotConversation({
     llmConfig,
@@ -68,6 +72,7 @@ export async function runOneShotAgent({
     thinkingLevel,
     mcpEnabled,
     cliSandboxOptions,
+    channels,
   });
 }
 
@@ -81,6 +86,8 @@ interface ReplAgentOptions {
   mcpEnabled?: boolean;
   /** CLI 传入的沙箱选项（--sandbox/--approval/--no-bash 等），缺省按配置文件装配 */
   cliSandboxOptions?: SandboxCliOptions;
+  /** 会话通道集合：输入 / 输出 / 交互提示的抽象出口，由各端注入 */
+  channels: SessionChannels;
 }
 
 /**
@@ -93,6 +100,7 @@ export async function runReplAgent({
   thinkingLevel,
   mcpEnabled = true,
   cliSandboxOptions,
+  channels,
 }: ReplAgentOptions): Promise<void> {
   await runReplConversation({
     llmConfig,
@@ -100,5 +108,6 @@ export async function runReplAgent({
     thinkingLevel,
     mcpEnabled,
     cliSandboxOptions,
+    channels,
   });
 }

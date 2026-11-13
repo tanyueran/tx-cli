@@ -5,6 +5,7 @@
 import { runOneShotConversation, runReplConversation } from ".";
 import type { ConversationModeConfig } from "./session/mode";
 import type { LlmConfig, ThinkingLevel } from "../llm/types";
+import type { SessionChannels } from "../channels";
 
 /** chat 命令的基础 system 提示词（人设），经 assembleSessionContext 组装技能清单后下发 */
 export const SYSTEM_PROMPT =
@@ -29,6 +30,8 @@ interface OneShotChatOptions {
   question: string;
   /** 命令行指定的思考档位，未指定时回退配置默认 */
   thinkingLevel?: ThinkingLevel;
+  /** 会话通道集合：输入 / 输出 / 交互提示的抽象出口，由各端注入 */
+  channels: SessionChannels;
 }
 
 /**
@@ -41,6 +44,7 @@ export async function runOneShotChat({
   llmConfig,
   question,
   thinkingLevel,
+  channels,
 }: OneShotChatOptions): Promise<void> {
   await runOneShotConversation({
     llmConfig,
@@ -48,6 +52,7 @@ export async function runOneShotChat({
     userInput: question,
     thinkingLevel,
     mcpEnabled: false,
+    channels,
   });
 }
 
@@ -56,16 +61,19 @@ export async function runOneShotChat({
  * 只读语义同单次问答；会话内可用 /think 切换思考档位
  * @param {LlmConfig} llmConfig - LLM 接入配置
  * @param {ThinkingLevel | undefined} thinkingLevel - 初始思考档位，未指定时回退配置默认
+ * @param {SessionChannels} channels - 会话通道集合
  * @returns {Promise<void>}
  */
 export async function runReplChat(
   llmConfig: LlmConfig,
-  thinkingLevel?: ThinkingLevel,
+  thinkingLevel: ThinkingLevel | undefined,
+  channels: SessionChannels,
 ): Promise<void> {
   await runReplConversation({
     llmConfig,
     modeConfig: CHAT_MODE_CONFIG,
     thinkingLevel,
     mcpEnabled: false,
+    channels,
   });
 }

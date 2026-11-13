@@ -6,9 +6,9 @@ import {
   resolveGlobalConfigPath,
   updateConfigSection,
 } from "@tx-cli/shared";
-import { askConfirm } from "@tx-cli/shared";
 import { CancelError } from "@tx-cli/shared";
 import { expandHome, isPathWithin } from "@tx-cli/shared";
+import type { SessionChannels } from "../../channels";
 
 /** 未信任目录降级决策的输入（resolveUntrustedFallback 用） */
 export interface UntrustedFallbackInput {
@@ -41,28 +41,32 @@ export interface UntrustedFallbackResult {
 }
 
 /**
- * 默认的目录信任确认回调：交互式 askConfirm，说明后果后请用户确认
+ * 创建目录信任确认回调：经通道展示提示并收集确认
  * 用户取消（Esc / Ctrl+C 抛 CancelError）视为不信任，本次按降级执行不中断会话
- * @param {string} cwd - 当前工作目录（绝对路径）
- * @returns {Promise<boolean>} 用户确认信任时为 true
+ * @param {SessionChannels} channels - 会话通道集合
+ * @returns {(cwd: string) => Promise<boolean>} 信任确认回调
  */
-async function defaultTrustPrompt(cwd: string): Promise<boolean> {
-  try {
-    console.log(
-      pico.yellow(
-        "\n当前目录不在 sandbox.trustDirectories 内，配置文件中的 danger-full-access 档位 / never 审批策略需要信任当前目录后才会生效",
-      ),
-    );
-    return await askConfirm(
-      `是否信任当前目录 ${cwd}？（确认后写入全局配置 ~/.tx-cli/config.json）`,
-      false,
-    );
-  } catch (err) {
-    if (err instanceof CancelError) {
-      return false;
+export function createTrustPrompt(
+  channels: SessionChannels,
+): (cwd: string) => Promise<boolean> {
+  return async (cwd: string): Promise<boolean> => {
+    try {
+      channels.output.text(
+        pico.yellow(
+          "\n当前目录不在 sandbox.trustDirectories 内，配置文件中的 danger-full-access 档位 / never 审批策略需要信任当前目录后才会生效",
+        ),
+      );
+      return await channels.prompt.confirm(
+        `是否信任当前目录 ${cwd}？（确认后写入全局配置 ~/.tx-cli/config.json）`,
+        false,
+      );
+    } catch (err) {
+      if (err instanceof CancelError) {
+        return false;
+      }
+      throw err;
     }
-    throw err;
-  }
+  };
 }
 
 /**
@@ -105,12 +109,12 @@ export function grantGlobalTrust(
  * 防止 clone 下来的仓库借自带配置自证信任；CLI 显式传入的危险值不触发（用户本人意图）。
  * 已在信任目录内、或无文件来源危险配置时返回 null（无需处理）
  * @param {UntrustedFallbackInput} input - 决策输入（当前目录、信任列表、生效值与来源）
- * @param {(cwd: string) => Promise<boolean>} prompt - 信任确认回调（仅 interactive 为 true 时调用）
+ * @param {(cwd: string) => Promise<boolean>} [prompt] - 信任确认回调（仅 interactive 为 true 时调用；缺省视为无法确认）
  * @returns {Promise<UntrustedFallbackResult | null>} null 表示无需处理，否则为决策结果
  */
 export async function resolveUntrustedFallback(
   input: UntrustedFallbackInput,
-  prompt: (cwd: string) => Promise<boolean> = defaultTrustPrompt,
+  prompt?: (cwd: string) => Promise<boolean>,
 ): Promise<UntrustedFallbackResult | null> {
   const fullFromConfig =
     input.levelFromFile && input.level === "danger-full-access";
@@ -122,7 +126,8 @@ export async function resolveUntrustedFallback(
   if (isTrusted(input.cwd, input.trustDirectories)) {
     return null;
   }
-  const granted = input.interactive ? await prompt(input.cwd) : false;
+  const granted =
+    input.interactive && prompt ? await prompt(input.cwd) : false;
   if (granted) {
     return {
       granted: true,

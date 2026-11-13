@@ -29,6 +29,7 @@ import {
 import { createMcpDiscoveryTool } from "@tx-cli/core/mcp/discovery-tool";
 import type { Tool } from "@tx-cli/core/tools";
 import type { LlmConfig, TokenUsage } from "@tx-cli/core/llm/types";
+import { MockOutputChannel } from "./helpers/mock-channels";
 
 // 子 Agent 复用主会话的 streamResponse：测试中替换为可编程的假实现。
 // 需同时 mock barrel 与 client 两个入口：回合函数（responses-turn）经 barrel 导入，
@@ -418,33 +419,28 @@ describe("createSubAgentRunner", () => {
   });
 
   it("子 Agent 达到轮数上限进入软收敛时输出提示，且软收敛轮不下发工具定义", async () => {
-    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-    try {
-      streamResponseMock
-        .mockResolvedValueOnce({
-          reply: "",
-          toolCalls: [{ callId: "call_1", name: "read_file", arguments: "{}" }],
-          usage,
-        })
-        .mockResolvedValueOnce({ reply: "结论", toolCalls: [], usage });
-      const runner = createSubAgentRunner({
-        llmConfig,
-        tools: [makeTool("read_file")],
-        maxIterations: 1,
-      });
+    const output = new MockOutputChannel();
+    streamResponseMock
+      .mockResolvedValueOnce({
+        reply: "",
+        toolCalls: [{ callId: "call_1", name: "read_file", arguments: "{}" }],
+        usage,
+      })
+      .mockResolvedValueOnce({ reply: "结论", toolCalls: [], usage });
+    const runner = createSubAgentRunner({
+      llmConfig,
+      tools: [makeTool("read_file")],
+      maxIterations: 1,
+      output,
+    });
 
-      const result = await runner({ task: "任务" });
+    const result = await runner({ task: "任务" });
 
-      expect(result.output).toBe("结论");
-      const softLog = logSpy.mock.calls.find((args) =>
-        String(args[0]).includes("轮上限"),
-      );
-      expect(softLog).toBeDefined();
-      // 软收敛轮不下发工具定义，迫使模型基于已有信息作答
-      expect(callArg(1).tools).toBeUndefined();
-    } finally {
-      logSpy.mockRestore();
-    }
+    expect(result.output).toBe("结论");
+    const softLog = output.texts.find((line) => line.includes("轮上限"));
+    expect(softLog).toBeDefined();
+    // 软收敛轮不下发工具定义，迫使模型基于已有信息作答
+    expect(callArg(1).tools).toBeUndefined();
   });
 });
 

@@ -8,19 +8,23 @@ import { mergeStringArrays } from "@tx-cli/shared";
 import { buildTierConfig } from "../runtime/tier-config";
 import { getProvider } from "../providers/registry";
 import { SandboxContext } from "../runtime/sandbox-context";
-import {
-  detectInteractive,
-  interactiveApprover,
-} from "../runtime/interactive-approver";
+import { createInteractiveApprover } from "../runtime/interactive-approver";
 import { resolveOptions, type SandboxCliOptions } from "./options";
-import { grantGlobalTrust, resolveUntrustedFallback } from "./trust";
+import {
+  createTrustPrompt,
+  grantGlobalTrust,
+  resolveUntrustedFallback,
+} from "./trust";
+import type { SessionChannels } from "../../channels";
 
 /** createSandboxContext 的调用方上下文选项 */
 export interface CreateSandboxContextOptions {
   /** 会话模式是否强制不装配 bash（如 chat 只读问答） */
   bashForcedOff?: boolean;
-  /** 目录信任确认回调（缺省为交互式确认；非交互环境不会调用，测试可注入） */
+  /** 目录信任确认回调（缺省基于 channels.prompt 交互确认；非交互环境不会调用，测试可注入） */
   trustPrompt?: (cwd: string) => Promise<boolean>;
+  /** 会话通道集合：审批问询与信任确认的出口 */
+  channels: SessionChannels;
 }
 
 /** L1 装配结果：沙箱上下文、bash 工具装配开关与装载警告的组合 */
@@ -47,8 +51,8 @@ export interface SandboxAssembly {
  * @returns {Promise<SandboxAssembly>} 沙箱上下文与 bash 装配开关
  */
 export async function createSandboxContext(
-  cliOptions: SandboxCliOptions = {},
-  contextOptions: CreateSandboxContextOptions = {},
+  cliOptions: SandboxCliOptions | undefined,
+  contextOptions: CreateSandboxContextOptions,
 ): Promise<SandboxAssembly> {
   const bashForcedOff = contextOptions.bashForcedOff === true;
   const warnings: string[] = [];
@@ -60,16 +64,17 @@ export async function createSandboxContext(
     },
   );
   warnings.push(...configWarnings);
+  const cliOpts: SandboxCliOptions = cliOptions ?? {};
   const bashEnabled = bashForcedOff
     ? false
-    : (cliOptions.bashEnabled ?? sandboxConfig.bash.enabled);
+    : (cliOpts.bashEnabled ?? sandboxConfig.bash.enabled);
   // --sandbox <level> 显式传入视为要求本次启用沙箱：否则配置关闭沙箱时 CLI 档位会被静默忽略，
   // 与「命令行 > 配置文件」的优先级宣称矛盾（审批/missing 选项无法重新启用沙箱，只有档位可以）
-  const cliForcesEnabled = cliOptions.level !== undefined;
+  const cliForcesEnabled = cliOpts.level !== undefined;
   if (!sandboxConfig.enabled && !cliForcesEnabled) {
     if (
-      cliOptions.approval !== undefined ||
-      cliOptions.missingAction !== undefined
+      cliOpts.approval !== undefined ||
+      cliOpts.missingAction !== undefined
     ) {
       warnings.push(
         "沙箱已被配置禁用（sandbox.enabled=false），--approval / --sandbox-missing 不生效；如需本次启用可传 --sandbox <level>",
@@ -78,7 +83,7 @@ export async function createSandboxContext(
     return { sandbox: undefined, bashEnabled: false, warnings };
   }
 
-  const resolvedOptions = resolveOptions(cliOptions, sandboxConfig);
+  const resolvedOptions = resolveOptions(cliOpts, sandboxConfig);
   let { level, approval } = resolvedOptions;
   // 信任确认与降级决策见 bootstrap/trust.ts（resolveUntrustedFallback）
   const fallback = await resolveUntrustedFallback(
@@ -89,9 +94,9 @@ export async function createSandboxContext(
       approval,
       levelFromFile: resolvedOptions.levelFromFile,
       approvalFromFile: resolvedOptions.approvalFromFile,
-      interactive: detectInteractive(),
+      interactive: contextOptions.channels.input.isInteractive(),
     },
-    contextOptions.trustPrompt,
+    contextOptions.trustPrompt ?? createTrustPrompt(contextOptions.channels),
   );
   if (fallback) {
     level = fallback.level;
@@ -170,8 +175,8 @@ export async function createSandboxContext(
       level,
       approval,
       provider,
-      isInteractive: detectInteractive(),
-      approver: interactiveApprover,
+      isInteractive: contextOptions.channels.input.isInteractive(),
+      approver: createInteractiveApprover(contextOptions.channels),
       cwd,
     }),
     bashEnabled,

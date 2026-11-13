@@ -1,5 +1,6 @@
 import pico from "picocolors";
 import { CliError } from "@tx-cli/shared";
+import type { OutputChannel } from "../channels";
 import type { LlmConfig, ThinkingLevel, ThinkingStyle } from "./types";
 
 /** 全部合法的思考档位（帮助文案与校验共用，避免多处硬编码漂移） */
@@ -205,14 +206,16 @@ export function resolveThinkingLevel({
  * none 风格说明思考字段不会下发；开关式风格仅在非 off 档位时提示折算（off 本就对应关闭，无需提示）
  * @param {ThinkingLevel} thinkingLevel - 生效的思考档位
  * @param {ThinkingStyle} thinkingStyle - 思考协议风格
+ * @param {OutputChannel} output - 输出通道
  * @returns {void}
  */
 export function warnThinkingFallback(
   thinkingLevel: ThinkingLevel,
   thinkingStyle: ThinkingStyle,
+  output: OutputChannel,
 ): void {
   if (thinkingStyle === "none") {
-    console.log(
+    output.text(
       pico.yellow(
         `思考档位为 ${thinkingLevel}，但${describeThinkingStyle(thinkingStyle)}`,
       ),
@@ -220,7 +223,7 @@ export function warnThinkingFallback(
     return;
   }
   if (isToggleOnlyStyle(thinkingStyle) && thinkingLevel !== "off") {
-    console.log(
+    output.text(
       pico.yellow(`注意：当前服务${describeThinkingStyle(thinkingStyle)}`),
     );
   }

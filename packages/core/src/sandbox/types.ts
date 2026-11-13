@@ -127,7 +127,7 @@ export type ApprovalChoice =
 
 /**
  * 审批器：ask 判定发生时向用户征询处置
- * 交互实现走 prompts，测试可注入假实现
+ * 交互实现走各端注入的通道（CLI 用终端弹窗，桌面端用弹窗，云端用 WebSocket 往返），测试可注入假实现
  */
 export interface Approver {
   /**

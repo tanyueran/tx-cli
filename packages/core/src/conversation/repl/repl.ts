@@ -23,6 +23,7 @@ import {
   warnThinkingFallback,
 } from "../../llm";
 import type { UsageAccumulator } from "../../llm";
+import type { SessionChannels } from "../../channels";
 import type {
   LlmConfig,
   ResponseHistoryItem,
@@ -58,6 +59,8 @@ interface ReplTurnOptions {
   onUsage?: (usage: TokenUsage) => void;
   /** 压缩摘要请求的用量回调（可选）：只计入统计，不更新 lastInputTokens（口径隔离，防重复压缩） */
   onCompactionUsage?: (usage: TokenUsage) => void;
+  /** 输出通道：流式渲染与提示的出口 */
+  output: SessionChannels["output"];
 }
 
 /**
@@ -73,6 +76,7 @@ async function runReplTurn({
   thinkingLevel,
   onUsage,
   onCompactionUsage,
+  output,
 }: ReplTurnOptions): Promise<void> {
   await executeConversationTurn({
     llmConfig: session.llmConfig,
@@ -84,10 +88,12 @@ async function runReplTurn({
     tools: session.tools,
     advertisedTools: session.advertisedTools,
     maxIterations: session.maxIterations,
+    output,
     onUsage,
     onCompactionUsage,
   });
-  process.stdout.write("\n\n");
+  output.text("");
+  output.text("");
 }
 
 /**
@@ -137,7 +143,7 @@ async function compactBeforeTurn(
   });
   const notice = formatCompactionNotice(outcome);
   if (notice) {
-    console.log(
+    state.options.channels.output.text(
       outcome.status === "failed" ? pico.yellow(notice) : pico.cyan(notice),
     );
   }
@@ -188,19 +194,21 @@ async function runTurnCycle(
         turnUsage.add(usage);
         state.usage.add(usage);
       },
+      output: state.options.channels.output,
     });
     // 本轮结束后展示「本轮 + 累计」用量（含配置单价时的费用估算）
     printTurnUsage(
       turnUsage.current,
       state.usage.current,
       state.session.llmConfig.pricing,
+      state.options.channels.output,
     );
   } catch (err) {
     // 审批等交互中按 Ctrl+C：只中断本轮并回滚本轮历史，会话继续
     if (err instanceof CancelError) {
       state.history.length = historyStart;
-      process.stdout.write("\n");
-      console.log(pico.yellow("已取消本轮"));
+      state.options.channels.output.text("");
+      state.options.channels.output.text(pico.yellow("已取消本轮"));
       return;
     }
     // 仅吞可预期的业务错误（网络、接口报错）；未预期错误仍上抛，避免代码 bug 被无限循环掩盖
@@ -208,8 +216,8 @@ async function runTurnCycle(
       throw err;
     }
     // 换行避免错误提示接在残缺的流式输出之后
-    process.stdout.write("\n");
-    console.error(pico.red(err.message));
+    state.options.channels.output.text("");
+    state.options.channels.output.error(pico.red(err.message));
   } finally {
     // 回合结束即撤销上报器：避免子 Agent 用量混入后续轮次统计
     state.subAgentHandle?.setUsageReporter(undefined);
@@ -228,6 +236,7 @@ async function runTurnCycle(
  * @returns {Promise<void>}
  */
 export async function runConversationRepl(options: ReplOptions): Promise<void> {
+  const { output } = options.channels;
   // 装配会话状态：子 Agent 工具带、斜杠命令注册表、压缩配置与用量口径
   const state = createReplState(options);
   // 就绪面板：标题、模型/用量/技能/MCP 信息行与命令提示，装配阶段警告统一缩进展示在其下
@@ -236,9 +245,10 @@ export async function runConversationRepl(options: ReplOptions): Promise<void> {
     state.level.current,
     state.commands,
     state.usage.current,
+    output,
   );
   // 服务能力折算警告：off 档位本就对应关闭，此时不提示
-  warnThinkingFallback(state.level.current, options.thinkingStyle);
+  warnThinkingFallback(state.level.current, options.thinkingStyle, output);
 
   for (;;) {
     // 步骤 1：采集输入，与后台任务事件竞速（用户纯等待时事件先到则自动唤醒）
@@ -258,7 +268,7 @@ export async function runConversationRepl(options: ReplOptions): Promise<void> {
       }
       if (state.autoTurnCount >= MAX_AUTO_CONTINUE_TURNS) {
         ingestEvents(state, events);
-        console.log(
+        output.text(
           pico.yellow(
             `已连续自动继续 ${state.autoTurnCount} 轮，暂停自动执行；结果已带入对话，请输入指示后继续`,
           ),
@@ -266,7 +276,7 @@ export async function runConversationRepl(options: ReplOptions): Promise<void> {
         continue;
       }
       state.autoTurnCount += 1;
-      printTaskEventLines(events);
+      printTaskEventLines(events, output);
       await runTurnCycle(state, buildBackgroundNotice(events));
       continue;
     }
@@ -294,6 +304,8 @@ export interface ReplConversationOptions {
   mcpEnabled?: boolean;
   /** CLI 传入的沙箱选项（agent 命令的 --sandbox 等），缺省按配置文件装配 */
   cliSandboxOptions?: SandboxCliOptions;
+  /** 会话通道集合：输入 / 输出 / 交互提示的抽象出口，由各端注入 */
+  channels: SessionChannels;
 }
 
 /**
@@ -308,6 +320,7 @@ export async function runReplConversation({
   thinkingLevel,
   mcpEnabled = true,
   cliSandboxOptions,
+  channels,
 }: ReplConversationOptions): Promise<void> {
   // 获取最终生效的思考档位
   const currentLevel = resolveThinkingLevel({
@@ -323,6 +336,7 @@ export async function runReplConversation({
     todosEnabled: modeConfig.todosEnabled,
     writeToolsEnabled: modeConfig.writeToolsEnabled,
     cliSandboxOptions,
+    channels,
   });
   try {
     await runConversationRepl({
@@ -333,6 +347,7 @@ export async function runReplConversation({
       modeLabel: modeConfig.modeLabel,
       maxIterations: modeConfig.maxIterations ?? DEFAULT_MAX_ITERATIONS,
       subAgentEnabled: modeConfig.subAgentEnabled,
+      channels,
     });
   } finally {
     await disposeConversationRuntime(runtime);

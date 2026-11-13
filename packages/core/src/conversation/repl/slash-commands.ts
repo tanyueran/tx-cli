@@ -11,6 +11,7 @@ import {
 import type { ThinkingLevel, ThinkingStyle } from "../../llm/types";
 import { CliError } from "@tx-cli/shared";
 import { displayWidth, padToWidth } from "@tx-cli/shared";
+import type { OutputChannel } from "../../channels";
 
 /** 斜杠命令执行结果：handled 表示命令已就地处理完，send 表示要把任务文本交给模型处理 */
 export type SlashCommandResult =
@@ -64,6 +65,8 @@ export interface SlashCommandDeps {
   todoHandle: TodoToolHandle | undefined;
   /** 思考协议风格（会话内不变） */
   thinkingStyle: ThinkingStyle;
+  /** 输出通道：命令执行过程的提示与错误展示出口 */
+  output: OutputChannel;
   /** 读取当前思考档位 */
   getThinkingLevel(): ThinkingLevel;
   /** 写入新的思考档位（/think 切换） */
@@ -139,6 +142,7 @@ export function buildSlashCommands(deps: SlashCommandDeps): SlashCommand[] {
     catalog,
     todoHandle,
     thinkingStyle,
+    output,
     getThinkingLevel,
     setThinkingLevel,
     clearSession,
@@ -153,7 +157,7 @@ export function buildSlashCommands(deps: SlashCommandDeps): SlashCommand[] {
       execute(input) {
         const thinkLevelArg = input.slice("/think".length).trim();
         if (!thinkLevelArg) {
-          printThinkingNotice(getThinkingLevel(), thinkingStyle);
+          printThinkingNotice(getThinkingLevel(), thinkingStyle, output);
           return { kind: "handled" };
         }
         try {
@@ -161,12 +165,12 @@ export function buildSlashCommands(deps: SlashCommandDeps): SlashCommand[] {
           if (nextLevel) {
             setThinkingLevel(nextLevel);
           }
-          printThinkingNotice(getThinkingLevel(), thinkingStyle);
+          printThinkingNotice(getThinkingLevel(), thinkingStyle, output);
         } catch (err) {
           if (!(err instanceof CliError)) {
             throw err;
           }
-          console.error(pico.red(err.message));
+          output.error(pico.red(err.message));
         }
         return { kind: "handled" };
       },
@@ -179,7 +183,7 @@ export function buildSlashCommands(deps: SlashCommandDeps): SlashCommand[] {
       async execute(input) {
         const { name, task } = parseSkillArgs(input);
         if (!name) {
-          console.log(
+          output.text(
             pico.yellow(
               `用法：/skill <name> [任务...]（输入 "/skill " 可从面板选择技能）`,
             ),
@@ -188,7 +192,7 @@ export function buildSlashCommands(deps: SlashCommandDeps): SlashCommand[] {
         }
         const skill = catalog.get(name);
         if (!skill) {
-          console.log(
+          output.text(
             pico.yellow(
               `未找到技能「${name}」，输入 /skills 查看可用技能清单`,
             ),
@@ -199,7 +203,7 @@ export function buildSlashCommands(deps: SlashCommandDeps): SlashCommand[] {
         try {
           body = await catalog.readBody(name);
         } catch (err) {
-          console.error(
+          output.error(
             pico.red(
               `读取技能「${name}」手册失败：${err instanceof Error ? err.message : String(err)}`,
             ),
@@ -207,7 +211,7 @@ export function buildSlashCommands(deps: SlashCommandDeps): SlashCommand[] {
           return { kind: "handled" };
         }
         if (!body) {
-          console.log(pico.yellow(`技能「${name}」没有可读的手册正文`));
+          output.text(pico.yellow(`技能「${name}」没有可读的手册正文`));
           return { kind: "handled" };
         }
         return { kind: "send", task: buildSkillTask(name, body, task) };
@@ -219,7 +223,7 @@ export function buildSlashCommands(deps: SlashCommandDeps): SlashCommand[] {
       available: catalog.size > 0,
       execute() {
         if (catalog.size === 0) {
-          console.log(
+          output.text(
             pico.yellow(
               "未发现可用技能（扫描目录：~/.tx-cli/skills、./.tx-cli/skills）",
             ),
@@ -228,7 +232,7 @@ export function buildSlashCommands(deps: SlashCommandDeps): SlashCommand[] {
         }
         for (const skill of catalog.list()) {
           const skillSource = skill.source === "project" ? "项目级" : "用户级";
-          console.log(
+          output.text(
             `${pico.cyan(skill.name)}（${skillSource}）${skill.description}`,
           );
         }
@@ -242,10 +246,10 @@ export function buildSlashCommands(deps: SlashCommandDeps): SlashCommand[] {
       execute() {
         const cleared = clearSession();
         if (cleared === 0) {
-          console.log(pico.gray("当前会话没有可清空的历史"));
+          output.text(pico.gray("当前会话没有可清空的历史"));
           return { kind: "handled" };
         }
-        console.log(
+        output.text(
           pico.cyan(
             `已清空会话历史（${cleared} 条消息），累计用量与任务清单已重置`,
           ),
@@ -261,12 +265,12 @@ export function buildSlashCommands(deps: SlashCommandDeps): SlashCommand[] {
         try {
           const path = await exportSession();
           if (!path) {
-            console.log(pico.yellow("当前会话没有可导出的内容"));
+            output.text(pico.yellow("当前会话没有可导出的内容"));
             return { kind: "handled" };
           }
-          console.log(pico.cyan(`已导出会话：${path}`));
+          output.text(pico.cyan(`已导出会话：${path}`));
         } catch (err) {
-          console.error(
+          output.error(
             pico.red(
               `导出会话失败：${err instanceof Error ? err.message : String(err)}`,
             ),
@@ -280,7 +284,7 @@ export function buildSlashCommands(deps: SlashCommandDeps): SlashCommand[] {
       description: "查看任务清单",
       available: todoHandle !== undefined,
       execute() {
-        printTodos(todoHandle);
+        printTodos(todoHandle, output);
         return { kind: "handled" };
       },
     },
@@ -289,7 +293,7 @@ export function buildSlashCommands(deps: SlashCommandDeps): SlashCommand[] {
       description: "查看沙箱与权限状态",
       available: sandbox !== undefined,
       execute() {
-        printPermissions(sandbox, bashEnabled);
+        printPermissions(sandbox, bashEnabled, output);
         return { kind: "handled" };
       },
     },
@@ -298,7 +302,7 @@ export function buildSlashCommands(deps: SlashCommandDeps): SlashCommand[] {
       description: "列出全部斜杠命令",
       available: true,
       execute() {
-        printHelp(commands, catalog);
+        printHelp(commands, catalog, output);
         return { kind: "handled" };
       },
     },
@@ -310,33 +314,40 @@ export function buildSlashCommands(deps: SlashCommandDeps): SlashCommand[] {
  * 打印思考档位切换/设置结果与服务能力折算提示
  * @param {ThinkingLevel} thinkingLevel - 目标档位
  * @param {ThinkingStyle} thinkingStyle - 思考协议风格
+ * @param {OutputChannel} output - 输出通道
  * @returns {void}
  */
 export function printThinkingNotice(
   thinkingLevel: ThinkingLevel,
   thinkingStyle: ThinkingStyle,
+  output: OutputChannel,
 ): void {
   // none 风格的警告已含档位信息，不重复打印档位行
   if (thinkingStyle !== "none") {
-    console.log(pico.cyan(`思考档位：${thinkingLevel}`));
+    output.text(pico.cyan(`思考档位：${thinkingLevel}`));
   }
-  warnThinkingFallback(thinkingLevel, thinkingStyle);
+  warnThinkingFallback(thinkingLevel, thinkingStyle, output);
 }
 
 /**
  * 打印规则列表段（/permissions 展示用）：空段显示占位说明
  * @param {string} title - 段标题（如「允许」「询问」「拒绝」）
  * @param {string[]} rules - 规则原文列表
+ * @param {OutputChannel} output - 输出通道
  * @returns {void}
  */
-function printRuleSection(title: string, rules: string[]): void {
+function printRuleSection(
+  title: string,
+  rules: string[],
+  output: OutputChannel,
+): void {
   if (rules.length === 0) {
-    console.log(pico.gray(`  ${title}：（空）`));
+    output.text(pico.gray(`  ${title}：（空）`));
     return;
   }
-  console.log(pico.cyan(`  ${title}：`));
+  output.text(pico.cyan(`  ${title}：`));
   for (const rule of rules) {
-    console.log(`    ${rule}`);
+    output.text(`    ${rule}`);
   }
 }
 
@@ -345,14 +356,16 @@ function printRuleSection(title: string, rules: string[]): void {
  * 展示：档位、审批策略、Provider、fs 边界、三段规则（allow 含会话与持久授权合并）
  * @param {SandboxContext | undefined} sandbox - 会话级沙箱上下文
  * @param {boolean} bashEnabled - bash 工具是否装配（区分 Provider「未装载」的两种原因）
+ * @param {OutputChannel} output - 输出通道
  * @returns {void}
  */
 export function printPermissions(
   sandbox: SandboxContext | undefined,
   bashEnabled: boolean,
+  output: OutputChannel,
 ): void {
   if (!sandbox) {
-    console.log(pico.yellow("本会话未启用沙箱（bash 与权限门卫均未装配）"));
+    output.text(pico.yellow("本会话未启用沙箱（bash 与权限门卫均未装配）"));
     return;
   }
   const providerName = !bashEnabled
@@ -360,49 +373,53 @@ export function printPermissions(
     : sandbox.provider
       ? `${sandbox.provider.name}${sandbox.provider.name === "noop" ? "（直通无隔离）" : ""}`
       : "无（bash 以失败关闭模式运行）";
-  console.log(pico.cyan(`沙箱档位：${sandbox.level}`));
-  console.log(pico.cyan(`审批策略：${sandbox.approval}`));
-  console.log(pico.cyan(`沙箱 Provider：${providerName}`));
-  console.log(pico.cyan("文件系统边界："));
-  console.log(
+  output.text(pico.cyan(`沙箱档位：${sandbox.level}`));
+  output.text(pico.cyan(`审批策略：${sandbox.approval}`));
+  output.text(pico.cyan(`沙箱 Provider：${providerName}`));
+  output.text(pico.cyan("文件系统边界："));
+  output.text(
     pico.gray(`  禁读：${sandbox.tier.denyRead.join("、") || "（无）"}`),
   );
   if (sandbox.level === "read-only") {
-    console.log(pico.gray("  可写：（无，禁止一切写入）"));
+    output.text(pico.gray("  可写：（无，禁止一切写入）"));
   } else {
-    console.log(
+    output.text(
       pico.gray(`  可写：${sandbox.tier.allowWrite.join("、") || "（无）"}`),
     );
-    console.log(
+    output.text(
       pico.gray(`  禁写：${sandbox.tier.denyWrite.join("、") || "（无）"}`),
     );
   }
   const rules = sandbox.listRules();
-  console.log(
+  output.text(
     pico.cyan("权限规则（allow 含会话授权与「始终允许」的持久授权）："),
   );
-  printRuleSection("允许", rules.allow);
-  printRuleSection("询问", rules.ask);
-  printRuleSection("拒绝", rules.deny);
+  printRuleSection("允许", rules.allow, output);
+  printRuleSection("询问", rules.ask, output);
+  printRuleSection("拒绝", rules.deny, output);
 }
 
 /**
  * 打印当前任务清单（/todos 内联命令）：复用 write_todos 的清单视图符号
  * @param {TodoToolHandle | undefined} todoHandle - 任务清单工具句柄（未装配时为 undefined）
+ * @param {OutputChannel} output - 输出通道
  * @returns {void}
  */
-export function printTodos(todoHandle: TodoToolHandle | undefined): void {
+export function printTodos(
+  todoHandle: TodoToolHandle | undefined,
+  output: OutputChannel,
+): void {
   if (!todoHandle) {
-    console.log(pico.yellow("本次会话未启用任务清单工具（仅 Agent 模式装配）"));
+    output.text(pico.yellow("本次会话未启用任务清单工具（仅 Agent 模式装配）"));
     return;
   }
   const todos = todoHandle.getTodos();
   if (todos.length === 0) {
-    console.log(pico.gray("任务清单为空"));
+    output.text(pico.gray("任务清单为空"));
     return;
   }
-  console.log(pico.cyan(`任务清单（${todos.length} 项）`));
-  console.log(formatTodoList(todos));
+  output.text(pico.cyan(`任务清单（${todos.length} 项）`));
+  output.text(formatTodoList(todos));
 }
 
 /**
@@ -569,9 +586,14 @@ export function buildSkillSuggestions(
  * 打印 /help：命令标签按显示宽度对齐，灰色描述；附带退出方式与技能统计
  * @param {SlashCommand[]} commands - 命令注册表（仅展示 available 的命令）
  * @param {SkillCatalog} catalog - 技能目录（统计行展示）
+ * @param {OutputChannel} output - 输出通道
  * @returns {void}
  */
-export function printHelp(commands: SlashCommand[], catalog: SkillCatalog): void {
+export function printHelp(
+  commands: SlashCommand[],
+  catalog: SkillCatalog,
+  output: OutputChannel,
+): void {
   const visible = commands.filter((command) => command.available);
   const labelWidth = Math.max(
     ...visible.map((command) =>
@@ -580,19 +602,19 @@ export function printHelp(commands: SlashCommand[], catalog: SkillCatalog): void
       ),
     ),
   );
-  console.log(pico.cyan("斜杠命令"));
+  output.text(pico.cyan("斜杠命令"));
   for (const command of visible) {
     const label = command.args
       ? `${command.name} ${command.args}`
       : command.name;
-    console.log(
+    output.text(
       `  ${pico.cyan(padToWidth(label, labelWidth))}  ${pico.gray(command.description)}`,
     );
   }
-  console.log(`  ${pico.gray("exit / quit")}  ${pico.gray("退出会话")}`);
+  output.text(`  ${pico.gray("exit / quit")}  ${pico.gray("退出会话")}`);
   if (catalog.size > 0) {
-    console.log("");
-    console.log(
+    output.text("");
+    output.text(
       pico.gray(
         `另有 ${catalog.size} 个技能可用：/skill <name> [任务...] 加载手册，/skills 查看清单`,
       ),

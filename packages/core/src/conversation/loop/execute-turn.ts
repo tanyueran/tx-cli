@@ -8,6 +8,7 @@ import {
 import { formatCompactionNotice, maybeCompactHistory } from "./compaction";
 import { runAgentLoop, DEFAULT_MAX_ITERATIONS, type RunTurn } from "./loop";
 import { resolveCompactionConfig, resolveResponsesThinkingFields } from "../../llm";
+import type { OutputChannel } from "../../channels";
 import type { Tool } from "../../tools";
 import type {
   LlmConfig,
@@ -37,6 +38,8 @@ export interface ConversationTurnOptions {
   advertisedTools: Tool[];
   /** 工具调用轮数上限，超出后软收敛为直接作答；缺省 DEFAULT_MAX_ITERATIONS */
   maxIterations?: number;
+  /** 输出通道：流式渲染、工具调用提示与压缩提示的出口 */
+  output: OutputChannel;
   /** token 用量回调（可选）：每次 LLM 请求返回 usage 时触发，供调用方累计展示 */
   onUsage?: (usage: TokenUsage) => void;
   /**
@@ -57,7 +60,7 @@ export interface ConversationTurnOptions {
 export async function executeConversationTurn(
   options: ConversationTurnOptions,
 ): Promise<string> {
-  const renderer = createStreamRenderer();
+  const renderer = createStreamRenderer(options.output);
   // 上下文压缩配置：未配置 llm.context.maxContextTokens 时为空，compress 完全不介入
   const compactionConfig = resolveCompactionConfig(options.llmConfig.context);
   // 上一次请求的真实 input token：压缩判定优先用它（含系统提示与工具定义，口径最准）
@@ -97,8 +100,8 @@ export async function executeConversationTurn(
     runTurn: runTurnWithLoading,
     tools: options.tools,
     maxIterations,
-    onToolCall: createToolCallLogger(renderer),
-    onSoftConverge: createSoftConvergeNotice(renderer, maxIterations),
+    onToolCall: createToolCallLogger(renderer, options.output),
+    onSoftConverge: createSoftConvergeNotice(renderer, options.output, maxIterations),
     // agentic 循环内部的安全点（首轮由会话层在进入回合前处理，此处从第二次请求开始）
     beforeIteration: async (iteration) => {
       if (iteration === 0 || !compactionConfig) {
@@ -115,7 +118,7 @@ export async function executeConversationTurn(
       });
       const notice = formatCompactionNotice(outcome);
       if (notice) {
-        console.log(
+        options.output.text(
           outcome.status === "failed" ? pico.yellow(notice) : pico.cyan(notice),
         );
       }

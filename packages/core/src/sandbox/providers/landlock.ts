@@ -17,8 +17,8 @@ const HELPER_ENV = "TX_SANDBOX_LANDLOCK_HELPER";
 /** 用户级安装目录：~/.tx-cli/bin */
 const USER_BIN_DIR = join(homedir(), ".tx-cli", "bin");
 
-/** helper 初始化后的档位配置（wrapCommand 映射参数用） */
-let tier: TierConfig | undefined;
+/** Provider 名称（注册表键） */
+export const LANDLOCK_PROVIDER_NAME = "landlock";
 
 /**
  * 探测外部 helper 的安装位置
@@ -47,80 +47,84 @@ async function resolveHelperPath(): Promise<string | null> {
 }
 
 /**
- * Landlock 沙箱 Provider：基于外部 helper（landlock-exec）的 Linux 内核级隔离
+ * 创建 Landlock 沙箱 Provider：基于外部 helper（landlock-exec）的 Linux 内核级隔离
+ *
  * 现实约束：Node 无法直接发起 Landlock syscall（seccomp + prctl 需在 exec 前由父进程设置），
  * 因此设计为外部 helper 方案（helper 需用户自行安装，探测规则见 resolveHelperPath）；
  * Landlock 是 allow-list 语义，denyRead 这类「父目录已授权时排除子树」无法表达，
  * 细粒度路径排除由应用层（fs 工具边界检查）与规则层兜底；
  * Landlock 违规表现为 EACCES/EPERM（信息已在 stderr 原文中），无结构化违规事件通道
+ *
+ * 档位配置保存在实例闭包中（而非模块级变量），不同会话各持一份，互不串味
+ * @returns {SandboxProvider} Landlock Provider 实例
  */
-export const landlockProvider: SandboxProvider = {
-  name: "landlock",
+export function createLandlockProvider(): SandboxProvider {
+  /** helper 初始化后的档位配置（wrapCommand 映射参数用） */
+  let tier: TierConfig | undefined;
 
-  /**
-   * 探测可用性：helper 存在且可执行
-   * @returns {Promise<boolean>} 可用时为 true
-   */
-  async isAvailable(): Promise<boolean> {
-    return (await resolveHelperPath()) !== null;
-  },
+  return {
+    name: LANDLOCK_PROVIDER_NAME,
 
-  /**
-   * 初始化：保存档位配置（Landlock 边界在每次 exec 时由 helper 参数建立，无会话级资源）
-   * @param {TierConfig} tierConfig - 档位配置
-   * @returns {Promise<void>}
-   */
-  async initialize(tierConfig: TierConfig): Promise<void> {
-    tier = tierConfig;
-  },
+    /**
+     * 探测可用性：helper 存在且可执行
+     * @returns {Promise<boolean>} 可用时为 true
+     */
+    async isAvailable(): Promise<boolean> {
+      return (await resolveHelperPath()) !== null;
+    },
 
-  /**
-   * 包装命令：改写为 helper 调用形态
-   * `landlock-exec --ro-paths <逗号分隔> --rw-paths <逗号分隔> -- <command>`；
-   * read-only 档只读根为 cwd，workspace-write 档只读根为全盘（/）+ 可写根 allowWrite
-   * @param {string} command - 原始命令文本
-   * @param {object} wrapOptions - 调用选项（Landlock helper 不消费，签名对齐接口）
-   * @returns {Promise<string>} 包装后的可执行命令
-   */
-  async wrapCommand(
-    command: string,
-    wrapOptions: { commandId: string; commandText: string },
-  ): Promise<string> {
-    void wrapOptions;
-    const helper = (await resolveHelperPath()) ?? HELPER_BIN;
-    if (tier?.level === "read-only") {
-      // read-only：只放行 cwd 读取，不传 --rw-paths（denyRead 的细粒度排除由应用层兜底）
-      return `${shellQuote(helper)} --ro-paths ${shellQuote(process.cwd())} -- ${command}`;
-    }
-    // workspace-write：全盘可读（denyRead 由应用层兜底），allowWrite 为可写根
-    const allowWrite = tier?.allowWrite ?? [];
-    return `${shellQuote(helper)} --ro-paths ${shellQuote("/")} --rw-paths ${shellQuote(allowWrite.join(","))} -- ${command}`;
-  },
+    /**
+     * 初始化：保存档位配置（Landlock 边界在每次 exec 时由 helper 参数建立，无会话级资源）
+     * @param {TierConfig} tierConfig - 档位配置
+     * @returns {Promise<void>}
+     */
+    async initialize(tierConfig: TierConfig): Promise<void> {
+      tier = tierConfig;
+    },
 
-  /**
-   * 标注 stderr：透传原文（Landlock 无结构化违规事件，EACCES/EPERM 信息已在 stderr 中）
-   * @param {string} commandId - 执行关联 ID（对齐接口，helper 不消费）
-   * @param {string} stderr - 原始 stderr 输出
-   * @returns {Promise<SandboxViolationInfo>} 原样透传与空事件列表
-   */
-  async annotateStderr(
-    commandId: string,
-    stderr: string,
-  ): Promise<SandboxViolationInfo> {
-    void commandId;
-    return { annotatedStderr: stderr, events: [] };
-  },
+    /**
+     * 包装命令：改写为 helper 调用形态
+     * `landlock-exec --ro-paths <逗号分隔> --rw-paths <逗号分隔> -- <command>`；
+     * read-only 档只读根为 cwd，workspace-write 档只读根为全盘（/）+ 可写根 allowWrite
+     * @param {string} command - 原始命令文本
+     * @param {object} wrapOptions - 调用选项（Landlock helper 不消费，签名对齐接口）
+     * @returns {Promise<string>} 包装后的可执行命令
+     */
+    async wrapCommand(
+      command: string,
+      wrapOptions: { commandId: string; commandText: string },
+    ): Promise<string> {
+      void wrapOptions;
+      const helper = (await resolveHelperPath()) ?? HELPER_BIN;
+      if (tier?.level === "read-only") {
+        // read-only：只放行 cwd 读取，不传 --rw-paths（denyRead 的细粒度排除由应用层兜底）
+        return `${shellQuote(helper)} --ro-paths ${shellQuote(process.cwd())} -- ${command}`;
+      }
+      // workspace-write：全盘可读（denyRead 由应用层兜底），allowWrite 为可写根
+      const allowWrite = tier?.allowWrite ?? [];
+      return `${shellQuote(helper)} --ro-paths ${shellQuote("/")} --rw-paths ${shellQuote(allowWrite.join(","))} -- ${command}`;
+    },
 
-  /**
-   * 释放资源：helper 按次调用，无会话级资源需要释放
-   * @returns {Promise<void>}
-   */
-  async dispose(): Promise<void> {
-    tier = undefined;
-  },
-};
+    /**
+     * 标注 stderr：透传原文（Landlock 无结构化违规事件，EACCES/EPERM 信息已在 stderr 中）
+     * @param {string} commandId - 执行关联 ID（对齐接口，helper 不消费）
+     * @param {string} stderr - 原始 stderr 输出
+     * @returns {Promise<SandboxViolationInfo>} 原样透传与空事件列表
+     */
+    async annotateStderr(
+      commandId: string,
+      stderr: string,
+    ): Promise<SandboxViolationInfo> {
+      void commandId;
+      return { annotatedStderr: stderr, events: [] };
+    },
 
-/** 仅用于测试：重置模块级档位状态 */
-export const __resetLandlockForTest = (): void => {
-  tier = undefined;
-};
+    /**
+     * 释放资源：清空本实例持有的档位配置（helper 按次调用，无会话级资源需要释放）
+     * @returns {Promise<void>}
+     */
+    async dispose(): Promise<void> {
+      tier = undefined;
+    },
+  };
+}

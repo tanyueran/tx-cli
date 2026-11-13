@@ -2,10 +2,10 @@ import path from "node:path";
 import { existsSync } from "node:fs";
 import { removeSync } from "fs-extra";
 import pico from "picocolors";
-import { askConfirm, askSelect, askText } from "@tx-cli/shared";
 import { renderTemplate } from "./render";
 import { loadTemplates } from "./templates";
 import type { TemplateKind } from "./types";
+import type { PromptChannel, OutputChannel } from "@tx-cli/core/channels";
 
 /**
  * 通用脚手架流程：确认名称 -> 选择模板 -> 确认覆盖 -> 生成文件
@@ -14,39 +14,41 @@ import type { TemplateKind } from "./types";
  * @param {string} [options.name] - 命令行已传入的名称，未传入时交互式询问
  * @param {string} options.nameLabel - 名称的业务称谓，如“项目名称”“模块名”
  * @param {TemplateKind} options.kind - 模板种类
+ * @param {PromptChannel} options.prompt - 交互提示通道（问询出口）
+ * @param {OutputChannel} options.output - 输出通道（提示与结果输出出口）
  * @returns {Promise<{ name: string; targetPath: string } | null>} 生成成功时返回名称与目标路径，用户放弃覆盖时返回 null
  */
 export async function runScaffold(options: {
   name?: string;
   nameLabel: string;
   kind: TemplateKind;
+  prompt: PromptChannel;
+  output: OutputChannel;
 }): Promise<{ name: string; targetPath: string } | null> {
-  const { nameLabel, kind } = options;
+  const { nameLabel, kind, prompt, output } = options;
 
   const templates = loadTemplates(kind);
-  const name = options.name?.trim() || (await askText(`请输入${nameLabel}`));
+  const name = options.name?.trim() || (await prompt.input(`请输入${nameLabel}`));
 
   // 只有一个模板时无需选择，直接使用
+  const choices = templates.map((item) => ({ title: item.label, value: item }));
   const template =
     templates.length === 1
       ? templates[0]
-      : await askSelect(
-          "请选择模板",
-          templates.map((item) => ({ title: item.label, value: item }))
-        );
+      : ((await prompt.select("请选择模板", choices)) as (typeof templates)[number]);
 
-  console.log(pico.green(`${nameLabel}：${name}`));
-  console.log(pico.green(`选择模板：${template.label}`));
+  output.text(pico.green(`${nameLabel}：${name}`));
+  output.text(pico.green(`选择模板：${template.label}`));
 
   const targetPath = path.resolve(process.cwd(), name);
 
   // 目标目录已存在时，必须由用户确认才能覆盖，避免误删已有代码
   if (existsSync(targetPath)) {
-    const overwrite = await askConfirm(
-      `目标目录 ${targetPath} 已存在，继续将删除该目录下的全部内容，确认覆盖吗？`
+    const overwrite = await prompt.confirm(
+      `目标目录 ${targetPath} 已存在，继续将删除该目录下的全部内容，确认覆盖吗？`,
     );
     if (!overwrite) {
-      console.log(pico.yellow("已取消，未做任何修改"));
+      output.text(pico.yellow("已取消，未做任何修改"));
       return null;
     }
     removeSync(targetPath);
