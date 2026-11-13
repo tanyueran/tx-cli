@@ -5,8 +5,11 @@
     "types": ["node"],
     "paths": {
       "@tx-cli/core": ["../core/src/index.ts"],
+      "@tx-cli/core/*": ["../core/src/*"],
       "@tx-cli/shared": ["../shared/src/index.ts"],
-      "@tx-cli/scaffold": ["../scaffold/src/index.ts"]
+      "@tx-cli/shared/*": ["../shared/src/*"],
+      "@tx-cli/scaffold": ["../scaffold/src/index.ts"],
+      "@tx-cli/scaffold/*": ["../scaffold/src/*"]
     }
   },
   "include": ["./src/**/*", "../../global.d.ts"]

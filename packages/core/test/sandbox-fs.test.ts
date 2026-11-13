@@ -7,8 +7,7 @@ import { SandboxContext } from "@tx-cli/core/sandbox/runtime/sandbox-context";
 import { DEFAULT_SANDBOX_CONFIG } from "@tx-cli/core/sandbox/config/schema";
 import { noopProvider } from "@tx-cli/core/sandbox/providers/noop";
 import {
-  landlockProvider,
-  __resetLandlockForTest,
+  createLandlockProvider,
 } from "@tx-cli/core/sandbox/providers/landlock";
 import type { ApprovalChoice, Approver, TierConfig } from "@tx-cli/core/sandbox/types";
 import type { SandboxFileConfig } from "@tx-cli/core/sandbox/config/schema";
@@ -74,7 +73,6 @@ beforeEach(() => {
 afterEach(() => {
   rmSync(dir, { recursive: true, force: true });
   delete process.env.TX_SANDBOX_LANDLOCK_HELPER;
-  __resetLandlockForTest();
 });
 
 describe("matchPathPattern", () => {
@@ -391,7 +389,7 @@ describe("landlockProvider", () => {
     delete process.env.TX_SANDBOX_LANDLOCK_HELPER;
     // macOS/测试环境下无显式 helper 时应探测失败（Linux 环境由 CI 矩阵覆盖）
     if (process.platform !== "linux") {
-      await expect(landlockProvider.isAvailable()).resolves.toBe(false);
+      await expect(createLandlockProvider().isAvailable()).resolves.toBe(false);
     }
   });
 
@@ -400,12 +398,12 @@ describe("landlockProvider", () => {
     writeFileSync(helper, "#!/bin/sh\nexec \"$@\"\n");
     chmodSync(helper, 0o755);
     process.env.TX_SANDBOX_LANDLOCK_HELPER = helper;
-    await expect(landlockProvider.isAvailable()).resolves.toBe(true);
+    await expect(createLandlockProvider().isAvailable()).resolves.toBe(true);
   });
 
   it("显式指定的 helper 不存在时不可用", async () => {
     process.env.TX_SANDBOX_LANDLOCK_HELPER = join(dir, "missing");
-    await expect(landlockProvider.isAvailable()).resolves.toBe(false);
+    await expect(createLandlockProvider().isAvailable()).resolves.toBe(false);
   });
 
   it("read-only 档包装为 helper 调用且只带只读根", async () => {
@@ -413,7 +411,8 @@ describe("landlockProvider", () => {
     writeFileSync(helper, "#!/bin/sh\nexec \"$@\"\n");
     chmodSync(helper, 0o755);
     process.env.TX_SANDBOX_LANDLOCK_HELPER = helper;
-    await landlockProvider.initialize({
+    const provider = createLandlockProvider();
+    await provider.initialize({
       level: "read-only",
       denyRead: [],
       allowWrite: [],
@@ -421,7 +420,7 @@ describe("landlockProvider", () => {
       allowedDomains: [],
       deniedDomains: [],
     });
-    const wrapped = await landlockProvider.wrapCommand("cat a.txt", {
+    const wrapped = await provider.wrapCommand("cat a.txt", {
       commandId: "id-1",
       commandText: "cat a.txt",
     });
@@ -435,7 +434,8 @@ describe("landlockProvider", () => {
     writeFileSync(helper, "#!/bin/sh\nexec \"$@\"\n");
     chmodSync(helper, 0o755);
     process.env.TX_SANDBOX_LANDLOCK_HELPER = helper;
-    await landlockProvider.initialize({
+    const provider = createLandlockProvider();
+    await provider.initialize({
       level: "workspace-write",
       denyRead: [],
       allowWrite: ["/work", "/tmp"],
@@ -443,7 +443,7 @@ describe("landlockProvider", () => {
       allowedDomains: [],
       deniedDomains: [],
     });
-    const wrapped = await landlockProvider.wrapCommand("echo hi", {
+    const wrapped = await provider.wrapCommand("echo hi", {
       commandId: "id-2",
       commandText: "echo hi",
     });
@@ -452,8 +452,31 @@ describe("landlockProvider", () => {
     expect(wrapped.endsWith("-- echo hi")).toBe(true);
   });
 
+  it("不同实例的档位互不影响（会话间不串味）", async () => {
+    const helper = join(dir, "landlock-exec");
+    writeFileSync(helper, "#!/bin/sh\nexec \"$@\"\n");
+    chmodSync(helper, 0o755);
+    process.env.TX_SANDBOX_LANDLOCK_HELPER = helper;
+    const first = createLandlockProvider();
+    const second = createLandlockProvider();
+    await first.initialize({
+      level: "read-only",
+      denyRead: [],
+      allowWrite: [],
+      denyWrite: [],
+      allowedDomains: [],
+      deniedDomains: [],
+    });
+    // 第二个实例未初始化：不应继承第一个实例的档位
+    const wrapped = await second.wrapCommand("echo hi", {
+      commandId: "id-3",
+      commandText: "echo hi",
+    });
+    expect(wrapped).toContain("--rw-paths");
+  });
+
   it("annotateStderr 透传原文且无违规事件", async () => {
-    const info = await landlockProvider.annotateStderr("id-3", "boom");
+    const info = await createLandlockProvider().annotateStderr("id-4", "boom");
     expect(info.annotatedStderr).toBe("boom");
     expect(info.events).toEqual([]);
   });

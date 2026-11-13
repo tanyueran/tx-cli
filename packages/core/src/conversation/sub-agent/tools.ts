@@ -6,6 +6,7 @@
 import pico from "picocolors";
 import { CancelError } from "@tx-cli/shared";
 import type { Tool, ToolOutput } from "../../tools";
+import type { OutputChannel } from "../../channels";
 import {
   SUB_AGENT_TOOL_NAME,
   TASK_STATUS_TOOL_NAME,
@@ -37,10 +38,12 @@ export interface SubAgentToolHandle {
  * 参数校验失败转为失败输出回传模型自纠；用户取消（CancelError）原样上抛走回合取消流程；
  * 其他异常（含调度器拒绝：并发上限、后台禁用）转为失败输出，主会话可继续对话而非中断
  * @param {SubAgentDispatcher} dispatcher - 子 Agent 调度器
+ * @param {OutputChannel} [output] - 输出通道（进度提示的出口；缺省时进度提示不展示）
  * @returns {SubAgentToolHandle} 工具句柄（工具实例 + 用量上报器设置入口）
  */
 export function createDelegateTaskTool(
   dispatcher: SubAgentDispatcher,
+  output?: OutputChannel,
 ): SubAgentToolHandle {
   let usageReporter: ((usage: TokenUsage) => void) | undefined;
 
@@ -139,15 +142,15 @@ export function createDelegateTaskTool(
           usageReporter,
         );
         if (result.kind === "sync") {
-          console.log(
+          output?.text(
             pico.dim(`…… 子 Agent 运行中：${preview}（过程不进入主上下文）`),
           );
-          console.log(
+          output?.text(
             pico.dim(`子 Agent 完成：结论 ${result.output.length} 字`),
           );
           return { ok: true, output: `子 Agent 结论：\n${result.output}` };
         }
-        console.log(
+        output?.text(
           pico.dim(
             `…… 子任务转后台：${preview}（${result.nodeId}，完成后结论自动带入对话）`,
           ),
@@ -165,7 +168,7 @@ export function createDelegateTaskTool(
           throw err;
         }
         const message = err instanceof Error ? err.message : String(err);
-        console.log(pico.yellow(`子 Agent 失败：${message}`));
+        output?.text(pico.yellow(`子 Agent 失败：${message}`));
         return { ok: false, output: `子 Agent 执行失败：${message}` };
       }
     },

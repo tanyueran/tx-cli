@@ -9,6 +9,7 @@ import {
   SUB_AGENT_TOOL_NAME,
 } from "../../tools/registry";
 import type { Tool } from "../../tools";
+import type { OutputChannel } from "../../channels";
 import { maybeCompactHistory } from "../loop/compaction";
 import { createSubAgentDispatcher } from "./dispatcher";
 import type { SubAgentDispatcher, SubAgentNodeEvent } from "./dispatcher";
@@ -95,6 +96,8 @@ export interface CreateSubAgentRunnerOptions {
   extraBody?: () => Record<string, unknown> | undefined;
   /** 工具调用轮数上限，缺省 DEFAULT_SUB_AGENT_MAX_ITERATIONS */
   maxIterations?: number;
+  /** 输出通道（软收敛提示的出口；缺省时不展示该提示） */
+  output?: OutputChannel;
 }
 
 /**
@@ -175,7 +178,7 @@ export function createSubAgentRunner(
       onSoftConverge: control?.quiet
         ? () => {}
         : () => {
-            console.log(
+            options.output?.text(
               pico.dim(
                 `…… 子 Agent 已达 ${maxIterations} 轮上限，将基于已有信息直接收尾`,
               ),
@@ -259,6 +262,8 @@ export interface AttachSubAgentOptions {
    * 被事件唤醒，实现「用户纯等待时后台任务完成即自动继续」
    */
   onNodeEvent?: (event: SubAgentNodeEvent) => void;
+  /** 输出通道（子 Agent 进度提示的出口） */
+  output?: OutputChannel;
 }
 
 /**
@@ -350,6 +355,7 @@ export function attachSubAgentTools(
     skills: options.skills,
     extraBody: options.extraBody,
     maxIterations: options.maxIterations,
+    output: options.output,
   });
   // 调度器是唯一派生入口：同步直连执行核，后台注册节点并跨回合收割
   const dispatcher = createSubAgentDispatcher({
@@ -357,7 +363,7 @@ export function attachSubAgentTools(
     backgroundEnabled: options.backgroundEnabled ?? true,
     onEvent: options.onNodeEvent,
   });
-  const handle = createDelegateTaskTool(dispatcher);
+  const handle = createDelegateTaskTool(dispatcher, options.output);
   // 本次装配的增量：三个子 Agent 工具（合并进会话工具带由 attachSubAgentIfEnabled 统一执行）
   const addedTools: Tool[] = [
     handle.tool,

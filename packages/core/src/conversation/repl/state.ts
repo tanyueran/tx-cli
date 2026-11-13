@@ -24,6 +24,7 @@ import type {
 import { buildSkillSuggestions, buildSlashCommands } from "./slash-commands";
 import type { SlashCommand } from "./slash-commands";
 import { writeSessionMarkdown } from "./session-export";
+import type { SessionChannels } from "../../channels";
 
 /** REPL 会话上下文：会话期间不变的依赖打包，避免逐参数透传 */
 interface ReplSession {
@@ -59,6 +60,8 @@ export interface ReplOptions {
   maxIterations: number;
   /** 是否装配子 Agent 工具（delegate_task）；agent 模式开启，chat 只读问答不装配 */
   subAgentEnabled?: boolean;
+  /** 会话通道集合：输入 / 输出 / 交互提示的抽象出口，由各端注入 */
+  channels: SessionChannels;
 }
 
 /** REPL 会话状态：主循环各步骤共享的会话内状态，可变项集中在对象属性上 */
@@ -130,6 +133,7 @@ export function createReplState(options: ReplOptions): ReplState {
         thinkingEffortMap: llmConfig.thinkingEffortMap,
       }),
     onNodeEvent: () => stateRef.current?.backgroundWake?.(),
+    output: options.channels.output,
   });
   const state: ReplState = {
     options,
@@ -163,6 +167,7 @@ export function createReplState(options: ReplOptions): ReplState {
     catalog,
     todoHandle,
     thinkingStyle,
+    output: options.channels.output,
     getThinkingLevel: () => state.level.current,
     setThinkingLevel: (next) => {
       state.level.current = next;

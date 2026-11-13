@@ -4,7 +4,7 @@
   "version": "0.11.1",
   "description": "一个cli工具，支持创建项目，添加模版，与大模型对话",
   "engines": {
-    "node": ">=20.11.0"
+    "node": ">=22.12.0"
   },
   "scripts": {
     "dev": "pnpm --filter @tx-cli/cli dev",
@@ -29,21 +29,11 @@
   "author": "tanyueran",
   "license": "ISC",
   "packageManager": "pnpm@10.5.2",
-  "dependencies": {
-    "@anthropic-ai/sandbox-runtime": "^0.0.80",
-    "@modelcontextprotocol/sdk": "^1.32.1",
-    "commander": "12.1.0",
-    "connect": "^3.7.0",
+  "devDependencies": {
     "fs-extra": "11.1.1",
-    "handlebars": "4.7.7",
-    "open": "^10.2.0",
-    "openai": "7.32.0",
     "picocolors": "1.1.1",
     "prompts": "2.4.2",
-    "serve-static": "^2.2.0",
-    "simple-git": "3.28.0"
-  },
-  "devDependencies": {
+    "simple-git": "3.28.0",
     "@commitlint/cli": "^21.2.3",
     "@commitlint/config-conventional": "^21.2.3",
     "@eslint/js": "^10.0.1",

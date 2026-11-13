@@ -7,7 +7,8 @@
 import pico from "picocolors";
 import { CancelError } from "@tx-cli/shared";
 import { formatElapsed } from "./panel";
-import { askReplLine, ReplInputAbortedError } from "./input";
+import { InputAbortedError } from "../../channels";
+import type { OutputChannel } from "../../channels";
 import {
   filterInlineSkillSuggestions,
   filterSuggestions,
@@ -24,9 +25,9 @@ interface ReplInputWaitOptions {
 }
 
 /**
- * 步骤一：采集一条用户输入（补全面板由 askReplLine 提供）
+ * 步骤一：采集一条用户输入（补全面板由输入通道实现）
  * Ctrl+C 取消输入视为正常退出；exit/quit 指令退出会话；输入行记入输入历史（上限 200 条）；
- * 输入等待被后台事件中断（ReplInputAbortedError）时原样上抛，由输入等待方处理
+ * 输入等待被后台事件中断（InputAbortedError）时原样上抛，由输入等待方处理
  * @param {ReplState} state - 会话状态
  * @param {ReplInputWaitOptions} [waitOptions] - 中断信号与还原草稿（可选）
  * @returns {Promise<string | undefined>} 用户输入；undefined 表示退出会话
@@ -35,9 +36,10 @@ async function readReplInput(
   state: ReplState,
   waitOptions?: ReplInputWaitOptions,
 ): Promise<string | undefined> {
+  const { input: inputChannel, output } = state.options.channels;
   let userInput: string;
   try {
-    userInput = await askReplLine({
+    userInput = await inputChannel.readLine({
       message: pico.green("你 > "),
       // 行首 /：命令与 /skill 二级补全；行中「空格 + /」：仅技能补全（技能提及）
       suggest: (input, cursor) =>
@@ -51,7 +53,7 @@ async function readReplInput(
   } catch (err) {
     // 用户按 Ctrl+C 取消输入：视为正常退出对话，不沿用顶层"未做任何修改"的取消文案
     if (err instanceof CancelError) {
-      console.log(pico.yellow("已退出对话"));
+      output.text(pico.yellow("已退出对话"));
       return undefined;
     }
     throw err;
@@ -65,7 +67,7 @@ async function readReplInput(
   }
   const lowerInput = userInput.toLowerCase();
   if (lowerInput === "exit" || lowerInput === "quit") {
-    console.log(pico.yellow("已退出对话"));
+    output.text(pico.yellow("已退出对话"));
     return undefined;
   }
   return userInput;
@@ -130,14 +132,18 @@ export function buildBackgroundNotice(events: SubAgentNodeEvent[]): string {
 /**
  * 打印一批后台任务通知行（前后留空行，与流式输出区隔）
  * @param {SubAgentNodeEvent[]} events - 节点终态事件
+ * @param {OutputChannel} output - 输出通道
  * @returns {void}
  */
-export function printTaskEventLines(events: SubAgentNodeEvent[]): void {
-  console.log("");
+export function printTaskEventLines(
+  events: SubAgentNodeEvent[],
+  output: OutputChannel,
+): void {
+  output.text("");
   for (const event of events) {
-    console.log(formatTaskEventLine(event));
+    output.text(formatTaskEventLine(event));
   }
-  console.log("");
+  output.text("");
 }
 
 /**
@@ -149,7 +155,7 @@ export function printTaskEventLines(events: SubAgentNodeEvent[]): void {
 function flushBackgroundEvents(state: ReplState): void {
   const events = state.subAgentDispatcher?.drainEvents() ?? [];
   if (events.length > 0) {
-    printTaskEventLines(events);
+    printTaskEventLines(events, state.options.channels.output);
   }
 }
 
@@ -164,7 +170,7 @@ export const MAX_AUTO_CONTINUE_TURNS = 3;
  * @returns {void}
  */
 export function ingestEvents(state: ReplState, events: SubAgentNodeEvent[]): void {
-  printTaskEventLines(events);
+  printTaskEventLines(events, state.options.channels.output);
   state.history.push({
     type: "message",
     role: "user",
@@ -204,7 +210,7 @@ export async function awaitBackgroundTasksOnExit(
   if (!dispatcher.hasRunning()) {
     return;
   }
-  console.log(
+  state.options.channels.output.text(
     pico.yellow(
       "存在运行中的后台任务，等待完成后再退出…（如需放弃等待请再按一次 Ctrl+C）",
     ),
@@ -229,7 +235,7 @@ export type ReplWaitOutcome =
  * - 否则构造 AbortController 竞速：输入先落定按输入/退出处理；
  *   事件先到则 abort 输入等待，草稿经 ReplInputAbortedError 捕获后存入
  *   state.pendingDraft，下一次输入等待预填还原；
- * - 非 TTY 环境（管道/CI）不竞速：后台事件仍在回合边界收割，行为与之前一致
+ * - 非交互环境（管道/CI）不竞速：后台事件仍在回合边界收割，行为与之前一致
  * @param {ReplState} state - 会话状态
  * @returns {Promise<ReplWaitOutcome>} 等待结果
  */
@@ -237,7 +243,7 @@ export async function waitForInputOrBackground(
   state: ReplState,
 ): Promise<ReplWaitOutcome> {
   const dispatcher = state.subAgentDispatcher;
-  const interactive = Boolean(process.stdin.isTTY && process.stdout.isTTY);
+  const interactive = state.options.channels.input.isInteractive();
   if (!dispatcher || !interactive) {
     const value = await readReplInput(state);
     return value === undefined ? { type: "exit" } : { type: "input", value };
@@ -266,7 +272,7 @@ export async function waitForInputOrBackground(
     initialInput: state.pendingDraft,
   });
   inputPromise.catch((err: unknown) => {
-    if (err instanceof ReplInputAbortedError) {
+    if (err instanceof InputAbortedError) {
       // 中断时用户可能已键入草稿：存入待还原槽，下一次输入等待预填
       state.pendingDraft = err.draft || state.pendingDraft;
     }

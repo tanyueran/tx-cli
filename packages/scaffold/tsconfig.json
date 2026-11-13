@@ -4,7 +4,9 @@
     "outDir": "./dist",
     "types": ["node"],
     "paths": {
-      "@tx-cli/shared": ["../shared/src/index.ts"]
+      "@tx-cli/shared": ["../shared/src/index.ts"],
+      "@tx-cli/core": ["../core/src/index.ts"],
+      "@tx-cli/core/*": ["../core/src/*"]
     }
   },
   "include": ["./src/**/*", "../../global.d.ts"]

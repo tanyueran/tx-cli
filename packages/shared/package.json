@@ -12,14 +12,9 @@
     "type-check": "tsc --noEmit",
     "clean": "rm -rf dist"
   },
-  "dependencies": {
-    "fs-extra": "11.1.1",
-    "prompts": "2.4.2"
-  },
+  "dependencies": {},
   "devDependencies": {
-    "@types/fs-extra": "11.0.4",
     "@types/node": "^26.4.1",
-    "@types/prompts": "2.4.2",
     "typescript": "5.9.2"
   }
 }

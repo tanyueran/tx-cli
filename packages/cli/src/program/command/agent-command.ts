@@ -17,6 +17,7 @@ import type {
   SandboxLevel,
   SandboxMissingAction,
 } from "@tx-cli/core";
+import { createCliChannels } from "../../channels";
 
 /** agent 命令执行体的选项入参（沙箱枚举字段用联合类型，合法性由 commander choices() 保证） */
 interface AgentOptions {
@@ -78,7 +79,9 @@ export async function runAgentAction(
 ): Promise<void> {
   const thinkingLevel = parseThinkingLevel(agentOptions.think);
   const cliSandboxOptions = buildSandboxOptions(agentOptions);
-  const llmConfig = await loadLlmConfig();
+  // 会话通道：终端输入、输出与交互提示的实现（core 只依赖接口）
+  const channels = createCliChannels();
+  const llmConfig = await loadLlmConfig(channels);
   // commander 的 --no-mcp 取反约定：显式传入时 agentOptions.mcp 为 false，缺省为 true
   const mcpEnabled = agentOptions.mcp !== false;
   const taskText = taskSegments.join(" ").trim();
@@ -89,6 +92,7 @@ export async function runAgentAction(
       thinkingLevel,
       mcpEnabled,
       cliSandboxOptions,
+      channels,
     });
     return;
   }
@@ -97,6 +101,7 @@ export async function runAgentAction(
     thinkingLevel,
     mcpEnabled,
     cliSandboxOptions,
+    channels,
   });
 }
 

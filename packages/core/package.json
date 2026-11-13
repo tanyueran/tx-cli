@@ -23,12 +23,10 @@
     "@anthropic-ai/sandbox-runtime": "^0.0.80",
     "@modelcontextprotocol/sdk": "^1.32.1",
     "openai": "7.32.0",
-    "picocolors": "1.1.1",
-    "prompts": "2.4.2"
+    "picocolors": "1.1.1"
   },
   "devDependencies": {
     "@types/node": "^26.4.1",
-    "@types/prompts": "2.4.2",
     "typescript": "5.9.2"
   }
 }

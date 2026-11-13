@@ -4,15 +4,14 @@
  * 以及标签对齐、耗时格式化等展示辅助（formatElapsed 同时被 background 的通知行复用）
  */
 import pico from "picocolors";
-import { printWarnings } from "@tx-cli/shared";
 import { displayWidth } from "@tx-cli/shared";
 import {
   describePricing,
   formatUsageSummary,
-  formatUsageTable,
   isEmptyUsage,
 } from "../../llm";
 import type { LlmPricing, ThinkingLevel, TokenUsage } from "../../llm/types";
+import type { OutputChannel } from "../../channels";
 import type { ReplOptions } from "./state";
 import type { SlashCommand } from "./slash-commands";
 
@@ -50,28 +49,28 @@ export function formatElapsed(ms: number): string {
  * 服务未返回 usage（本轮无数据）时不输出噪音
  * @param {TokenUsage} turnUsage - 本轮累计用量（可能包含 agentic 循环的多轮请求）
  * @param {TokenUsage} totalUsage - 会话累计用量
- * @param {LlmPricing} [pricing] - 费用单价配置，未配置时只展示 token
+ * @param {LlmPricing | undefined} pricing - 费用单价配置，未配置时只展示 token
+ * @param {OutputChannel} output - 输出通道
  * @returns {void}
  */
 export function printTurnUsage(
   turnUsage: TokenUsage,
   totalUsage: TokenUsage,
-  pricing?: LlmPricing,
+  pricing: LlmPricing | undefined,
+  output: OutputChannel,
 ): void {
   if (isEmptyUsage(turnUsage)) {
     return;
   }
   // 表格展示本轮与累计：标签列对齐，本轮高亮、累计弱化
-  console.log(
-    formatUsageTable(
-      [
-        { label: "本轮", usage: turnUsage, emphasis: true },
-        { label: "累计", usage: totalUsage },
-      ],
-      pricing,
-    ),
-  );
-  console.log("");
+  output.usage({
+    rows: [
+      { label: "本轮", usage: turnUsage, emphasis: true },
+      { label: "累计", usage: totalUsage },
+    ],
+    pricing,
+  });
+  output.text("");
 }
 
 /**
@@ -83,6 +82,7 @@ export function printTurnUsage(
  * @param {ThinkingLevel} thinkingLevel - 初始思考档位
  * @param {SlashCommand[]} commands - 斜杠命令注册表
  * @param {TokenUsage} usage - 当前会话累计用量
+ * @param {OutputChannel} output - 输出通道
  * @returns {void}
  */
 export function printReadyPanel(
@@ -90,6 +90,7 @@ export function printReadyPanel(
   thinkingLevel: ThinkingLevel,
   commands: SlashCommand[],
   usage: TokenUsage,
+  output: OutputChannel,
 ): void {
   const { llmConfig, runtime } = options;
   const { mcpSummary, bootWarnings } = runtime;
@@ -113,21 +114,23 @@ export function printReadyPanel(
     ]);
   }
   for (const [label, rowContent] of rows) {
-    console.log(`  ${pico.gray(padPanelLabel(label))}${rowContent}`);
+    output.text(`  ${pico.gray(padPanelLabel(label))}${rowContent}`);
   }
 
-  console.log("");
+  output.text("");
   const hints = commands
     .filter((command) => command.available)
     .map((command) => command.name);
   hints.push("exit 或 Ctrl+C 退出");
-  console.log(
+  output.text(
     `  ${pico.gray(padPanelLabel("提示"))}${pico.cyan(hints.join(" · "))}`,
   );
 
   const allWarnings = [...scanWarnings, ...bootWarnings];
   if (allWarnings.length > 0) {
-    console.log("");
-    printWarnings(allWarnings, "  ");
+    output.text("");
+    for (const warning of allWarnings) {
+      output.warn(pico.yellow(`  ${warning}`));
+    }
   }
 }

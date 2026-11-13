@@ -47,7 +47,7 @@ beforeEach(() => {
 
 describe("runChatAction", () => {
   it("传入问题走单次问答：多个词以空格合并，思考档位透传", async () => {
-    const llmConfig = await loadLlmConfig();
+    const llmConfig = makeLlmConfig();
 
     await runChatAction(["解释", "一下", "这段代码"], { think: "high" });
 
@@ -56,17 +56,22 @@ describe("runChatAction", () => {
       llmConfig,
       question: "解释 一下 这段代码",
       thinkingLevel: "high",
+      channels: expect.anything(),
     });
     expect(runReplChat).not.toHaveBeenCalled();
   });
 
   it("未传参进入多轮对话模式", async () => {
-    const llmConfig = await loadLlmConfig();
+    const llmConfig = makeLlmConfig();
 
     await runChatAction([], {});
 
     expect(runReplChat).toHaveBeenCalledTimes(1);
-    expect(runReplChat).toHaveBeenCalledWith(llmConfig, undefined);
+    expect(runReplChat).toHaveBeenCalledWith(
+      llmConfig,
+      undefined,
+      expect.anything(),
+    );
     expect(runOneShotChat).not.toHaveBeenCalled();
   });
 
@@ -84,16 +89,17 @@ describe("runChatAction", () => {
     await runChatAction(["问题"], {});
 
     expect(runOneShotChat).toHaveBeenCalledWith({
-      llmConfig: await loadLlmConfig(),
+      llmConfig: makeLlmConfig(),
       question: "问题",
       thinkingLevel: undefined,
+      channels: expect.anything(),
     });
   });
 });
 
 describe("runAgentAction", () => {
   it("传入任务走单次执行：MCP 缺省开启，沙箱选项为空对象走配置默认", async () => {
-    const llmConfig = await loadLlmConfig();
+    const llmConfig = makeLlmConfig();
 
     await runAgentAction(["修复", "这个", "bug"], {});
 
@@ -104,12 +110,13 @@ describe("runAgentAction", () => {
       thinkingLevel: undefined,
       mcpEnabled: true,
       cliSandboxOptions: {},
+      channels: expect.anything(),
     });
     expect(runReplAgent).not.toHaveBeenCalled();
   });
 
   it("未传参进入多轮任务模式", async () => {
-    const llmConfig = await loadLlmConfig();
+    const llmConfig = makeLlmConfig();
 
     await runAgentAction([], {});
 
@@ -119,6 +126,7 @@ describe("runAgentAction", () => {
       thinkingLevel: undefined,
       mcpEnabled: true,
       cliSandboxOptions: {},
+      channels: expect.anything(),
     });
     expect(runOneShotAgent).not.toHaveBeenCalled();
   });
@@ -127,11 +135,12 @@ describe("runAgentAction", () => {
     await runAgentAction(["任务"], { mcp: false });
 
     expect(runOneShotAgent).toHaveBeenCalledWith({
-      llmConfig: await loadLlmConfig(),
+      llmConfig: makeLlmConfig(),
       task: "任务",
       thinkingLevel: undefined,
       mcpEnabled: false,
       cliSandboxOptions: {},
+      channels: expect.anything(),
     });
   });
 
@@ -146,7 +155,7 @@ describe("runAgentAction", () => {
     });
 
     expect(runOneShotAgent).toHaveBeenCalledWith({
-      llmConfig: await loadLlmConfig(),
+      llmConfig: makeLlmConfig(),
       task: "任务",
       thinkingLevel: "low",
       mcpEnabled: false,
@@ -156,6 +165,7 @@ describe("runAgentAction", () => {
         bashEnabled: false,
         missingAction: "allow",
       },
+      channels: expect.anything(),
     });
   });
 

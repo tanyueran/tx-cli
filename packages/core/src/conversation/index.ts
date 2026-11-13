@@ -10,7 +10,7 @@ export { buildSystemPrompt } from "./session/prompt";
 export {
   createStreamRenderer,
   createToolCallLogger,
-  printToolCall,
+  buildToolCallInfo,
 } from "./loop/renderer";
 export { runConversationRepl, runReplConversation } from "./repl/repl";
 export type { ReplConversationOptions } from "./repl/repl";

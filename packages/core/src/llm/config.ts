@@ -6,6 +6,7 @@ import {
   updateConfigSection,
 } from "@tx-cli/shared";
 import { mergeRecords } from "@tx-cli/shared";
+import type { SessionChannels } from "../channels";
 import { runSetupWizard } from "./config-wizard";
 import { parseThinkingLevel, parseThinkingStyle } from "./thinking";
 import type {
@@ -22,14 +23,28 @@ interface LlmFileConfig {
 }
 
 /**
+ * 输出配置装载告警：经输出通道展示
+ * @param {SessionChannels} channels - 会话通道集合
+ * @param {string} message - 告警文本
+ * @returns {void}
+ */
+function warnMessage(channels: SessionChannels, message: string): void {
+  channels.output.warn(pico.yellow(message));
+}
+
+/**
  * 读取指定配置文件的 llm 段：文件读取与 JSON 解析由共享模块完成，此处只做段收窄
  * @param {string} configPath - 配置文件路径
+ * @param {SessionChannels} channels - 会话通道集合
  * @returns {LlmFileConfig} llm 段内容（文件不存在或损坏时为空对象）
  */
-function readLlmFileConfig(configPath: string): LlmFileConfig {
+function readLlmFileConfig(
+  configPath: string,
+  channels: SessionChannels,
+): LlmFileConfig {
   const { configData: fileConfig, warnings } = readGlobalConfig(configPath);
   for (const warning of warnings) {
-    console.warn(pico.yellow(warning));
+    warnMessage(channels, warning);
   }
   const { llm } = fileConfig;
   return {
@@ -53,9 +68,13 @@ function normalizeText(configValue: string | undefined): string | undefined {
  * 校验并归一化费用单价配置：只保留有限非负数的单价字段
  * 无任何有效单价时返回 undefined（仅统计 token，不估算费用）
  * @param {LlmPricing | undefined} raw - 配置文件中的原始 pricing 段
+ * @param {SessionChannels} channels - 会话通道集合
  * @returns {LlmPricing | undefined} 归一化后的单价配置
  */
-function normalizePricing(raw: LlmPricing | undefined): LlmPricing | undefined {
+function normalizePricing(
+  raw: LlmPricing | undefined,
+  channels: SessionChannels,
+): LlmPricing | undefined {
   if (!raw || typeof raw !== "object") {
     return undefined;
   }
@@ -70,9 +89,7 @@ function normalizePricing(raw: LlmPricing | undefined): LlmPricing | undefined {
       pricing[key] = value;
       hasPrice = true;
     } else {
-      console.warn(
-        pico.yellow(`llm.pricing.${key} 配置非法（需为非负数），已忽略`),
-      );
+      warnMessage(channels, `llm.pricing.${key} 配置非法（需为非负数），已忽略`);
     }
   }
   if (typeof raw.currency === "string" && raw.currency.trim()) {
@@ -85,10 +102,12 @@ function normalizePricing(raw: LlmPricing | undefined): LlmPricing | undefined {
  * 校验并归一化上下文压缩配置：逐字段丢弃非法值，全部无效时返回 undefined
  * maxContextTokens 是启用开关，缺失该项时压缩整体关闭
  * @param {LlmContextConfig | undefined} raw - 配置文件中的原始 context 段
+ * @param {SessionChannels} channels - 会话通道集合
  * @returns {LlmContextConfig | undefined} 归一化后的配置
  */
 function normalizeContext(
   raw: LlmContextConfig | undefined,
+  channels: SessionChannels,
 ): LlmContextConfig | undefined {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
     return undefined;
@@ -108,9 +127,7 @@ function normalizeContext(
     if (typeof value === "number" && Number.isFinite(value) && value > 0) {
       context[key] = value;
     } else {
-      console.warn(
-        pico.yellow(`llm.context.${key} 配置非法（需为${expectation}），已忽略`),
-      );
+      warnMessage(channels, `llm.context.${key} 配置非法（需为${expectation}），已忽略`);
     }
   }
   return Object.keys(context).length > 0 ? context : undefined;
@@ -121,14 +138,16 @@ function normalizeContext(
  * 无效字段在归一化阶段已丢弃，不会因项目层的非法值把全局层的合法值冲掉
  * @param {LlmContextConfig | undefined} globalContext - 全局配置 context 段
  * @param {LlmContextConfig | undefined} projectContext - 项目配置 context 段
+ * @param {SessionChannels} channels - 会话通道集合
  * @returns {LlmContextConfig | undefined} 合并后的配置
  */
 function mergeContextConfig(
   globalContext: LlmContextConfig | undefined,
   projectContext: LlmContextConfig | undefined,
+  channels: SessionChannels,
 ): LlmContextConfig | undefined {
-  const globalCtx = normalizeContext(globalContext);
-  const projectCtx = normalizeContext(projectContext);
+  const globalCtx = normalizeContext(globalContext, channels);
+  const projectCtx = normalizeContext(projectContext, channels);
   if (!globalCtx && !projectCtx) {
     return undefined;
   }
@@ -141,15 +160,17 @@ function mergeContextConfig(
  * 标量字段高层覆盖低层，thinkingEffortMap 按 key 合并（项目同名覆盖全局）
  * @param {string} globalPath - 全局配置文件路径
  * @param {string | undefined} projectPath - 项目配置文件路径（缺省跳过项目层）
+ * @param {SessionChannels} channels - 会话通道集合
  * @returns {Partial<LlmConfig>} 解析结果，任一项都可能为空
  */
 function resolveConfigFromSources(
   globalPath: string,
-  projectPath?: string,
+  projectPath: string | undefined,
+  channels: SessionChannels,
 ): Partial<LlmConfig> {
-  const globalLlm = readLlmFileConfig(globalPath).llm;
+  const globalLlm = readLlmFileConfig(globalPath, channels).llm;
   const projectLlm = projectPath
-    ? readLlmFileConfig(projectPath).llm
+    ? readLlmFileConfig(projectPath, channels).llm
     : undefined;
   return {
     apiKey:
@@ -171,20 +192,26 @@ function resolveConfigFromSources(
           )
         : undefined,
     // 单价配置整体覆盖（项目 > 全局），非法字段在校验时丢弃
-    pricing: normalizePricing(projectLlm?.pricing ?? globalLlm?.pricing),
+    pricing: normalizePricing(projectLlm?.pricing ?? globalLlm?.pricing, channels),
     // 上下文压缩配置逐字段合并（项目覆盖全局），非法字段在校验时丢弃
-    context: mergeContextConfig(globalLlm?.context, projectLlm?.context),
+    context: mergeContextConfig(
+      globalLlm?.context,
+      projectLlm?.context,
+      channels,
+    ),
   };
 }
 
 /**
  * 保存 LLM 配置到用户级配置文件（统一写入口只替换 llm 段，其他段与缓存由共享模块处理）
  * @param {LlmConfig} llmConfig - 完整配置
+ * @param {SessionChannels} channels - 会话通道集合
  * @returns {void}
  */
-function saveConfigFile(llmConfig: LlmConfig): void {
+function saveConfigFile(llmConfig: LlmConfig, channels: SessionChannels): void {
   updateConfigSection("llm", llmConfig);
-  console.log(pico.green(`配置已保存到 ${resolveGlobalConfigPath()}`));
+  const message = `配置已保存到 ${resolveGlobalConfigPath()}`;
+  channels.output.text(pico.green(message));
 }
 
 /**
@@ -193,16 +220,22 @@ function saveConfigFile(llmConfig: LlmConfig): void {
  * 必填三项（apiKey/baseUrl/model）任一缺失时进入交互向导补全并写盘；
  * 可选思考配置不参与引导，装载时统一校验，向导补全后原样合并保留以免落盘丢失
  *
- * @param {string} globalPath - 全局配置文件路径（缺省 ~/.tx-cli/config.json，测试可注入）
- * @param {string} projectPath - 项目配置文件路径（缺省 <cwd>/.tx-cli/config.json，测试可注入）
+ * @param {SessionChannels} channels - 会话通道集合（引导问询与提示的出口）
+ * @param {string} [globalPath] - 全局配置文件路径（缺省 ~/.tx-cli/config.json，测试可注入）
+ * @param {string} [projectPath] - 项目配置文件路径（缺省 <cwd>/.tx-cli/config.json，测试可注入）
  * @returns {Promise<LlmConfig>} 完整可用的 LLM 配置
  * @throws {CliError} 思考档位或风格配置非法时抛出
  */
 export async function loadLlmConfig(
+  channels: SessionChannels,
   globalPath: string = resolveGlobalConfigPath(),
   projectPath: string = resolveProjectConfigPath(process.cwd()),
 ): Promise<LlmConfig> {
-  const partialLlmConfig = resolveConfigFromSources(globalPath, projectPath);
+  const partialLlmConfig = resolveConfigFromSources(
+    globalPath,
+    projectPath,
+    channels,
+  );
   const thinkingLevel = parseThinkingLevel(partialLlmConfig.thinkingLevel);
   const thinkingStyle = parseThinkingStyle(partialLlmConfig.thinkingStyle);
   const thinkingConfig = {
@@ -228,8 +261,8 @@ export async function loadLlmConfig(
       ...thinkingConfig,
     };
   }
-  const wizardConfig = await runSetupWizard(partialLlmConfig);
+  const wizardConfig = await runSetupWizard(partialLlmConfig, channels);
   const mergedLlmConfig = { ...wizardConfig, ...thinkingConfig };
-  saveConfigFile(mergedLlmConfig);
+  saveConfigFile(mergedLlmConfig, channels);
   return mergedLlmConfig;
 }

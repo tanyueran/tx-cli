@@ -16,6 +16,7 @@ import {
 import { SkillCatalog } from "@tx-cli/core/skills";
 import type { SlashCommandDeps } from "@tx-cli/core/conversation/repl/slash-commands";
 import type { TodoToolHandle } from "@tx-cli/core/tools";
+import { MockOutputChannel } from "./helpers/mock-channels";
 
 /** 构造无沙箱、无任务清单、none 思考风格的最小依赖（档位经 lastLevel 观测），可按用例覆盖字段 */
 function makeDeps(
@@ -28,6 +29,7 @@ function makeDeps(
     catalog,
     todoHandle: undefined,
     thinkingStyle: "none",
+    output: new MockOutputChannel({ echo: true }),
     getThinkingLevel: () => "low",
     setThinkingLevel: (level) => {
       lastLevel = level;
@@ -451,7 +453,7 @@ describe("printHelp", () => {
       },
     ]);
     const commands = buildSlashCommands(makeDeps(catalog));
-    printHelp(commands, catalog);
+    printHelp(commands, catalog, new MockOutputChannel({ echo: true }));
     const output = logSpy.mock.calls.map((args: unknown[]) => args.join(" ")).join("\n");
     // 每个可用命令行都应出现（含参数占位）
     expect(output).toContain("/think <off|low|medium|high>");

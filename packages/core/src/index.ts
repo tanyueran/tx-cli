@@ -1,3 +1,6 @@
+// I/O 抽象
+export * from "./channels";
+
 // 会话
 export * from "./conversation";
 

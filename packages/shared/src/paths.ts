@@ -54,19 +54,6 @@ export function findPackageRoot(): string {
 }
 
 /**
- * 把模板元数据里的相对路径解析为绝对路径
- * 说明：模板目录归属于 scaffold 包，位于 packages/scaffold/template（源码）或 dist/template（产物），
- * 本函数从当前文件位置向上查找 template 目录后拼接相对路径；
- * 注意在 monorepo 源码模式下 shared 自身位置向上没有 template 目录，
- * scaffold 包内应使用 findNearestDirUp("template", __dirname) 自行定位
- * @param {string} relativePath - 相对于 template 目录的路径，如 project/vue/vite-vue-ts
- * @returns {string} 模板目录的绝对路径
- */
-export function resolveTemplatePath(relativePath: string): string {
-  return resolve(findNearestDirUp("template", __dirname), "template", relativePath);
-}
-
-/**
  * 读取 CLI 版本号
  * 构建产物中 __CLI_VERSION__ 会被 rollup 替换为字面量；直跑源码（tsx）时该常量不存在，
  * 此时回退到读取 package.json，保证两种运行方式行为一致

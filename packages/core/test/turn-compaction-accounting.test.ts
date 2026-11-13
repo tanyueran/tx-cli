@@ -10,6 +10,7 @@ import { createSubAgentRunner } from "@tx-cli/core/conversation/sub-agent/attach
 import type { SubAgentRunner } from "@tx-cli/core/conversation/sub-agent/attach";
 import type { Tool } from "@tx-cli/core/tools";
 import type { LlmConfig, TokenUsage } from "@tx-cli/core/llm/types";
+import { MockOutputChannel } from "./helpers/mock-channels";
 
 // 子 Agent 与主会话复用同一 streamResponse；同时 mock barrel 与 client 两个入口
 // （回合函数经 barrel 导入，摘要生成器从 ./client 导入）。
@@ -111,6 +112,7 @@ describe("压缩用量的口径隔离", () => {
       instructions: "sys",
       tools: [makeTool("noop")],
       advertisedTools: [makeTool("noop")],
+      output: new MockOutputChannel(),
       onUsage,
       onCompactionUsage,
     });

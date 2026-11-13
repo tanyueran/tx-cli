@@ -50,17 +50,18 @@ export { expandHome } from "@tx-cli/shared";
 export { appendAudit } from "./runtime/audit";
 export type { AuditEntry } from "./runtime/audit";
 export { getProvider, listProviderNames } from "./providers/registry";
-export { landlockProvider, __resetLandlockForTest } from "./providers/landlock";
+export { createLandlockProvider, LANDLOCK_PROVIDER_NAME } from "./providers/landlock";
 export { SandboxContext } from "./runtime/sandbox-context";
 export type {
   SandboxContextOptions,
   SandboxEvaluationInput,
 } from "./runtime/sandbox-context";
-export {
-  interactiveApprover,
-  detectInteractive,
-} from "./runtime/interactive-approver";
+export { createInteractiveApprover } from "./runtime/interactive-approver";
 export { createSandboxContext } from "./bootstrap/create-context";
 export type { SandboxCliOptions } from "./bootstrap/options";
-export { grantGlobalTrust, resolveUntrustedFallback } from "./bootstrap/trust";
+export {
+  createTrustPrompt,
+  grantGlobalTrust,
+  resolveUntrustedFallback,
+} from "./bootstrap/trust";
 export type { UntrustedFallbackInput } from "./bootstrap/trust";

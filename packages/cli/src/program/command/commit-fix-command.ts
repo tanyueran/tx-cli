@@ -3,7 +3,7 @@ import pico from "picocolors";
 import simpleGit from "simple-git";
 import { disposeOnesInfo } from "@tx-cli/scaffold";
 import { CliError } from "@tx-cli/shared";
-import { askSelect } from "@tx-cli/shared";
+import { createCliChannels } from "../../channels";
 
 /**
  * 注册 commit-fix 命令：把 ones 上复制的信息转换为规范的 commit message 并提交
@@ -32,10 +32,14 @@ export function registerCommitFixCommand(program: Command): void {
       const newMessage = disposeOnesInfo(message.join(" "));
 
       console.log(pico.green("commit message: " + newMessage));
-      const confirm = await askSelect("确认按照处理后的信息提交吗？", [
-        { title: "确认", value: "confirm" },
-        { title: "取消", value: "cancel" },
-      ]);
+      const channels = createCliChannels();
+      const confirm = await channels.prompt.select(
+        "确认按照处理后的信息提交吗？",
+        [
+          { title: "确认", value: "confirm" },
+          { title: "取消", value: "cancel" },
+        ],
+      );
       if (confirm !== "confirm") {
         console.log(pico.yellow("已取消"));
         return;

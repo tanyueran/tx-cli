@@ -1,6 +1,10 @@
+/**
+ * CLI 终端提示实现：基于 prompts 库的三类问询封装
+ *
+ * prompts 是终端专属实现，只属于 CLI 层；core 等其他端通过 PromptChannel 接口使用交互能力
+ */
 import prompts from "prompts";
-import { CancelError } from "./errors";
-import { markTurnCancelled } from "./turn-cancel";
+import { CancelError, markTurnCancelled } from "@tx-cli/shared";
 
 /**
  * prompts 的统一封装：用户取消（Ctrl+C / Esc）时抛出 CancelError
@@ -11,7 +15,7 @@ import { markTurnCancelled } from "./turn-cancel";
  * @param {prompts.PromptObject | prompts.PromptObject[]} questions - 问题配置
  * @returns {Promise<prompts.Answers<string>>} 用户的完整作答结果
  */
-export async function ask(
+async function ask(
   questions: prompts.PromptObject | prompts.PromptObject[]
 ): Promise<prompts.Answers<string>> {
   return prompts(questions, {
@@ -25,13 +29,18 @@ export async function ask(
 /**
  * 询问一个必填的文本值，空白输入会重新提示
  * @param {string} message - 提示文案
+ * @param {string} [initial] - 预填的默认值（回车直接采用）
  * @returns {Promise<string>} 去除首尾空格后的非空字符串
  */
-export async function askText(message: string): Promise<string> {
+export async function askText(
+  message: string,
+  initial?: string,
+): Promise<string> {
   const { text } = await ask({
     type: "text",
     name: "text",
     message,
+    ...(initial !== undefined ? { initial } : {}),
     validate: (userInput: string) => (userInput?.trim() ? true : "不能为空"),
   });
   return String(text).trim();
@@ -59,7 +68,7 @@ export async function askSelect<T>(
 /**
  * 询问一个是/否确认
  * @param {string} message - 提示文案
- * @param {boolean} initial - 默认值
+ * @param {boolean} [initial] - 默认值
  * @returns {Promise<boolean>} 用户确认结果
  */
 export async function askConfirm(

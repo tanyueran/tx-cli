@@ -3,6 +3,7 @@ import type { McpConnectSummary, McpManager } from "../../mcp";
 import { createSandboxContext } from "../../sandbox";
 import type { SandboxCliOptions } from "../../sandbox";
 import type { SandboxContext } from "../../sandbox/runtime/sandbox-context";
+import type { SessionChannels } from "../../channels";
 import { assembleSessionContext } from "./session-assembly";
 import type { SessionAssembly } from "./session-assembly";
 
@@ -35,6 +36,8 @@ export interface ConversationOptions {
   todosEnabled?: boolean;
   /** 写侧内置工具（write_file / edit_file）是否装配；未指定时装配，chat 模式固定传 false */
   writeToolsEnabled?: boolean;
+  /** 会话通道集合：沙箱审批与信任确认等交互统一走这里 */
+  channels: SessionChannels;
 }
 
 /**
@@ -58,6 +61,7 @@ export async function createConversationRuntime(
     warnings: sandboxWarnings,
   } = await createSandboxContext(options.cliSandboxOptions, {
     bashForcedOff: options.bashEnabled === false,
+    channels: options.channels,
   });
   let mcpManager: McpManager | undefined;
   try {
