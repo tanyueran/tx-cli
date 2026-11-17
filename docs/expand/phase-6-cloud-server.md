@@ -1,17 +1,19 @@
-# Phase 5: 云端 Agent 服务
+# Phase 6: 云端 Agent 服务
 
-> 前置依赖：Phase 3 完成
+> 前置依赖：Phase 4 完成
 > 预计产出：可部署在云服务器上的 Agent 服务，支持浏览器访问、多用户、实时对话
 
 ## 概述
 
-基于 Express + WebSocket + React 构建云端服务，复用 `@tx-cli/core` 包，通过 WebSocket Channel 与浏览器通信。
+基于 Express + WebSocket + React 构建云端服务，复用已完成无头化的 `@tx-cli/core` 与 `@tx-cli/shared`，通过 WebSocket Channel 与浏览器通信。core 只提供会话运行时、回合执行和语义化消息，不包含终端 REPL、面板或 `picocolors`；终端 REPL 已移至 `@tx-cli/cli`，云端不得复用该 REPL，而应通过服务端会话适配层实现浏览器多轮对话。
+
+server 只能依赖 `@tx-cli/core` 和 `@tx-cli/shared`，不得依赖 `@tx-cli/cli` 或 `@tx-cli/scaffold`。
 
 **核心原则：多用户、JWT 认证、目录隔离、WebSocket 实时通信。**
 
 ---
 
-## Task 5.1: 搭建服务项目骨架
+## Task 6.1: 搭建服务项目骨架
 
 ### 目标
 
@@ -94,7 +96,7 @@ mkdir -p packages/server/web/src/{pages,components,hooks,api}
 
 ---
 
-## Task 5.2: 用户系统
+## Task 6.2: 用户系统
 
 ### 目标
 
@@ -238,7 +240,7 @@ export class UserService {
 
 ---
 
-## Task 5.3: 认证系统
+## Task 6.3: 认证系统
 
 ### 目标
 
@@ -372,7 +374,7 @@ authRouter.post("/refresh", (req, res) => {
 
 ---
 
-## Task 5.4: 用户管理 CLI
+## Task 6.4: 用户管理 CLI
 
 ### 目标
 
@@ -457,7 +459,7 @@ program.parse();
 
 ---
 
-## Task 5.5: 实现云端版 Channel
+## Task 6.5: 实现云端版 Channel
 
 ### 目标
 
@@ -508,13 +510,17 @@ export class WsOutputChannel implements OutputChannel {
   dim(message: string): void { this.send("dim", { message }); }
   usage(info: UsageDisplayInfo): void { this.send("usage", info); }
   ensureNewline(): void { /* WebSocket 无需处理 */ }
+  /** 推送模型请求等待状态 */
+  startLoading(): void { this.send("loading-start", {}); }
+  /** 清除模型请求等待状态 */
+  stopLoading(): void { this.send("loading-end", {}); }
 }
 ```
 
 #### Step 2: 创建 ws-input.ts
 
 ```typescript
-import type { InputChannel } from "@tx-cli/core";
+import type { InputChannel, InputRequest } from "@tx-cli/core";
 import type { WebSocket } from "ws";
 
 /**
@@ -528,11 +534,23 @@ export class WsInputChannel implements InputChannel {
     this.ws = ws;
   }
 
-  async readLine(prompt?: string): Promise<string> {
-    this.ws.send(JSON.stringify({ type: "input-request", prompt }));
+  /** 发送输入请求；suggest、history、signal 由服务端处理，不直接序列化到 WebSocket */
+  async readLine(request?: string | InputRequest): Promise<string> {
+    const inputRequest: InputRequest | undefined =
+      typeof request === "string" ? { message: request } : request;
+    this.ws.send(JSON.stringify({
+      type: "input-request",
+      message: inputRequest?.message,
+      initialInput: inputRequest?.initialInput,
+    }));
     return new Promise((resolve) => {
       this.pendingResolve = resolve;
     });
+  }
+
+  /** 当前 WebSocket 会话可交互时返回 true */
+  isInteractive(): boolean {
+    return this.ws.readyState === this.ws.OPEN;
   }
 
   /** 由 WebSocket handler 调用：用户提交了输入 */
@@ -564,16 +582,21 @@ export class WsPromptChannel implements PromptChannel {
     this.ws = ws;
   }
 
-  async confirm(message: string): Promise<boolean> {
+  /** 发送确认请求，并透传默认选项 */
+  async confirm(message: string, initial?: boolean): Promise<boolean> {
     const id = crypto.randomUUID();
-    this.ws.send(JSON.stringify({ type: "prompt-confirm", id, message }));
+    this.ws.send(JSON.stringify({ type: "prompt-confirm", id, message, initial }));
     return new Promise((resolve) => this.pending.set(id, resolve));
   }
 
-  async select(message: string, choices: Array<{ label: string; value: string }>): Promise<string> {
+  /** 发送选择请求，保留 core 的 title/value 选项与泛型返回值 */
+  async select<T = string>(
+    message: string,
+    choices: Array<{ title: string; value: T }>,
+  ): Promise<T> {
     const id = crypto.randomUUID();
     this.ws.send(JSON.stringify({ type: "prompt-select", id, message, choices }));
-    return new Promise((resolve) => this.pending.set(id, resolve));
+    return new Promise<T>((resolve) => this.pending.set(id, resolve));
   }
 
   async input(message: string, defaultValue?: string): Promise<string> {
@@ -595,31 +618,45 @@ export class WsPromptChannel implements PromptChannel {
 
 ### 验收标准
 
-- [ ] 三个 WebSocket Channel 实现完整
+- [ ] 三个 WebSocket Channel 实现完整，与 core 的 `OutputChannel`、`InputChannel`、`PromptChannel` 签名一致
+- [ ] 输出通道实现 `startLoading/stopLoading`，输入通道实现 `isInteractive` 并接收 `string | InputRequest`
+- [ ] 选择提示使用 `{ title, value }` 选项和 `select<T>` 泛型返回值
 - [ ] `pnpm --filter @tx-cli/server type-check` 通过
 
 ---
 
-## Task 5.6: WebSocket 服务
+## Task 6.6: WebSocket 服务
 
 ### 目标
 
-实现 WebSocket 连接管理和会话池。
+实现 WebSocket 连接管理、会话池和基于无头 core 的多轮会话适配。
 
 ### 涉及文件
 
 - `packages/server/src/ws/handler.ts` — 新建
 - `packages/server/src/services/session-pool.ts` — 新建
+- `packages/server/src/services/core-session.ts` — 新建
 
 ### 步骤
 
-#### Step 1: 创建 session-pool.ts
+#### Step 1: 创建 core-session.ts 服务端适配层
+
+实现 `CoreSessionAdapter`，内部持有并委托 Phase 3 提供的 core `ConversationSession`。适配层只负责注入服务端解析的模型、模式、用户 workspace 和 WebSocket Channel，不导入 CLI REPL，也不直接组合 runtime/history/executeConversationTurn。
+
+1. 会话创建时仅创建一个 core `ConversationSession`，后续消息复用该对象，不重建 MCP 连接、沙箱、工具装配结果或 history。
+2. `runTurn(userInput)` 直接委托 core 会话的串行回合能力；同一会话的 runtime、history、子 Agent、压缩、用量和 `maxIterations` 由 core 统一管理。
+3. `cancel()` 委托 core 的协作式取消与未完成历史回滚，不能只忽略浏览器结果或仅删除 WebSocket 会话。
+4. `dispose()` 委托 core 的幂等资源释放，同时结束服务端挂起的 input/prompt 等待并清理会话引用，确保 MCP 子进程、沙箱及待处理 Promise 不泄漏。
+5. server 不得通过每次新建 `runOneShotConversation` 冒充多轮，也不得复制一份 `executeConversationTurn` 编排逻辑。
+
+#### Step 2: 创建 session-pool.ts
 
 ```typescript
 import type { WebSocket } from "ws";
 import { WsOutputChannel } from "../channels/ws-output";
 import { WsInputChannel } from "../channels/ws-input";
 import { WsPromptChannel } from "../channels/ws-prompt";
+import { CoreSessionAdapter } from "./core-session";
 
 /** 会话信息 */
 export interface Session {
@@ -631,6 +668,7 @@ export interface Session {
     input: WsInputChannel;
     prompt: WsPromptChannel;
   };
+  core: CoreSessionAdapter;
   createdAt: Date;
 }
 
@@ -640,18 +678,24 @@ export interface Session {
 export class SessionPool {
   private sessions = new Map<string, Session>();
 
-  /** 创建新会话 */
-  create(userId: string, ws: WebSocket): Session {
+  /** 创建新会话及其长期持有的 core 运行时 */
+  async create(userId: string, ws: WebSocket): Promise<Session> {
     const id = crypto.randomUUID();
+    const channels = {
+      output: new WsOutputChannel(ws),
+      input: new WsInputChannel(ws),
+      prompt: new WsPromptChannel(ws),
+    };
+    const core = await CoreSessionAdapter.create({
+      channels,
+      // 传入服务端解析的模型、模式和工作目录配置
+    });
     const session: Session = {
       id,
       userId,
       ws,
-      channels: {
-        output: new WsOutputChannel(ws),
-        input: new WsInputChannel(ws),
-        prompt: new WsPromptChannel(ws),
-      },
+      channels,
+      core,
       createdAt: new Date(),
     };
     this.sessions.set(id, session);
@@ -663,13 +707,13 @@ export class SessionPool {
     return this.sessions.get(id);
   }
 
-  /** 关闭会话 */
-  close(id: string): void {
+  /** 关闭会话并等待 core 资源释放 */
+  async close(id: string): Promise<void> {
     const session = this.sessions.get(id);
-    if (session) {
-      session.channels.input.close();
-      this.sessions.delete(id);
-    }
+    if (!session) return;
+    this.sessions.delete(id);
+    session.channels.input.close();
+    await session.core.dispose();
   }
 
   /** 获取用户的所有会话 */
@@ -679,13 +723,12 @@ export class SessionPool {
 }
 ```
 
-#### Step 2: 创建 ws/handler.ts
+#### Step 3: 创建 ws/handler.ts
 
 ```typescript
 import type { WebSocketServer, WebSocket } from "ws";
 import { AuthService } from "../services/auth-service";
 import { SessionPool } from "../services/session-pool";
-import { runOneShotConversation } from "@tx-cli/core";
 
 const authService = new AuthService();
 const sessionPool = new SessionPool();
@@ -694,7 +737,7 @@ const sessionPool = new SessionPool();
  * WebSocket 连接处理器
  */
 export function handleConnection(wss: WebSocketServer): void {
-  wss.on("connection", (ws: WebSocket, req) => {
+  wss.on("connection", async (ws: WebSocket, req) => {
     // 从 URL 参数中获取 token
     const url = new URL(req.url || "", `http://${req.headers.host}`);
     const token = url.searchParams.get("token");
@@ -710,7 +753,7 @@ export function handleConnection(wss: WebSocketServer): void {
       return;
     }
 
-    const session = sessionPool.create(payload.userId, ws);
+    const session = await sessionPool.create(payload.userId, ws);
     ws.send(JSON.stringify({ type: "session-created", sessionId: session.id }));
 
     ws.on("message", async (data) => {
@@ -723,7 +766,7 @@ export function handleConnection(wss: WebSocketServer): void {
     });
 
     ws.on("close", () => {
-      sessionPool.close(session.id);
+      void sessionPool.close(session.id);
     });
   });
 }
@@ -737,12 +780,8 @@ async function handleMessage(sessionId: string, msg: any): Promise<void> {
 
   switch (msg.type) {
     case "chat":
-      // 处理聊天消息
-      await runOneShotConversation({
-        // ... 配置
-        channels: session.channels,
-        userInput: msg.text,
-      });
+      // 在同一个 runtime/history 上执行一个多轮会话回合
+      await session.core.runTurn(msg.text);
       break;
     case "confirm":
       session.channels.prompt.resolve(msg.id, msg.approved);
@@ -751,7 +790,7 @@ async function handleMessage(sessionId: string, msg: any): Promise<void> {
       session.channels.input.resolveInput(msg.text);
       break;
     case "cancel":
-      // TODO: 取消当前会话
+      session.core.cancel();
       break;
   }
 }
@@ -759,13 +798,14 @@ async function handleMessage(sessionId: string, msg: any): Promise<void> {
 
 ### 验收标准
 
-- [ ] WebSocket 连接能正确认证
-- [ ] 会话能正常创建和销毁
-- [ ] 消息能正确路由
+- [ ] WebSocket 连接能正确认证，会话能正常创建和销毁，消息能正确路由
+- [ ] 连续两条 `chat` 消息复用同一 runtime 和 history，第二轮能读取第一轮上下文，且未调用 `runOneShotConversation`
+- [ ] `cancel` 能取消当前回合并回滚该轮未完成历史，不破坏此前会话
+- [ ] 连接关闭和异常路径均释放 runtime、MCP 连接、沙箱与挂起交互，无残留资源
 
 ---
 
-## Task 5.7: HTTP API
+## Task 6.7: HTTP API
 
 ### 目标
 
@@ -911,7 +951,7 @@ export function createApp() {
 
 ---
 
-## Task 5.8: 目录隔离
+## Task 6.8: 目录隔离
 
 ### 目标
 
@@ -975,7 +1015,7 @@ data/
 
 ---
 
-## Task 5.9: React Web 前端
+## Task 6.9: React Web 前端
 
 ### 目标
 
@@ -1238,7 +1278,7 @@ export function ChatPage() {
 
 ---
 
-## Task 5.10: 部署与测试
+## Task 6.10: 部署与测试
 
 ### 目标
 
@@ -1270,7 +1310,7 @@ COPY packages/server/package.json packages/server/
 # 安装依赖
 RUN pnpm install --frozen-lockfile
 
-# 复制源码
+# 仅复制运行时所需的 shared/core/server，不复制 cli/scaffold
 COPY packages/shared/ packages/shared/
 COPY packages/core/ packages/core/
 COPY packages/server/ packages/server/
@@ -1288,6 +1328,8 @@ EXPOSE 3000
 
 CMD ["node", "packages/server/dist/index.js"]
 ```
+
+镜像和 server 依赖清单都只允许引入 shared/core/server 所需内容，不得为了复用终端 REPL、copy 或静态服务器命令而加入 `@tx-cli/cli`、`@tx-cli/scaffold`。server 直接转发 core 的纯文本与语义化事件，不在 core 消息中引入 ANSI 控制字符。
 
 #### Step 2: 创建 .env.example
 
@@ -1333,6 +1375,6 @@ docker run -p 3000:3000 -v ./data:/app/data tx-cli-server
 ### 验收标准
 
 - [ ] `pnpm --filter @tx-cli/server dev` 能启动服务
-- [ ] Docker 镜像能正常构建
-- [ ] 容器内服务正常运行
-- [ ] 浏览器能正常访问
+- [ ] Docker 镜像能正常构建，容器内服务正常运行，浏览器能正常访问
+- [ ] server 的依赖、构建产物和 Docker 运行时均不依赖 `@tx-cli/cli` 或 `@tx-cli/scaffold`，镜像不包含这两个包的源码
+- [ ] 浏览器通过 WebSocket 收到的 core 正文、提示、工具调用与结果文本均不含 ANSI 控制字符

@@ -1,17 +1,17 @@
-# Phase 4: Electron 桌面端
+# Phase 5: Electron 桌面端
 
-> 前置依赖：Phase 3 完成
+> 前置依赖：Phase 4 完成
 > 预计产出：可运行的 Electron 桌面应用，支持 Agent/Chat 切换、多模型切换
 
 ## 概述
 
-基于 Electron + React 构建桌面应用，复用 `@tx-cli/core` 包的会话引擎，通过 IPC Channel 与主进程通信。
+基于 Electron + React 构建桌面应用，复用 Phase 3 完成无头化后的 `@tx-cli/core` 会话机制，通过 IPC Channel 连接主进程与渲染进程。桌面主进程复用 core 的 `ConversationSession`，由 core 统一持有 runtime、跨轮 history、子 Agent、压缩、取消与资源释放；桌面端只管理 GUI 会话映射，不复用 CLI 的终端 REPL，也不重复实现回合控制。`desktop` 对 workspace 包的依赖仅限 `core/shared`，不依赖 `cli`。
 
-**核心原则：复用 core 包，通过 IPC Channel 对接。**
+**核心原则：复用无头 core，自持桌面多轮会话，通过 IPC Channel 对接。**
 
 ---
 
-## Task 4.1: 搭建 Electron 项目骨架
+## Task 5.1: 搭建 Electron 项目骨架
 
 ### 目标
 
@@ -159,7 +159,7 @@ pnpm install
 
 ---
 
-## Task 4.2: 实现桌面版 Channel
+## Task 5.2: 实现桌面版 Channel
 
 ### 目标
 
@@ -237,6 +237,22 @@ export class IpcOutputChannel implements OutputChannel {
     this.wc.send("output:usage", info);
   }
 
+  /**
+   * 通知渲染进程显示模型请求等待状态
+   * @returns {void}
+   */
+  startLoading(): void {
+    this.wc.send("output:start-loading");
+  }
+
+  /**
+   * 通知渲染进程收起模型请求等待状态
+   * @returns {void}
+   */
+  stopLoading(): void {
+    this.wc.send("output:stop-loading");
+  }
+
   ensureNewline(): void {
     // IPC 版本无需处理
   }
@@ -246,7 +262,7 @@ export class IpcOutputChannel implements OutputChannel {
 #### Step 2: 创建 ipc-input.ts
 
 ```typescript
-import type { InputChannel } from "@tx-cli/core";
+import type { InputChannel, InputRequest } from "@tx-cli/core";
 import type { WebContents } from "electron";
 
 /**
@@ -260,8 +276,19 @@ export class IpcInputChannel implements InputChannel {
     this.wc = wc;
   }
 
-  async readLine(prompt?: string): Promise<string> {
-    this.wc.send("input:request", { prompt });
+  /**
+   * 请求渲染进程采集一行输入
+   * @param {string | InputRequest} [request] - 提示文案或完整输入请求
+   * @returns {Promise<string>} 用户提交的文本
+   */
+  async readLine(request?: string | InputRequest): Promise<string> {
+    const inputRequest: InputRequest = typeof request === "string"
+      ? { message: request }
+      : request ?? { message: "" };
+    this.wc.send("input:request", {
+      message: inputRequest.message,
+      initialInput: inputRequest.initialInput,
+    });
     return new Promise((resolve) => {
       this.pendingResolve = resolve;
     });
@@ -273,11 +300,21 @@ export class IpcInputChannel implements InputChannel {
     this.pendingResolve = null;
   }
 
+  /**
+   * 桌面 GUI 会话始终支持交互
+   * @returns {boolean} 固定为 true
+   */
+  isInteractive(): boolean {
+    return true;
+  }
+
   close(): void {
     this.pendingResolve = null;
   }
 }
 ```
+
+`InputRequest.suggest` 回调、`history` 数组引用和 `signal` 不可直接通过 IPC 结构化克隆；只在事件中传递可序列化字段，补全结果、输入历史和中断由主进程会话服务协调。
 
 #### Step 3: 创建 ipc-prompt.ts
 
@@ -290,47 +327,74 @@ import type { WebContents } from "electron";
  */
 export class IpcPromptChannel implements PromptChannel {
   private wc: WebContents;
-  private pendingConfirms = new Map<string, (value: boolean) => void>();
+  private pendingPrompts = new Map<string, (value: unknown) => void>();
 
   constructor(wc: WebContents) {
     this.wc = wc;
   }
 
-  async confirm(message: string): Promise<boolean> {
+  /**
+   * 请求用户确认
+   * @param {string} message - 提示信息
+   * @param {boolean} [initial] - 默认选项
+   * @returns {Promise<boolean>} 用户确认结果
+   */
+  async confirm(message: string, initial = false): Promise<boolean> {
     const id = crypto.randomUUID();
-    this.wc.send("prompt:confirm", { id, message });
+    this.wc.send("prompt:confirm", { id, message, initial });
     return new Promise((resolve) => {
-      this.pendingConfirms.set(id, resolve);
+      this.pendingPrompts.set(id, (value) => resolve(value as boolean));
     });
   }
 
-  async select(message: string, choices: Array<{ label: string; value: string }>): Promise<string> {
+  /**
+   * 请求用户从泛型选项中选择一项
+   * @param {string} message - 提示信息
+   * @param {Array<{ title: string; value: T }>} choices - 展示标题与回传值
+   * @returns {Promise<T>} 选中项的 value
+   */
+  async select<T = string>(
+    message: string,
+    choices: Array<{ title: string; value: T }>,
+  ): Promise<T> {
     const id = crypto.randomUUID();
     this.wc.send("prompt:select", { id, message, choices });
     return new Promise((resolve) => {
-      // 复用 confirm 的 map，但值为 string
-      this.pendingConfirms.set(id, resolve as any);
+      this.pendingPrompts.set(id, (value) => resolve(value as T));
     });
   }
 
+  /**
+   * 请求用户输入自由文本
+   * @param {string} message - 提示信息
+   * @param {string} [defaultValue] - 默认输入
+   * @returns {Promise<string>} 用户输入文本
+   */
   async input(message: string, defaultValue?: string): Promise<string> {
     const id = crypto.randomUUID();
     this.wc.send("prompt:input", { id, message, defaultValue });
     return new Promise((resolve) => {
-      this.pendingConfirms.set(id, resolve as any);
+      this.pendingPrompts.set(id, (value) => resolve(value as string));
     });
   }
 
-  /** 由 IPC handler 调用：用户响应了确认 */
-  resolveConfirm(id: string, value: boolean): void {
-    const resolve = this.pendingConfirms.get(id);
+  /**
+   * 由 IPC handler 调用：路由确认、选择或输入响应
+   * @param {string} id - 请求标识
+   * @param {unknown} value - 用户响应值
+   * @returns {void}
+   */
+  resolvePrompt(id: string, value: unknown): void {
+    const resolve = this.pendingPrompts.get(id);
     if (resolve) {
       resolve(value);
-      this.pendingConfirms.delete(id);
+      this.pendingPrompts.delete(id);
     }
   }
 }
 ```
+
+选择项以 `title` 展示、以 `value` 回传；当 `T` 为自定义对象时，其值必须支持 Electron IPC 结构化克隆，不能携带函数等不可序列化内容。
 
 ### 验收标准
 
@@ -339,7 +403,7 @@ export class IpcPromptChannel implements PromptChannel {
 
 ---
 
-## Task 4.3: 主进程 IPC Handler
+## Task 5.3: 主进程 IPC Handler
 
 ### 目标
 
@@ -349,6 +413,7 @@ export class IpcPromptChannel implements PromptChannel {
 
 - `packages/desktop/src/main/index.ts` — 新建
 - `packages/desktop/src/main/window.ts` — 新建
+- `packages/desktop/src/main/session-service.ts` — 新建
 - `packages/desktop/src/main/ipc-handlers.ts` — 新建
 
 ### 步骤
@@ -387,50 +452,57 @@ export function createMainWindow(): BrowserWindow {
 }
 ```
 
-#### Step 2: 创建 ipc-handlers.ts
+#### Step 2: 创建 session-service.ts 管理多轮会话
+
+新增 `DesktopSessionService`，按窗口与 `sessionId` 隔离桌面会话。每个桌面会话持有一个 core `ConversationSession` 和三个 IPC Channel，桌面服务只负责输入/提示响应路由、GUI 生命周期与 core API 委托。
+
+- 首次创建会话时加载 LLM 配置，按 Agent/Chat 模式创建 core `ConversationSession` 并注入 IPC Channel；同一对象在后续回合复用，不在每条消息结束后释放。
+- 每次发送消息调用该对象的串行 `runTurn`。runtime、history、子 Agent、压缩、用量、取消回滚与 dispose 均由 core 统一实现，桌面端不得直接拼接一套 `executeConversationTurn` 控制逻辑。
+- 删除会话、窗口销毁或应用退出时调用 `ConversationSession.dispose`；切换 Provider/Model 或模式需要重建配置时，先释放旧会话，再创建新会话。
+
+不得通过每条消息调用一次 `runOneShotConversation` 来模拟多轮，也不迁入终端 REPL 主循环。桌面服务只编排 GUI 会话与 core 无头多轮会话之间的映射。
+
+#### Step 3: 创建 ipc-handlers.ts
 
 ```typescript
 import { ipcMain } from "electron";
-import { runOneShotConversation, runReplConversation } from "@tx-cli/core";
-import { IpcOutputChannel } from "./channels/ipc-output";
-import { IpcInputChannel } from "./channels/ipc-input";
-import { IpcPromptChannel } from "./channels/ipc-prompt";
+import { DesktopSessionService } from "./session-service";
+
+const sessionService = new DesktopSessionService();
 
 /**
  * 注册所有 IPC 处理器
+ * @returns {void}
  */
 export function registerIpcHandlers(): void {
-  // 发送消息（Agent/Chat）
-  ipcMain.handle("chat:send", async (event, { text, mode, provider, model }) => {
-    const wc = event.sender;
-    const output = new IpcOutputChannel(wc);
-    const input = new IpcInputChannel(wc);
-    const prompt = new IpcPromptChannel(wc);
-
-    const channels = { input, output, prompt };
-
-    // TODO: 加载配置，创建会话
-    // await runOneShotConversation({ ...channels });
+  // 发送消息（Agent/Chat），由会话服务复用同一 runtime/history 执行本轮
+  ipcMain.handle("chat:send", async (event, { sessionId = "default", text, mode, provider, model }) => {
+    await sessionService.sendTurn(event.sender, { sessionId, text, mode, provider, model });
   });
 
-  // 用户确认响应
-  ipcMain.on("prompt:confirm-response", (_event, { id, approved }) => {
-    // TODO: 路由到对应的 IpcPromptChannel
+  // 路由桌面输入响应
+  ipcMain.on("input:response", (event, { text }) => {
+    sessionService.resolveInput(event.sender, text);
   });
 
-  // 取消
-  ipcMain.on("chat:cancel", () => {
-    // TODO: 取消当前会话
+  // 路由确认、泛型选择和自由输入响应
+  ipcMain.on("prompt:response", (event, { id, value }) => {
+    sessionService.resolvePrompt(event.sender, id, value);
   });
 
-  // 切换模型
-  ipcMain.on("chat:switch-model", (_event, { provider, model }) => {
-    // TODO: 切换模型
+  // 取消当前会话的本轮执行
+  ipcMain.on("chat:cancel", (event, { sessionId = "default" } = {}) => {
+    sessionService.cancelTurn(event.sender, sessionId);
+  });
+
+  // 切换模型，由会话服务决定是否需要重建 runtime
+  ipcMain.on("chat:switch-model", (event, { sessionId = "default", provider, model }) => {
+    sessionService.switchModel(event.sender, { sessionId, provider, model });
   });
 }
 ```
 
-#### Step 3: 创建主进程入口 index.ts
+#### Step 4: 创建主进程入口 index.ts
 
 ```typescript
 import { app, BrowserWindow } from "electron";
@@ -459,11 +531,13 @@ app.on("window-all-closed", () => {
 
 - [ ] 主进程能创建窗口
 - [ ] IPC 处理器注册成功
+- [ ] 同一 `sessionId` 连续发送消息时复用同一 core `ConversationSession`，能够引用前序上下文，不同会话的历史互不影响
+- [ ] 会话删除、窗口销毁和应用退出时释放 runtime，取消本轮不会留下未配对历史
 - [ ] `pnpm --filter @tx-cli/desktop dev` 能启动应用
 
 ---
 
-## Task 4.4: Preload 安全桥接
+## Task 5.4: Preload 安全桥接
 
 ### 目标
 
@@ -487,9 +561,23 @@ const api = {
     return ipcRenderer.invoke("chat:send", { text, mode, provider, model });
   },
 
-  /** 确认响应 */
-  confirmResponse: (id: string, approved: boolean) => {
-    ipcRenderer.send("prompt:confirm-response", { id, approved });
+  /**
+   * 返回桌面输入结果
+   * @param {string} text - 用户提交的文本
+   * @returns {void}
+   */
+  inputResponse: (text: string) => {
+    ipcRenderer.send("input:response", { text });
+  },
+
+  /**
+   * 返回确认、选择或自由输入结果
+   * @param {string} id - 请求标识
+   * @param {unknown} value - 布尔结果、选中项 value 或输入文本
+   * @returns {void}
+   */
+  promptResponse: (id: string, value: unknown) => {
+    ipcRenderer.send("prompt:response", { id, value });
   },
 
   /** 取消 */
@@ -508,8 +596,8 @@ const api = {
       "output:text", "output:stream-token", "output:stream-thinking",
       "output:end-thinking", "output:tool-call", "output:tool-result",
       "output:error", "output:warn", "output:system", "output:success",
-      "output:dim", "output:usage", "input:request",
-      "prompt:confirm", "prompt:select", "prompt:input",
+      "output:dim", "output:usage", "output:start-loading", "output:stop-loading",
+      "input:request", "prompt:confirm", "prompt:select", "prompt:input",
     ];
     if (validChannels.includes(channel)) {
       ipcRenderer.on(channel, (_event, ...args) => callback(...args));
@@ -535,7 +623,7 @@ export type TxCliApi = typeof api;
 
 ---
 
-## Task 4.5: React UI — 布局与组件
+## Task 5.5: React UI — 布局与组件
 
 ### 目标
 
@@ -639,7 +727,7 @@ export default function App() {
 
 ---
 
-## Task 4.6: 状态管理与 Hooks
+## Task 5.6: 状态管理与 Hooks
 
 ### 目标
 
@@ -766,7 +854,7 @@ export function useChat() {
 
 ---
 
-## Task 4.7: 会话持久化
+## Task 5.7: 会话持久化
 
 ### 目标
 
@@ -810,7 +898,7 @@ export const useChatStore = create<ChatState>()(
 
 ---
 
-## Task 4.8: 打包与测试
+## Task 5.8: 打包与测试
 
 ### 目标
 
@@ -875,3 +963,5 @@ pnpm --filter @tx-cli/desktop dist
 - [ ] Windows 打包成功（.exe）
 - [ ] Linux 打包成功（.AppImage）
 - [ ] 打包后的应用能正常运行
+- [ ] `desktop` 的 workspace 依赖仅限 `@tx-cli/core`、`@tx-cli/shared`，不依赖 `@tx-cli/cli`，也不导入 core/CLI 的终端 REPL、输入帧或面板
+- [ ] core 经 Channel 与 IPC 发往渲染进程的文本、工具调用和错误消息不含 ANSI 控制字符，颜色与样式完全由 React UI 处理

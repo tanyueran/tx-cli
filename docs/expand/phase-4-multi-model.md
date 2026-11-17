@@ -1,17 +1,19 @@
-# Phase 3: 多模型/多 Provider 配置扩展
+# Phase 4: 多模型/多 Provider 配置扩展
 
-> 前置依赖：Phase 2 完成
+> 前置依赖：Phase 3 完成
 > 预计产出：支持配置多个 LLM Provider 和模型，可在会话中切换
 
 ## 概述
 
 当前 `user-config.ts` 只支持单 provider 配置。本阶段扩展为多 provider/model 配置，支持在 CLI、桌面端、云端中切换不同的模型。
 
-**核心原则：向后兼容，旧配置自动迁移。**
+Phase 3 已完成包边界收口：Provider 配置、注册表和模型选择逻辑继续放在 core；终端内的模型切换命令位于 `packages/cli/src/conversation/repl/`，桌面端和云端后续直接复用 core API，不经过 CLI。
+
+**核心原则：向后兼容，旧配置自动迁移；配置与 Provider 逻辑不反向依赖任何终端。**
 
 ---
 
-## Task 3.1: 扩展配置 Schema
+## Task 4.1: 扩展配置 Schema
 
 ### 目标
 
@@ -148,7 +150,7 @@ function inferProviderName(baseUrl: string): string {
 
 ---
 
-## Task 3.2: 实现 Provider 注册表
+## Task 4.2: 实现 Provider 注册表
 
 ### 目标
 
@@ -240,7 +242,7 @@ export class ProviderRegistry {
 
 ---
 
-## Task 3.3: 改造 LLM Client 工厂
+## Task 4.3: 改造 LLM Client 工厂
 
 ### 目标
 
@@ -311,7 +313,7 @@ export async function loadLlmConfig(): Promise<LlmConfig & { registry?: Provider
 
 ---
 
-## Task 3.4: 配置向导升级
+## Task 4.4: 配置向导升级
 
 ### 目标
 
@@ -320,6 +322,7 @@ export async function loadLlmConfig(): Promise<LlmConfig & { registry?: Provider
 ### 涉及文件
 
 - `packages/core/src/llm/config-wizard.ts` — 修改
+- `packages/cli/src/conversation/repl/slash-commands.ts` — 修改终端内模型切换入口
 
 ### 步骤
 
@@ -348,7 +351,7 @@ export async function loadLlmConfig(): Promise<LlmConfig & { registry?: Provider
 
 #### Step 3: 实现模型选择流程
 
-在对话开始前或会话中，支持选择模型：
+core 通过 Channel 提供可跨端复用的选择流程；CLI 在对话开始前或 REPL 斜杠命令中接入，桌面端和云端在后续阶段复用同一 ProviderRegistry，不引用 CLI 的 REPL 实现：
 
 ```
 ? 选择 Provider：
@@ -370,7 +373,7 @@ export async function loadLlmConfig(): Promise<LlmConfig & { registry?: Provider
 
 ---
 
-## Task 3.5: 测试验证
+## Task 4.5: 测试验证
 
 ### 目标
 
