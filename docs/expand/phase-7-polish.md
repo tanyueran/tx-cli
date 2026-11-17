@@ -1,6 +1,6 @@
-# Phase 6: 打磨与发布
+# Phase 7: 打磨与发布
 
-> 前置依赖：Phase 4 和 Phase 5 完成
+> 前置依赖：Phase 5 和 Phase 6 完成
 > 预计产出：完整的测试覆盖、更新的文档、可发布的版本
 
 ## 概述
@@ -9,7 +9,7 @@
 
 ---
 
-## Task 6.1: 集成测试补全
+## Task 7.1: 集成测试补全
 
 ### 目标
 
@@ -21,12 +21,15 @@
 
 ### 步骤
 
-#### Step 1: Channel 接口测试
+#### Step 1: 包边界与 Channel 接口测试
+
+先执行 `pnpm deps:check`，确认 shared/core/scaffold/cli/desktop/server 的依赖方向与 Phase 3 一致，且不存在循环依赖。
 
 为每个 Channel 实现编写单元测试：
-- CLI Channel 测试
+- CLI Channel 测试，包括终端 REPL 和 ANSI 展示
 - IPC Channel 测试（桌面端）
 - WebSocket Channel 测试（云端）
+- core 输出契约测试，确保跨端消息不含 ANSI，且不依赖 CLI REPL
 
 #### Step 2: 多 Provider 配置测试
 
@@ -53,7 +56,7 @@
 
 ---
 
-## Task 6.2: 文档更新
+## Task 7.2: 文档更新
 
 ### 目标
 
@@ -71,16 +74,18 @@
 
 #### Step 1: 更新 ARCHITECTURE.md
 
-- 更新目录结构为 monorepo 结构
+- 更新目录结构为最终 monorepo 结构
+- 说明 core 无头化、CLI 独占终端 REPL、scaffold 只负责模板能力
 - 添加桌面端架构说明
 - 添加云端服务架构说明
-- 添加 Channel 抽象层说明
+- 添加 Channel 抽象层和包依赖守卫说明
 
 #### Step 2: 更新 DESIGN-NOTES.md
 
 - 记录 I/O 解耦的设计决策
+- 记录 Phase 3 包边界收口、循环依赖清理和展示层迁移决策
 - 记录多 Provider 配置的设计决策
-- 记录桌面端和云端的设计决策
+- 记录桌面端和云端复用 core 会话机制的设计决策
 
 #### Step 3: 更新使用文档
 
@@ -101,7 +106,7 @@
 
 ---
 
-## Task 6.3: 发布流程
+## Task 7.3: 发布流程
 
 ### 目标
 
@@ -160,6 +165,7 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm deps:check
       - run: pnpm type-check
       - run: pnpm test
       - run: pnpm build

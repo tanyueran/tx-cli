@@ -1,12 +1,15 @@
 # tx-cli 扩展改造计划
 
 > 将 tx-cli 从单体 CLI 工具改造为 pnpm + monorepo 架构，并扩展桌面端和云端服务能力。
+>
+> 当前进度：Phase 1、Phase 2 已完成；Phase 3 先收口包职责与依赖边界，再继续多模型和多端扩展。
 
 ## 改造目标
 
 1. **Monorepo 化**：拆分为独立包，职责清晰，便于多端复用
-2. **桌面端**：Electron 桌面应用，支持 Agent/Chat 切换、多模型切换
-3. **云端服务**：在云服务器上运行 Agent 服务，通过浏览器访问，多用户支持
+2. **核心无头化**：core 不包含终端 REPL、ANSI 展示或前端适配代码，桌面端与云端可直接复用
+3. **桌面端**：Electron 桌面应用，支持 Agent/Chat 切换、多模型切换
+4. **云端服务**：在云服务器上运行 Agent 服务，通过浏览器访问，多用户支持
 
 ## 技术选型
 
@@ -31,61 +34,56 @@ tx-cli/
 ├── tsconfig.base.json            # 共享 TS 配置
 │
 ├── packages/
-│   ├── shared/                   # @tx-cli/shared — 纯工具函数
-│   ├── core/                     # @tx-cli/core — 核心引擎（I/O 解耦）
-│   ├── scaffold/                 # @tx-cli/scaffold — 项目脚手架
-│   ├── cli/                      # @tx-cli/cli — CLI 入口
-│   ├── desktop/                  # @tx-cli/desktop — Electron 桌面应用
-│   └── server/                   # @tx-cli/server — 云端 Agent 服务
+│   ├── shared/                   # @tx-cli/shared — 通用工具与配置读写
+│   ├── core/                     # @tx-cli/core — 无头核心引擎（Channel + 会话 + 工具）
+│   ├── scaffold/                 # @tx-cli/scaffold — 模板发现、渲染与生成流程
+│   ├── cli/                      # @tx-cli/cli — 终端 REPL、命令适配与 CLI 专属服务
+│   ├── desktop/                  # @tx-cli/desktop — Electron 桌面应用（Phase 5 新增）
+│   └── server/                   # @tx-cli/server — 云端 Agent 服务（Phase 6 新增）
 │
-├── test/                         # 集成测试
+├── packages/*/test/              # 各包单元测试
+├── test/                         # 跨包与端到端集成测试
 └── docs/
     └── expand/                   # 本目录
 ```
 
 ## 包依赖关系
 
-```
-                    ┌──────────────┐
-                    │   @tx-cli/cli │
-                    └──────┬───────┘
-                           │
-              ┌────────────┼────────────┐
-              ▼            ▼            ▼
-       ┌──────────┐ ┌───────────┐ ┌───────────┐
-       │  core    │ │  scaffold  │ │  shared   │
-       └────┬─────┘ └───────────┘ └───────────┘
-            │
-            ▼
-       ┌──────────┐
-       │  shared  │
-       └──────────┘
+```text
+cli ──────> core ──────> shared
+ │                         ↑
+ ├──────> scaffold ────────┘
+ │                         ↑
+ └─────────────────────────┘
 
-┌─────────────────┐     ┌─────────────────┐
-│ @tx-cli/desktop │     │ @tx-cli/server  │
-│   (Electron)    │     │   (Express+WS)  │
-└────────┬────────┘     └────────┬────────┘
-         │                       │
-         ▼                       ▼
-    ┌──────────┐           ┌──────────┐
-    │   core   │           │   core   │
-    └──────────┘           └──────────┘
+desktop ──> core ──> shared
+server  ──> core ──> shared
 ```
+
+依赖约束：
+
+- `shared` 不依赖任何 workspace 包。
+- `core` 只依赖 `shared`，不得依赖 CLI、scaffold 或任何前端。
+- `scaffold` 只依赖 `shared`，不再为了 Channel 类型依赖 core。
+- `cli` 可以依赖 core、scaffold、shared，并独占终端 REPL 与 CLI 专属服务。
+- `desktop/server` 只复用 core/shared，不得依赖 cli。
 
 ## Phase 导航
 
 | Phase | 标题 | 前置依赖 | 状态 | 文档 |
 |---|---|---|---|---|
-| 1 | pnpm + monorepo 拆分 | 无 | 待开始 | [phase-1-monorepo.md](./phase-1-monorepo.md) |
-| 2 | core I/O 解耦 | Phase 1 | 待开始 | [phase-2-io-decoupling.md](./phase-2-io-decoupling.md) |
-| 3 | 多模型/多 Provider 配置 | Phase 2 | 待开始 | [phase-3-multi-model.md](./phase-3-multi-model.md) |
-| 4 | Electron 桌面端 | Phase 3 | 待开始 | [phase-4-desktop.md](./phase-4-desktop.md) |
-| 5 | 云端 Agent 服务 | Phase 3 | 待开始 | [phase-5-cloud-server.md](./phase-5-cloud-server.md) |
-| 6 | 打磨与发布 | Phase 4, 5 | 待开始 | [phase-6-polish.md](./phase-6-polish.md) |
+| 1 | pnpm + monorepo 拆分 | 无 | 已完成 | [phase-1-monorepo.md](./phase-1-monorepo.md) |
+| 2 | core I/O 解耦 | Phase 1 | 已完成 | [phase-2-io-decoupling.md](./phase-2-io-decoupling.md) |
+| 3 | 包职责与依赖边界收口 | Phase 2 | 待开始 | [phase-3-package-boundaries.md](./phase-3-package-boundaries.md) |
+| 4 | 多模型/多 Provider 配置 | Phase 3 | 待开始 | [phase-4-multi-model.md](./phase-4-multi-model.md) |
+| 5 | Electron 桌面端 | Phase 4 | 待开始 | [phase-5-desktop.md](./phase-5-desktop.md) |
+| 6 | 云端 Agent 服务 | Phase 4 | 待开始 | [phase-6-cloud-server.md](./phase-6-cloud-server.md) |
+| 7 | 打磨与发布 | Phase 5, 6 | 待开始 | [phase-7-polish.md](./phase-7-polish.md) |
 
 ## 实施原则
 
 1. **每个 Phase 完成后 CLI 功能必须不变** — 所有现有测试必须通过
-2. **按 Phase 顺序执行** — Phase 4 和 Phase 5 可以在 Phase 3 完成后并行
-3. **每个 Task 完成后验证** — 按验收标准逐项检查
-4. **最小改动原则** — 不做与当前 Task 无关的改动
+2. **先完成边界收口** — Phase 3 未验收前，不开始多模型、桌面端和云端改造
+3. **按 Phase 顺序执行** — Phase 5 和 Phase 6 可以在 Phase 4 完成后并行
+4. **每个 Task 完成后验证** — 按验收标准逐项检查
+5. **最小改动原则** — 不做与当前 Task 无关的改动，不为每个小能力新增 package
