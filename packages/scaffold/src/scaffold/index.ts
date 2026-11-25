@@ -1,11 +1,9 @@
 import path from "node:path";
 import { existsSync } from "node:fs";
 import { removeSync } from "fs-extra";
-import pico from "picocolors";
 import { renderTemplate } from "./render";
 import { loadTemplates } from "./templates";
-import type { TemplateKind } from "./types";
-import type { PromptChannel, OutputChannel } from "@tx-cli/core/channels";
+import type { TemplateKind, ScaffoldPrompt, ScaffoldOutput } from "./types";
 
 /**
  * 通用脚手架流程：确认名称 -> 选择模板 -> 确认覆盖 -> 生成文件
@@ -14,16 +12,16 @@ import type { PromptChannel, OutputChannel } from "@tx-cli/core/channels";
  * @param {string} [options.name] - 命令行已传入的名称，未传入时交互式询问
  * @param {string} options.nameLabel - 名称的业务称谓，如“项目名称”“模块名”
  * @param {TemplateKind} options.kind - 模板种类
- * @param {PromptChannel} options.prompt - 交互提示通道（问询出口）
- * @param {OutputChannel} options.output - 输出通道（提示与结果输出出口）
+ * @param {ScaffoldPrompt} options.prompt - 交互提示通道（问询出口）
+ * @param {ScaffoldOutput} options.output - 语义化输出通道（提示与结果输出出口）
  * @returns {Promise<{ name: string; targetPath: string } | null>} 生成成功时返回名称与目标路径，用户放弃覆盖时返回 null
  */
 export async function runScaffold(options: {
   name?: string;
   nameLabel: string;
   kind: TemplateKind;
-  prompt: PromptChannel;
-  output: OutputChannel;
+  prompt: ScaffoldPrompt;
+  output: ScaffoldOutput;
 }): Promise<{ name: string; targetPath: string } | null> {
   const { nameLabel, kind, prompt, output } = options;
 
@@ -37,8 +35,8 @@ export async function runScaffold(options: {
       ? templates[0]
       : ((await prompt.select("请选择模板", choices)) as (typeof templates)[number]);
 
-  output.text(pico.green(`${nameLabel}：${name}`));
-  output.text(pico.green(`选择模板：${template.label}`));
+  output.success(`${nameLabel}：${name}`);
+  output.success(`选择模板：${template.label}`);
 
   const targetPath = path.resolve(process.cwd(), name);
 
@@ -48,7 +46,7 @@ export async function runScaffold(options: {
       `目标目录 ${targetPath} 已存在，继续将删除该目录下的全部内容，确认覆盖吗？`,
     );
     if (!overwrite) {
-      output.text(pico.yellow("已取消，未做任何修改"));
+      output.warn("已取消，未做任何修改");
       return null;
     }
     removeSync(targetPath);
@@ -65,4 +63,4 @@ export async function runScaffold(options: {
 
 export { mapFileName, renderTemplate } from "./render";
 export { loadTemplates } from "./templates";
-export type { TemplateKind } from "./types";
+export type { TemplateKind, ScaffoldPrompt, ScaffoldOutput } from "./types";

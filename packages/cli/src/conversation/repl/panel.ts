@@ -7,11 +7,12 @@ import pico from "picocolors";
 import { displayWidth } from "@tx-cli/shared";
 import {
   describePricing,
+  formatElapsed,
   formatUsageSummary,
   isEmptyUsage,
-} from "../../llm";
-import type { LlmPricing, ThinkingLevel, TokenUsage } from "../../llm/types";
-import type { OutputChannel } from "../../channels";
+} from "@tx-cli/core";
+import type { LlmPricing, ThinkingLevel, TokenUsage } from "@tx-cli/core";
+import type { OutputChannel } from "@tx-cli/core";
 import type { ReplOptions } from "./state";
 import type { SlashCommand } from "./slash-commands";
 
@@ -30,18 +31,6 @@ function padPanelLabel(label: string): string {
     Math.max(0, PANEL_LABEL_WIDTH - displayWidth(label)),
   );
   return `${label}${padding}${" ".repeat(PANEL_LABEL_GAP)}`;
-}
-
-/**
- * 格式化连接耗时展示：不足 1 秒显示毫秒整数，达到 1 秒显示保留一位小数的秒
- * @param {number} ms - 耗时（毫秒）
- * @returns {string} 形如「820ms」「1.8s」的展示文本
- */
-export function formatElapsed(ms: number): string {
-  if (ms < 1000) {
-    return `${Math.round(ms)}ms`;
-  }
-  return `${(ms / 1000).toFixed(1)}s`;
 }
 
 /**
@@ -92,7 +81,7 @@ export function printReadyPanel(
   usage: TokenUsage,
   output: OutputChannel,
 ): void {
-  const { llmConfig, runtime } = options;
+  const { llmConfig, runtime } = options.session;
   const { mcpSummary, bootWarnings } = runtime;
   const { catalog, scanWarnings } = runtime.assembly;
 
@@ -130,7 +119,7 @@ export function printReadyPanel(
   if (allWarnings.length > 0) {
     output.text("");
     for (const warning of allWarnings) {
-      output.warn(pico.yellow(`  ${warning}`));
+      output.warn(`  ${warning}`);
     }
   }
 }

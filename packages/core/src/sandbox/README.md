@@ -4,7 +4,7 @@
 
 它不只是“包装 Bash 命令”，而是由配置、规则、审批、执行边界和审计共同组成的运行时安全层。
 
-> 整体架构与权限链路（四层模型）见 [docs/ARCHITECTURE.md](../../../docs/ARCHITECTURE.md)，本文聚焦沙箱模块内部的实现细节。
+> 整体架构与权限链路（四层模型）见 [docs/ARCHITECTURE.md](../../../../docs/ARCHITECTURE.md)，本文聚焦沙箱模块内部的实现细节。
 
 ## 1. 核心思想
 

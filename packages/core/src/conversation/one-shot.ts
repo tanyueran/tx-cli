@@ -4,7 +4,6 @@ import {
   disposeConversationRuntime,
 } from "./session/runtime";
 import type { ConversationModeConfig } from "./session/mode";
-import pico from "picocolors";
 import {
   createUsageAccumulator,
   isEmptyUsage,
@@ -153,7 +152,7 @@ export async function runOneShotConversation({
       ...runtime.assembly.scanWarnings,
       ...runtime.bootWarnings,
     ]) {
-      output.warn(pico.yellow(warning));
+      output.warn(warning);
     }
     // 步骤 4：装配会话工具带（子 Agent 按模式开关，三个工具增量合并进 runtime.assembly 的两份列表；
     // 单次会话档位固定，扩展字段直接闭包捕获；

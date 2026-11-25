@@ -1,4 +1,3 @@
-import pico from "picocolors";
 import {
   readGlobalConfig,
   resolveGlobalConfigPath,
@@ -29,7 +28,7 @@ interface LlmFileConfig {
  * @returns {void}
  */
 function warnMessage(channels: SessionChannels, message: string): void {
-  channels.output.warn(pico.yellow(message));
+  channels.output.warn(message);
 }
 
 /**
@@ -211,7 +210,7 @@ function resolveConfigFromSources(
 function saveConfigFile(llmConfig: LlmConfig, channels: SessionChannels): void {
   updateConfigSection("llm", llmConfig);
   const message = `配置已保存到 ${resolveGlobalConfigPath()}`;
-  channels.output.text(pico.green(message));
+  channels.output.success(message);
 }
 
 /**

@@ -1,4 +1,3 @@
-import pico from "picocolors";
 import { resolve } from "node:path";
 import type { ApprovalPolicy, SandboxLevel } from "../types";
 import {
@@ -51,10 +50,8 @@ export function createTrustPrompt(
 ): (cwd: string) => Promise<boolean> {
   return async (cwd: string): Promise<boolean> => {
     try {
-      channels.output.text(
-        pico.yellow(
-          "\n当前目录不在 sandbox.trustDirectories 内，配置文件中的 danger-full-access 档位 / never 审批策略需要信任当前目录后才会生效",
-        ),
+      channels.output.warn(
+        "\n当前目录不在 sandbox.trustDirectories 内，配置文件中的 danger-full-access 档位 / never 审批策略需要信任当前目录后才会生效",
       );
       return await channels.prompt.confirm(
         `是否信任当前目录 ${cwd}？（确认后写入全局配置 ~/.tx-cli/config.json）`,

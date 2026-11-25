@@ -26,8 +26,8 @@ import type {
   SubAgentControl,
   SubAgentRequest,
   SubAgentRunner,
-} from "./attach";
-import { buildTaskPreview } from "./attach";
+} from "./types";
+import { buildTaskPreview } from "./utils";
 
 /** 后台节点默认并发上限：超限派生返回失败说明，提示模型先收割已完成任务 */
 export const DEFAULT_MAX_BACKGROUND_NODES = 3;

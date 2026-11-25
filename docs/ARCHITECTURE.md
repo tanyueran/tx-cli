@@ -1,73 +1,91 @@
 # 项目架构
 
 > tx-cli：一个 Node.js 命令行工具，支持创建项目、添加模块、与大模型对话（含工具调用与沙箱管控）以及若干实用命令。
+>
+> 仓库为 pnpm monorepo：`shared` / `core` / `scaffold` / `cli` 四包。下文路径简写 `core/`、`cli/`、`shared/`、`scaffold/` 分别指 `packages/<包名>/src/`。
 
 ## 技术栈
 
 | 类别      | 选型                                                  |
 | ------- | --------------------------------------------------- |
-| 语言与运行时  | TypeScript（ESM）+ Node.js ≥ 20.11                    |
+| 语言与运行时  | TypeScript（ESM）+ Node.js ≥ 22.12                    |
 | CLI 框架  | commander                                           |
 | LLM 协议  | OpenAI 兼容 Responses API（`openai` SDK）               |
 | 工具生态    | Model Context Protocol（`@modelcontextprotocol/sdk`） |
 | 沙箱      | `@anthropic-ai/sandbox-runtime`（可插拔，见「沙箱与权限」）       |
 | 构建 / 测试 | rollup / vitest                                     |
-| 包管理     | pnpm                                                |
+| 包管理     | pnpm + workspace（monorepo）                           |
+| 依赖守卫    | dependency-cruiser + ESLint（见「包边界与依赖守卫」）          |
 
 ## 分层总览
 
 ```mermaid
 flowchart TD
-    subgraph CLI层["CLI 层 · src/program"]
+    subgraph CLI层["CLI 层 · packages/cli"]
         CLI["cli.ts 入口<br/>createProgram 装配命令"]
-        CMDS["command/*<br/>chat / agent / create / add / copy<br/>server / git-rename / commit-fix"]
+        CMDS["program/command/*<br/>chat / agent / create / add / copy<br/>server / git-rename / commit-fix"]
+        CHANNELS["channels/ TTY Channel 实现<br/>输入 / 输出 / 交互提示（颜色在此映射）"]
+        REPL["conversation/repl/ 终端 REPL<br/>输入帧 / 面板 / 斜杠命令"]
+        SERVICES["services/ copy / server / commit-fix"]
     end
-    subgraph 领域层["领域层 · src/core"]
-        CONV["conversation 对话编排"]
+    subgraph 领域层["领域层 · packages/core（无头核心引擎）"]
+        CONV["conversation 对话编排<br/>session（含 ConversationSession）/ loop / sub-agent"]
         TOOLS["tools 工具系统"]
         SANDBOX["sandbox 沙箱与权限"]
         LLM["llm 接入与思考档位"]
         MCP["mcp 服务器连接"]
         SKILLS["skills 技能发现"]
-        SCAFFOLD["scaffold / copy / server / commit-fix"]
+        CH["channels 跨端 I/O 契约（纯类型）"]
     end
-    subgraph 共享层["共享层"]
-        SHARED["shared 通用工具<br/>fs / paths / interactive-prompt / errors / user-config"]
+    subgraph 脚手架层["脚手架层 · packages/scaffold"]
+        SCAFFOLD["scaffold 模板发现 / 渲染 / 生成流程"]
+    end
+    subgraph 共享层["共享层 · packages/shared"]
+        SHARED["shared 通用工具<br/>fs / paths / errors / user-config / turn-cancel"]
     end
     CLI --> CMDS --> 领域层
+    CMDS --> REPL --> 领域层
+    CMDS --> SERVICES
+    CMDS --> CHANNELS --> 领域层
+    CMDS --> 脚手架层
     领域层 --> 共享层
+    脚手架层 --> 共享层
 ```
 
-依赖方向自上而下：命令层只做参数解析与分流，业务逻辑在领域层，跨模块复用的纯工具在共享层。命令与执行体分离（如 `registerChatCommand` / `runChatAction`），便于脱离 commander 单测。
+依赖方向自上而下：`cli` 可依赖 core/scaffold/shared；`core` 只依赖 shared，**不含终端 REPL、ANSI 着色与任何前端适配**（无 picocolors、console、readline、stdio 依赖），桌面端与云端可直接复用；`scaffold` 只依赖 shared，通过自身的 `ScaffoldPrompt` / `ScaffoldOutput` 最小端口以结构化类型接收 CLI Channel。命令与执行体分离（如 `registerChatCommand` / `runChatAction`），便于脱离 commander 单测。
 
 ## 目录结构
 
 ```text
-src/
-├── cli.ts                     # 进程入口：装配 program 并接管退出码
-├── program/                   # CLI 层：命令注册（仅参数解析与分流）
-│   └── command/               #   每个命令一个文件
-├── core/                      # 领域层（协议类型内聚在各模块 types.ts）
+packages/
+├── shared/src/                # 共享层：fs / paths / errors / user-config（全局配置读写）/
+│                              # config-merge（配置合并）/ string / text / timeout /
+│                              # serial-queue（串行执行队列）/ turn-cancel（回合级取消）
+├── core/src/                  # 领域层 · 无头核心引擎（协议类型内聚在各模块 types.ts）
+│   ├── channels/              # 跨端 I/O 契约：InputChannel / OutputChannel / PromptChannel
 │   ├── conversation/          # 对话编排（chat / agent 命令共用机制，模式即配置）
-│   │   ├── chat.ts            #   chat 命令实现：CHAT_MODE + one-shot（单次）/ repl（多轮）入口
-│   │   ├── agent.ts           #   agent 命令实现：AGENT_MODE + one-shot（单次）/ repl（多轮）入口
+│   │   ├── chat.ts            #   CHAT_MODE_CONFIG + runOneShotChat（单次入口）
+│   │   ├── agent.ts           #   AGENT_MODE_CONFIG + runOneShotAgent（单次入口）
 │   │   ├── one-shot.ts        #   单次会话入口（one-shot，agent / chat 共用）
 │   │   ├── session/           #   会话装配层：运行时装配（runtime）、模式配置（mode）、
-│   │   │                      #   技能与提示词装配（session-assembly / prompt）
+│   │   │                      #   技能与提示词装配（session-assembly / prompt）、
+│   │   │                      #   无头多轮会话（conversation-session）、后台事件通用处理
+│   │   │                      #   （background-events）、会话导出（session-export）
 │   │   ├── loop/              #   回合执行层：execute-turn 回合 wiring、agentic loop、
-│   │   │                      #   Responses 适配、流式渲染、上下文压缩
-│   │   ├── sub-agent/         #   子 Agent：attach（执行核 runner）、dispatcher（调度器）、
-│   │   │                      #   tools（delegate_task / task_status / task_stop 工具壳）
-│   │   └── repl/              #   多轮终端交互：主循环、输入、斜杠命令、会话导出
+│   │   │                      #   Responses 适配、流式渲染、上下文压缩（compaction）
+│   │   └── sub-agent/         #   子 Agent：attach（执行核 runner）、dispatcher（调度器）、
+│   │                          #   tools（delegate_task / task_status / task_stop 工具壳）、
+│   │                          #   types（公共契约）/ utils（纯函数）
 │   ├── tools/                 # 工具系统
 │   │   ├── types.ts           #   Tool 接口（含 permission 权限声明、renderCall 调用渲染扩展点）
 │   │   ├── executor.ts        #   执行器：参数解析、超时、8KB 截断
 │   │   ├── permission.ts      #   权限门卫包装层（wrapToolWithPermission）
+│   │   ├── registry.ts        #   工具名常量（delegate_task / discover_mcp_tools 等）与注册辅助
 │   │   └── builtin/           #   内置工具：read_file / list_dir / glob /
 │   │                          #   grep / web_search / web_fetch / write_file / edit_file（写侧，
 │   │                          #   受可写边界管控）/ write_todos（agent 模式装配，
 │   │                          #   工厂创建）/ bash（工厂创建，按需拼入）
-│   ├── sandbox/               # 沙箱与权限（四层模型，见下文；模块详情见 src/core/sandbox/README.md）
+│   ├── sandbox/               # 沙箱与权限（四层模型，见下文；模块详情见 packages/core/src/sandbox/README.md）
 │   │   ├── bootstrap/         #   L1 装配：create-context（createSandboxContext）、
 │   │   │                      #   options（CLI/配置优先级合并）、trust（目录信任与降级）
 │   │   ├── config/            #   配置 schema / 全局与项目配置加载校验
@@ -77,35 +95,63 @@ src/
 │   │   ├── providers/         #   Provider 注册表 + srt / landlock / noop
 │   │   ├── utils/             #   与业务无关的工具：glob 编译、路径匹配、命令切分、shell 引号
 │   │   └── types.ts           #   领域类型与 Provider / Approver 接口
-│   ├── llm/                   # LLM 接入：client、config 向导、thinking 适配（含档位解析）
-│   ├── mcp/                   # MCP：config 解析、manager 连接管理、tool-adapter
-│   ├── skills/                # 技能：discovery 扫描、catalog、load_skill 工具
-│   ├── scaffold/              # 脚手架：templates 加载、render 渲染（create/add 共用）
-│   ├── copy/                  # copy 命令的复制实现
-│   ├── server/                # server 命令的静态文件服务
-│   └── commit-fix/            # commit-fix 命令的 ONES 消息转换
-└── shared/                    # 共享层：fs / paths / interactive-prompt（交互问答封装）/
-                               # errors / user-config / warnings / string / text /
-                               # serial-queue（串行执行队列）
+│   ├── llm/                   # LLM 接入：client、config / config-wizard 配置向导、
+│   │                          #   thinking 适配（含档位解析）、context（压缩配置归一）、
+│   │                          #   usage 用量计算与费用估算（纯计算，不含终端表格渲染）
+│   ├── mcp/                   # MCP：config 解析（stdio / http 传输）、manager 连接管理、
+│   │                          #   tool-adapter 工具适配、discovery-tool 折叠发现、setup 装配
+│   └── skills/                # 技能：discovery 扫描、catalog、load_skill 工具（loader-tool）
+├── scaffold/
+│   ├── src/
+│   │   ├── index.ts           # 包出口
+│   │   └── scaffold/          # 脚手架：index（runScaffold 生成流程）、templates 加载、
+│   │                          #   render 渲染（create/add 共用）、
+│   │                          #   types（ScaffoldPrompt / ScaffoldOutput 最小端口）
+│   └── template/              # 模板目录（project / module，位于包根而非 src 下）
+└── cli/src/
+    ├── cli.ts                 # 进程入口：装配 program 并接管退出码
+    ├── channels/              # TTY Channel 实现：cli-input / cli-output（语义事件 → 颜色映射、
+    │                          #   用量表格渲染 usage-table）/ cli-prompt（交互提示，
+    │                          #   prompts 库适配在 prompts-prompt）
+    ├── conversation/
+    │   ├── agent.ts           #   runReplAgent（终端多轮入口，薄包装）
+    │   ├── chat.ts            #   runReplChat（终端多轮入口，薄包装）
+    │   └── repl/              #   终端 REPL：主循环（repl）、输入帧（input）、面板（panel）、
+    │                          #   斜杠命令（slash-commands）、终端状态（state）、
+    │                          #   输入与后台事件竞速（background）
+    ├── services/
+    │   ├── copy/              #   copy 命令的复制实现
+    │   ├── server/            #   server 命令的静态文件服务
+    │   └── commit-fix/        #   commit-fix 命令的 ONES 消息转换
+    └── program/               # CLI 层：命令注册（仅参数解析与分流）
+        └── command/           #   每个命令一个文件
 ```
+
+## 包边界与依赖守卫
+
+依赖方向由自动化检查固定（Phase 3 产出），后续开发不会悄悄退化：
+
+- **`pnpm deps:check`**（dependency-cruiser，配置 `.dependency-cruiser.mjs`）：禁止任何循环依赖；shared 不依赖其他 workspace 包；core 只依赖 shared；scaffold 只依赖 shared；desktop/server（后续包）不得依赖 cli。类型级导入同样纳入检查。
+- **ESLint `no-restricted-imports`**：禁止跨包相对路径导入（如 `../../core/src/...`），跨包一律经 `@tx-cli/*` 包名导入，确保只走各包 package.json 声明的公开出口。
+- **core 无终端展示依赖**：core 只产出语义化事件（`output.warn/error/success/dim/system`）与纯文本，颜色、表格对齐与终端布局由 CLI 展示层（`cli/channels/cli-output.ts`、`cli/channels/usage-table.ts`）映射；core 发送给 IPC/WebSocket 的内容不含 ANSI 控制字符。
 
 ## 对话链路（chat / agent 命令）
 
 ```mermaid
 flowchart LR
-    A["chat-command<br/>解析 --think（模式兜底 low）"] --> B["runOneShotConversation /<br/>runReplConversation<br/>会话生命周期"]
-    A2["agent-command<br/>解析 --think/--no-mcp/<br/>--sandbox 等"] --> B
-    B --> C["createConversationRuntime<br/>MCP / 沙箱 / 会话装配<br/>（assembleSessionContext）"]
-    C --> D["executeConversationTurn<br/>渲染器 + Responses 回合<br/>+ runAgentLoop"]
+    A["chat-command（cli）<br/>解析 --think（模式兜底 low）"] --> B["单次：runOneShotConversation（core）<br/>多轮：runReplConversation（cli）<br/>组合 ConversationSession（core）"]
+    A2["agent-command（cli）<br/>解析 --think/--no-mcp/<br/>--sandbox 等"] --> B
+    B --> C["createConversationRuntime（core）<br/>MCP / 沙箱 / 会话装配<br/>（assembleSessionContext）"]
+    C --> D["executeConversationTurn（core）<br/>渲染器 + Responses 回合<br/>+ runAgentLoop"]
     D --> E["Responses API<br/>（无状态，历史本地维护）"]
-    D --> F["executeToolCall<br/>参数解析/超时/截断"]
+    D --> F["executeToolCall（core）<br/>参数解析/超时/截断"]
     F --> G["内置工具 / bash（门卫包装）<br/>load_skill / MCP 工具"]
     G --> D
 ```
 
 ### 模式即配置
 
-chat 与 agent 共用同一套会话机制（单次 one-shot / 多轮 repl、agentic loop、流式渲染、技能装配），两个命令的差异全部收敛为一份 `ConversationModeConfig`（`core/conversation/session/mode.ts`），由 `chat.ts` / `agent.ts` 各自提供，传给公共的 `runOneShotConversation` / `runReplConversation`——新增一种模式不需要新写编排逻辑。
+chat 与 agent 共用同一套会话机制（单次 one-shot / 多轮会话、agentic loop、流式渲染、技能装配），两个命令的差异全部收敛为一份 `ConversationModeConfig`（`core/conversation/session/mode.ts`），由 `chat.ts` / `agent.ts` 各自提供。单次入口为 core 的 `runOneShotConversation`；多轮入口为 cli 的 `runReplConversation`，内部创建 core 的 **`ConversationSession`**（`core/conversation/session/conversation-session.ts`）——无头多轮会话统一持有运行时、跨轮 history、思考档位、累计用量、压缩配置与子 Agent 工具句柄/调度器，提供串行 `runTurn`、档位切换、`clear`、协作式取消与幂等 `dispose`，CLI 与后续桌面端/云端复用同一套多轮控制，不各自复制。新增一种模式不需要新写编排逻辑。
 
 **配置字段：**
 
@@ -159,7 +205,7 @@ LLM 调用走 OpenAI 兼容 Responses API 的**无状态模式**（`core/llm/cli
 
 - **采集**（`core/llm/client.ts`）：`streamResponse` 在 `response.completed` 事件读取服务端 `usage`，归一化为 `TokenUsage`（输入 / 输出 / 总量、缓存命中、思考 token）；缺失字段按 0 兜底，`total_tokens` 缺失时按输入 + 输出推算，服务未返回 usage 时为 `undefined`。
 - **透传**（`responses-turn.ts` → `execute-turn.ts`）：每次 LLM 请求返回用量即通过 `onUsage` 回调上报，agentic loop 的多轮请求在会话层逐次累加。
-- **展示**（`core/llm/usage.ts`）：大数值用 `k` / `M` / `B` 紧凑单位；REPL 每轮结束以表格展示「本轮 / 累计」四列（项目、输入、输出、费用），单次会话展示「本次」单行表格；REPL 就绪面板展示当前累计统计口径。表格按 `displayWidth` 计算列宽以兼容中文全角，边框灰色、本轮标签高亮、累计标签弱化。
+- **展示**（计算在 `core/llm/usage.ts`，终端表格渲染在 `cli/channels/usage-table.ts`）：大数值用 `k` / `M` / `B` 紧凑单位；REPL 每轮结束以表格展示「本轮 / 累计」四列（项目、输入、输出、费用），单次会话展示「本次」单行表格；REPL 就绪面板展示当前累计统计口径。表格按 `displayWidth` 计算列宽以兼容中文全角，边框灰色、本轮标签高亮、累计标签弱化。
 - **计费口径**：无状态模式每轮全量重传历史，`input` token 即真实计费量，会随轮次增长；费用估算需配置 `llm.pricing`（每百万 token 的 `inputPerMillion` / `outputPerMillion` 与可选 `currency`），未配置时只统计 token、费用列显示 `-`；非法单价在配置装载时告警并忽略。
 
 ```jsonc
@@ -180,11 +226,11 @@ LLM 调用走 OpenAI 兼容 Responses API 的**无状态模式**（`core/llm/cli
 无状态模式每轮全量重传历史，长任务会让 `input` token 持续膨胀。自动压缩在历史超过阈值时，把早期轮次摘要成一条消息插回历史首部，从而在保留关键信息的前提下收缩上下文。同样是 `chat` / `agent`、单次 / 多轮共用的公共机制。
 
 - **配置归一**（`core/llm/context.ts` 的 `resolveCompactionConfig`）：未配置 `llm.context.maxContextTokens` 时整体不启用；`thresholdTokens` = `compactAt <= 1` 时按比例换算（`maxContextTokens × compactAt`，缺省 0.7），`compactAt > 1` 时视为绝对 token 阈值；`keepRecentTurns` 缺省 4（小于 1 回退默认），`summaryMaxChars` 缺省 2000（下限 200）。非法字段在配置装载时告警并忽略，项目配置按字段覆盖全局配置。
-- **触发点（安全点）**：压缩只在「不会切断工具调用配对」的边界执行——REPL 在每轮用户输入开始前（`repl/repl.ts`），agentic loop 在每次请求前（`loop.ts` 的 `beforeIteration`，仅 `iteration > 0`，此时上一轮工具结果已回传）。正在进行的回合与工具调用链不受影响。
+- **触发点（安全点）**：压缩只在「不会切断工具调用配对」的边界执行——多轮会话在每轮输入开始前（`ConversationSession.runTurn`，`core/conversation/session/conversation-session.ts`），agentic loop 在每次请求前（`loop.ts` 的 `beforeIteration`，仅 `iteration > 0`，此时上一轮工具结果已回传）。正在进行的回合与工具调用链不受影响。
 - **阈值判定**（`shouldCompact`）：优先使用上一轮 LLM 请求返回的真实 `input_tokens`，没有时回退到历史字符数估算（`Math.ceil(字符数 / 2)`）；两者任一超过 `thresholdTokens` 即触发。
 - **安全切分**（`findCompactionSplit`）：切分点固定落在 **user 消息**上，取「倒数第 `keepRecentTurns` 轮用户输入」为界；轮次不足（历史 user 消息数 ≤ 保留轮数）时跳过压缩，保证每轮 user/assistant 与 `function_call`/`function_call_output` 不被拆散。
 - **摘要生成**：`buildSummaryTranscript` 把待压缩段展开成带角色标注的纯文本（工具输出截断到 1000 字符）→ 用**无工具**的 LLM 请求（`createLlmSummaryGenerator`，走同一 `streamResponse`，不下发工具定义）生成摘要 → `createSummaryMessage` 包装为 **user 角色**、以 `【历史摘要】` 开头的消息，保证压缩后历史首项仍是 user。
-- **原地替换**：`maybeCompactHistory`（`turn/compaction.ts`）用 `history.splice(0, split, summaryMessage)` 原地替换，保持 REPL 共享的数组引用；摘要请求的用量通过 `onUsage` 计入本轮与累计统计。
+- **原地替换**：`maybeCompactHistory`（`loop/compaction.ts`）用 `history.splice(0, split, summaryMessage)` 原地替换，保持会话共享的数组引用；摘要请求的用量通过 `onUsage` 计入本轮与累计统计。
 - **失败降级**：摘要请求失败、返回空摘要等异常一律返回 `status: "failed"`，历史保持原样、本轮继续用完整历史对话，不中断会话；压缩成功与否都以一行提示告知（成功青色、失败黄色）。
 
 ```jsonc
@@ -214,7 +260,7 @@ LLM 调用走 OpenAI 兼容 Responses API 的**无状态模式**（`core/llm/cli
 - **上下文压缩**：子 Agent 循环内接入与主会话同口径的压缩（配置 `llm.context.maxContextTokens` 后生效），但采用 `tool-rounds` 切分策略（`findSubAgentCompactionSplit`）——子 Agent 历史只有一条用户消息，按用户消息切分的策略永不触发；该策略保留子任务消息与最近 N 轮工具交互，切分点落在调用块边界，不拆散 `function_call` / `function_call_output` 配对。
 - **失败与取消**：同步子任务失败转为 `ok:false` 工具结果回传主模型自纠；用户取消（`CancelError`）原样上抛——同步嵌套 loop **复用**主回合的取消上下文，任一方向的取消都短路整轮。后台任务则脱离主回合取消上下文，由调度器独立管理停止与终态。
 - **用量统计**：子 Agent 每次 LLM 请求的 usage 经会话层每轮设置的 `setUsageReporter` 计入「本轮 / 累计」，但不更新 `lastInputTokens`，避免子 Agent 的上下文规模影响主会话压缩阈值判定。
-- **装配位置**：与 `write_todos` 不同，子 Agent 工具带依赖 LLM 配置与当前思考档位，因此在会话入口（`one-shot.ts` / `repl.ts`）装配，通过 `subAgentEnabled` 模式开关控制；REPL 中扩展字段闭包读取当前档位，`/think` 切换后子 Agent 同步生效。
+- **装配位置**：与 `write_todos` 不同，子 Agent 工具带依赖 LLM 配置与当前思考档位，因此在会话入口（`one-shot.ts` / `conversation-session.ts`）装配，通过 `subAgentEnabled` 模式开关控制；扩展字段闭包读取当前档位，`/think` 切换后子 Agent 同步生效。
 
 ### 流式渲染
 
@@ -239,10 +285,10 @@ LLM 调用走 OpenAI 兼容 Responses API 的**无状态模式**（`core/llm/cli
 
 ### REPL 会话状态与内联命令（/clear · /export）
 
-REPL 在会话内本地持有对话历史、累计用量、输入历史与任务清单句柄；斜杠命令注册表是补全面板、`/help`、就绪面板与分发的单一事实来源。
+通用会话状态（对话历史、累计用量、压缩配置、子 Agent 调度器与任务清单句柄）由 core 的 `ConversationSession` 持有；终端专属状态（输入历史、草稿还原、后台唤醒槽、斜杠命令注册表）由 cli 的 REPL 状态（`cli/conversation/repl/state.ts`）持有。斜杠命令注册表是补全面板、`/help`、就绪面板与分发的单一事实来源。
 
 - `/clear`：清空对话历史、累计用量、输入历史与任务清单，保留运行时（system 提示词、工具、MCP、沙箱）立即重开；命令在回合之间执行，不存在切断未配对工具调用的风险。后台子任务由独立调度器管理，不受 `/clear` 影响。
-- `/export`：把当前历史序列化为 Markdown（`repl/session-export.ts`），头部包含模式、模型、思考档位、导出时间与累计用量；消息按原序输出，工具调用参数美化，结果按 `callId` 标注工具名，超长工具输出截断（4000 字符）；文件写入当前工作目录，命名为 `tx-cli-session-<时间戳>.md`，无历史时提示不落盘。
+- `/export`：把当前历史序列化为 Markdown（`core/conversation/session/session-export.ts`，各端可复用），头部包含模式、模型、思考档位、导出时间与累计用量；消息按原序输出，工具调用参数美化，结果按 `callId` 标注工具名，超长工具输出截断（4000 字符）；文件写入当前工作目录，命名为 `tx-cli-session-<时间戳>.md`，无历史时提示不落盘。
 
 ### 任务清单与 MCP 生命周期
 
@@ -356,7 +402,7 @@ interface Tool extends ToolDefinition {
 
 ## 沙箱与权限（四层模型）
 
-> 模块内部目录职责、核心概念与推荐阅读顺序见 [src/core/sandbox/README.md](../src/core/sandbox/README.md)。
+> 模块内部目录职责、核心概念与推荐阅读顺序见 [packages/core/src/sandbox/README.md](../packages/core/src/sandbox/README.md)。
 
 三档沙箱（`SandboxLevel`）× 审批策略（`ApprovalPolicy`）正交：
 
@@ -447,8 +493,9 @@ bash（exec，串行）、read_file / list_dir / glob / grep（fs.read，规则�
 
 | 需求         | 入口                                                                                         |
 | ---------- | ------------------------------------------------------------------------------------------ |
-| 新增命令       | `src/program/command/` 新建文件并在 `program/index.ts` 的 registrars 注册                           |
-| 新增内置工具     | `src/core/tools/builtin/` 实现 `Tool` 接口并加入 `builtinTools`；需权限管控则声明 `permission` 字段（自动被门卫包装） |
-| 新增沙箱实现     | `src/core/sandbox/providers/` 实现 `SandboxProvider` 并在 `providers/registry.ts` 注册                     |
-| 新增模板       | `template/` 目录（create/add 共用脚手架流程 `core/scaffold`）                                         |
-| 接入新 LLM 能力 | 思考档位等协议差异统一收敛在 `core/llm/thinking.ts` 适配层                                                  |
+| 新增命令       | `packages/cli/src/program/command/` 新建文件并在 `program/index.ts` 的 registrars 注册                           |
+| 新增内置工具     | `packages/core/src/tools/builtin/` 实现 `Tool` 接口并加入 `builtinTools`；需权限管控则声明 `permission` 字段（自动被门卫包装） |
+| 新增沙箱实现     | `packages/core/src/sandbox/providers/` 实现 `SandboxProvider` 并在 `providers/registry.ts` 注册                     |
+| 新增模板       | `packages/scaffold/template/` 目录（create/add 共用脚手架流程 `@tx-cli/scaffold`）                                         |
+| 接入新 LLM 能力 | 思考档位等协议差异统一收敛在 `packages/core/src/llm/thinking.ts` 适配层                                                  |
+| 新增前端（桌面/云端） | 复用 core 的 `ConversationSession` 与 channels 契约实现各端 Channel；不得反向让 core 依赖前端（由 `pnpm deps:check` 强制） |

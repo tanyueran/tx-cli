@@ -1,8 +1,9 @@
 /**
  * conversation/agent：agent 命令的任务执行能力（Agent 模式）
- * 模式差异收敛为 AGENT_MODE_CONFIG 配置，单次/多轮机制复用 session/loop/repl 分层
+ * 模式差异收敛为 AGENT_MODE_CONFIG 配置，单次机制复用 session/loop 分层；
+ * 终端多轮入口（runReplAgent）在 cli 包，由 CLI 组合 ConversationSession 实现
  */
-import { runOneShotConversation, runReplConversation } from ".";
+import { runOneShotConversation } from "./one-shot";
 import type { ConversationModeConfig } from "./session/mode";
 import type { SandboxCliOptions } from "../sandbox";
 import type { LlmConfig, ThinkingLevel } from "../llm/types";
@@ -69,42 +70,6 @@ export async function runOneShotAgent({
     llmConfig,
     modeConfig: AGENT_MODE_CONFIG,
     userInput: task,
-    thinkingLevel,
-    mcpEnabled,
-    cliSandboxOptions,
-    channels,
-  });
-}
-
-/** runReplAgent 入参对象 */
-interface ReplAgentOptions {
-  /** LLM 接入配置 */
-  llmConfig: LlmConfig;
-  /** 命令行指定的思考档位，未指定时回退配置默认 */
-  thinkingLevel?: ThinkingLevel;
-  /** 是否启用 MCP 服务器（--no-mcp 关闭），缺省开启 */
-  mcpEnabled?: boolean;
-  /** CLI 传入的沙箱选项（--sandbox/--approval/--no-bash 等），缺省按配置文件装配 */
-  cliSandboxOptions?: SandboxCliOptions;
-  /** 会话通道集合：输入 / 输出 / 交互提示的抽象出口，由各端注入 */
-  channels: SessionChannels;
-}
-
-/**
- * agent 命令的多轮任务模式（REPL 入口），会话循环复用会话机制的 runReplConversation
- * @param {ReplAgentOptions} options - 入参对象（字段说明见接口定义）
- * @returns {Promise<void>}
- */
-export async function runReplAgent({
-  llmConfig,
-  thinkingLevel,
-  mcpEnabled = true,
-  cliSandboxOptions,
-  channels,
-}: ReplAgentOptions): Promise<void> {
-  await runReplConversation({
-    llmConfig,
-    modeConfig: AGENT_MODE_CONFIG,
     thinkingLevel,
     mcpEnabled,
     cliSandboxOptions,

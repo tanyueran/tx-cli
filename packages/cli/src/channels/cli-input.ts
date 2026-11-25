@@ -1,15 +1,15 @@
 /**
  * CLI 输入通道：REPL 输入行的 TTY 编排（补全面板、Tab 补全、历史回溯）
- * 输入状态机与帧渲染是纯逻辑，放在 core 的 conversation/repl/input.ts；
+ * 输入状态机与帧渲染是纯逻辑，放在本包 conversation/repl/input.ts；
  * 本文件只负责终端交互（raw mode、keypress 监听、光标定位、终端恢复）
  */
 import readline from "node:readline";
 import { CancelError } from "@tx-cli/shared";
+import { InputAbortedError } from "@tx-cli/core";
 import {
-  InputAbortedError,
   ReplInputController,
   renderReplFrame,
-} from "@tx-cli/core";
+} from "../conversation/repl/input";
 import type { InputChannel, InputRequest } from "@tx-cli/core";
 
 /**
@@ -94,10 +94,13 @@ async function readReplLineTty({
     initialInput,
   );
 
+  /** 上一帧绘制结束后光标相对帧首行的物理行偏移（重绘时先回到帧首再清屏） */
+  let prevCursorRow = 0;
+
   /**
-   * 全帧重绘：光标回到行首 → 清屏下方 → 写入整帧 → 上移回输入行 → 按列定位
-   * 约定：每次 draw 结束后光标都停在帧首行（输入行），因此重绘时无需再上移回帧首，
-   * 只需清屏下方重写；若重绘前还上移 (旧行数-1) 行，会越过输入行逐次删除上方会话输出
+   * 全帧重绘：回到上一帧首行 → 光标列归零 → 清屏下方 → 写入整帧 → 按物理行/列定位光标
+   * 输入行超出终端宽度会自动换行，因此定位一律使用帧的物理行数（rowCount / cursorRow），
+   * 不能用逻辑行数（lineCount）：否则折行后重绘起点逐次下移，旧输入行残留在屏幕上
    * @returns {void}
    */
   const draw = (): void => {
@@ -105,15 +108,22 @@ async function readReplLineTty({
       message,
       columns: stdout.columns || 80,
     });
+    // 先回到上一帧首行：折行输入时上一帧光标可能停在中间物理行，
+    // 若直接从当前行清屏，帧首以上的旧行无法被重绘覆盖（逐行残留）
+    if (prevCursorRow > 0) {
+      readline.moveCursor(stdout, 0, -prevCursorRow);
+    }
     readline.cursorTo(stdout, 0);
     readline.clearScreenDown(stdout);
     stdout.write(frame.text);
-    // 多行帧（面板可见）写完后光标停在最后一行，先上移回输入行再按列定位，
-    // 否则 cursorTo 只改列不改行，光标会落在面板行上、与实际输入位置错开
-    if (frame.lineCount > 1) {
-      readline.moveCursor(stdout, 0, -(frame.lineCount - 1));
+    // 写完帧文本后光标停在最后一个物理行（面板行或输入折行末行），
+    // 一次性相对移动到光标所在物理行（向上为负、向下为正），再按列定位
+    const rowDelta = frame.cursorRow - (frame.rowCount - 1);
+    if (rowDelta !== 0) {
+      readline.moveCursor(stdout, 0, rowDelta);
     }
     readline.cursorTo(stdout, frame.cursorColumn);
+    prevCursorRow = frame.cursorRow;
   };
 
   return new Promise<string>((resolve, reject) => {

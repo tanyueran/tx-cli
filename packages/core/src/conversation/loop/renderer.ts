@@ -1,4 +1,3 @@
-import pico from "picocolors";
 import type { OutputChannel, ToolCallInfo } from "../../channels";
 import type { ToolCall } from "../../llm/types";
 import type { Tool } from "../../tools";
@@ -102,10 +101,6 @@ export function createSoftConvergeNotice(
   return () => {
     renderer.endThinking();
     renderer.ensureNewline();
-    output.text(
-      pico.yellow(
-        `已达到工具调用轮数上限（${maxIterations} 轮），AI 将基于已有信息直接作答`,
-      ),
-    );
+    output.warn(`已达到工具调用轮数上限（${maxIterations} 轮），AI 将基于已有信息直接作答`);
   };
 }

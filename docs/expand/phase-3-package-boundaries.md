@@ -111,10 +111,10 @@ attach ──────> dispatcher ──────> types/utils
 
 ### 验收标准
 
-- [ ] `agent.ts`、`chat.ts` 不再从 `"."` 导入
-- [ ] `dispatcher.ts`、`tools.ts` 不再导入 `attach.ts`
-- [ ] 子 Agent 同步派生、后台派生、状态查询和停止行为不变
-- [ ] `pnpm type-check` 与 `pnpm test` 通过
+- [x] `agent.ts`、`chat.ts` 不再从 `"."` 导入
+- [x] `dispatcher.ts`、`tools.ts` 不再导入 `attach.ts`
+- [x] 子 Agent 同步派生、后台派生、状态查询和停止行为不变
+- [x] `pnpm type-check` 与 `pnpm test` 通过
 
 ---
 
@@ -174,11 +174,11 @@ core 的 `agent.ts`、`chat.ts` 保留 `AGENT_MODE_CONFIG`、`CHAT_MODE_CONFIG` 
 
 ### 验收标准
 
-- [ ] `packages/core/src/conversation/repl/` 不再存在
-- [ ] core 不导入 `@tx-cli/cli`，也不包含 REPL 专属导出
-- [ ] CLI 与后续非终端入口可复用同一个 `ConversationSession` 完成多轮、子 Agent、压缩、取消和资源释放
-- [ ] `chat`、`agent` 的单次和多轮 CLI 行为与改造前一致
-- [ ] REPL 补全、斜杠命令、后台任务通知、会话导出行为不回归
+- [x] `packages/core/src/conversation/repl/` 不再存在
+- [x] core 不导入 `@tx-cli/cli`，也不包含 REPL 专属导出
+- [x] CLI 与后续非终端入口可复用同一个 `ConversationSession` 完成多轮、子 Agent、压缩、取消和资源释放
+- [x] `chat`、`agent` 的单次和多轮 CLI 行为与改造前一致
+- [x] REPL 补全、斜杠命令、后台任务通知、会话导出行为不回归
 
 ---
 
@@ -227,10 +227,10 @@ CLI Channel 负责把语义事件映射为颜色；桌面端和 WebSocket Channe
 
 ### 验收标准
 
-- [ ] core 生产源码不再导入 `picocolors`
-- [ ] core 不直接依赖 `console`、`readline`、`process.stdin/stdout/stderr`
-- [ ] core 发送给 IPC/WebSocket 的内容不含 ANSI 控制字符
-- [ ] CLI 的颜色、用量表格和提示层级与改造前基本一致
+- [x] core 生产源码不再导入 `picocolors`
+- [x] core 不直接依赖 `console`、`readline`、`process.stdin/stdout/stderr`
+- [x] core 发送给 IPC/WebSocket 的内容不含 ANSI 控制字符
+- [x] CLI 的颜色、用量表格和提示层级与改造前基本一致
 
 ---
 
@@ -278,11 +278,11 @@ CLI Channel 负责把语义事件映射为颜色；桌面端和 WebSocket Channe
 
 ### 验收标准
 
-- [ ] scaffold 不再依赖或导入 core
-- [ ] scaffold 不再导出 copy/server/commit-fix
-- [ ] `create/add/copy/server/commit-fix` 命令行为不变
-- [ ] `pnpm --filter @tx-cli/scaffold type-check` 通过
-- [ ] 静态服务器有直接单元测试，覆盖启动、404 和监听失败
+- [x] scaffold 不再依赖或导入 core
+- [x] scaffold 不再导出 copy/server/commit-fix
+- [x] `create/add/copy/server/commit-fix` 命令行为不变
+- [x] `pnpm --filter @tx-cli/scaffold type-check` 通过
+- [x] 静态服务器有直接单元测试，覆盖启动、404 和监听失败
 
 ---
 
@@ -297,7 +297,7 @@ CLI Channel 负责把语义事件映射为颜色；桌面端和 WebSocket Channe
 - `packages/core/package.json` — 修改 exports
 - `packages/scaffold/package.json` — 修改 exports
 - `package.json`（根）— 新增依赖检查脚本
-- `.dependency-cruiser.cjs` — 新建
+- `.dependency-cruiser.mjs` — 新建（实施时采用 ESM 配置）
 - `eslint.config.mjs` — 按需补充导入限制
 
 ### 步骤
@@ -317,7 +317,7 @@ scaffold 只公开模板相关入口，CLI 专属服务不作为 workspace 公�
 - `core` 只能依赖 `shared`
 - `scaffold` 只能依赖 `shared`
 - `desktop/server` 不得依赖 `cli`
-- 禁止通过深层相对路径绕过 workspace 包公开出口
+- 禁止通过深层相对路径绕过 workspace 包公开出口（实施时由 `eslint.config.mjs` 的 `no-restricted-imports` 承担：depcruise 的 local 依赖类型无法区分 tsconfig paths 别名与相对路径）
 
 #### Step 3: 接入根脚本
 
@@ -325,9 +325,9 @@ scaffold 只公开模板相关入口，CLI 专属服务不作为 workspace 公�
 
 ### 验收标准
 
-- [ ] `pnpm deps:check` 能发现人为制造的循环依赖和反向依赖
-- [ ] 当前四包全部通过依赖规则
-- [ ] core 与 scaffold 的 exports 和实际导入方式一致
+- [x] `pnpm deps:check` 能发现人为制造的循环依赖和反向依赖
+- [x] 当前四包全部通过依赖规则
+- [x] core 与 scaffold 的 exports 和实际导入方式一致
 
 ---
 
@@ -379,8 +379,8 @@ node packages/cli/bin/tx-cli --help
 
 ### 验收标准
 
-- [ ] 依赖检查、类型检查、lint、全部测试和构建通过
-- [ ] 构建后的 CLI 能正常启动并展示帮助
-- [ ] 现有 CLI 命令关键流程无功能回归
-- [ ] 测试归属与新包边界一致
-- [ ] 未引入新 package，未修改 LLM 配置格式
+- [x] 依赖检查、类型检查、lint、全部测试和构建通过
+- [x] 构建后的 CLI 能正常启动并展示帮助
+- [x] 现有 CLI 命令关键流程无功能回归
+- [x] 测试归属与新包边界一致
+- [x] 未引入新 package，未修改 LLM 配置格式

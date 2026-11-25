@@ -1,4 +1,3 @@
-import pico from "picocolors";
 import { CliError } from "@tx-cli/shared";
 import type { SessionChannels } from "../channels";
 import type { LlmConfig } from "./types";
@@ -22,9 +21,7 @@ export async function runSetupWizard(
   }
 
   const { prompt, output } = channels;
-  output.text(
-    pico.yellow("首次使用需要配置大模型服务（支持任何 OpenAI 兼容接口）"),
-  );
+  output.warn("首次使用需要配置大模型服务（支持任何 OpenAI 兼容接口）");
   const apiKey = await prompt.input("API Key", partialConfig.apiKey);
   const baseUrl = await prompt.input(
     "Base URL（OpenAI 兼容接口地址）",

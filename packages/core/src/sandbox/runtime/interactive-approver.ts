@@ -1,4 +1,3 @@
-import pico from "picocolors";
 import { CliError } from "@tx-cli/shared";
 import { isInBackgroundScope } from "@tx-cli/shared";
 import type { SessionChannels } from "../../channels";
@@ -45,10 +44,8 @@ export function createInteractiveApprover(channels: SessionChannels): Approver {
         backgroundApprovalRejected();
       }
       const mcpMeta = context?.mcp;
-      output.text(
-        pico.yellow(`\n${mcpMeta ? "MCP 工具" : "命令"}需要审批：${ruleKey}`),
-      );
-      output.text(pico.gray(`原因：${reason}`));
+      output.warn(`\n${mcpMeta ? "MCP 工具" : "命令"}需要审批：${ruleKey}`);
+      output.dim(`原因：${reason}`);
       if (mcpMeta) {
         const choice = await prompt.select<ApprovalChoice["kind"]>(
           "是否允许执行？",
@@ -91,8 +88,8 @@ export function createInteractiveApprover(channels: SessionChannels): Approver {
       if (isInBackgroundScope()) {
         backgroundApprovalRejected();
       }
-      output.text(pico.yellow(`\n命令在沙箱内失败：${commandText}`));
-      output.text(pico.gray(reason));
+      output.warn(`\n命令在沙箱内失败：${commandText}`);
+      output.dim(reason);
       return prompt.confirm("是否脱离沙箱重跑本次命令？（风险自担）", false);
     },
   };

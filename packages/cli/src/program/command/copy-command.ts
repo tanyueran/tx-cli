@@ -1,7 +1,7 @@
 import type { Command } from "commander";
 import { existsSync } from "node:fs";
 import pico from "picocolors";
-import { copyPath, resolveCopyTarget } from "@tx-cli/scaffold";
+import { copyPath, resolveCopyTarget } from "../../services/copy";
 import { resolveFromCwd } from "@tx-cli/shared";
 import { CancelError } from "@tx-cli/shared";
 import { createCliChannels } from "../../channels";

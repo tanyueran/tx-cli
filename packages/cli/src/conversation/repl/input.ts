@@ -4,7 +4,7 @@ import {
   stripAnsi,
   truncateToWidth,
 } from "@tx-cli/shared";
-import type { InputSuggestion } from "../../channels";
+import type { InputSuggestion } from "@tx-cli/core";
 
 /**
  * 补全建议项（与 slash-commands 的 SlashSuggestion 结构兼容，可直接传入）
@@ -422,18 +422,22 @@ export class ReplInputController {
 export interface ReplFrameOptions {
   /** 输入行提示词（可含 ANSI 色码） */
   message: string;
-  /** 终端宽度（列数），用于面板行宽预算与光标列 clamp，默认 80 */
+  /** 终端宽度（列数），用于面板行宽预算、输入行折行与光标物理位置计算，默认 80 */
   columns?: number;
 }
 
-/** 渲染帧：text 为整帧文本（多行以 \n 连接），cursorColumn 为光标列，lineCount 为帧行数 */
+/** 渲染帧：text 为整帧文本（多行以 \n 连接），行列位置均为终端物理行/列（自动换行感知） */
 export interface ReplFrame {
   /** 整帧文本 */
   text: string;
-  /** 光标所在列（已 clamp 到 columns-1） */
+  /** 光标所在物理列（提示词 + 光标前文本的显示宽度对 columns 取模） */
   cursorColumn: number;
-  /** 帧总行数（重绘上移行数用） */
+  /** 光标所在物理行（相对帧首行的偏移，输入行折行时光标可能不在第 0 行） */
+  cursorRow: number;
+  /** 帧逻辑行数（输入行计 1 行 + 面板行数） */
   lineCount: number;
+  /** 帧占用的终端物理行数（输入行按 columns 自动换行折算 + 面板行数，重绘定位用） */
+  rowCount: number;
 }
 
 /**
@@ -448,10 +452,15 @@ export function renderReplFrame(
   { message, columns = 80 }: ReplFrameOptions,
 ): ReplFrame {
   const promptWidth = displayWidth(stripAnsi(message));
-  const cursorColumn = Math.min(
-    promptWidth + displayWidth(controller.input.slice(0, controller.cursor)),
-    Math.max(0, columns - 1),
-  );
+  const columnsSafe = Math.max(1, columns);
+  const beforeCursorWidth =
+    promptWidth + displayWidth(controller.input.slice(0, controller.cursor));
+  const fullWidth = promptWidth + displayWidth(controller.input);
+  // 输入行折行后的物理行数：宽度恰好为列宽整数倍时终端处于「待换行」态，仍占最后一行
+  const inputRows = Math.max(1, Math.ceil(fullWidth / columnsSafe));
+  // 光标物理位置与 Node readline 同口径：行 = 光标前宽度 / 列宽，列 = 取模
+  const cursorRow = Math.floor(beforeCursorWidth / columnsSafe);
+  const cursorColumn = beforeCursorWidth % columnsSafe;
   const lines: string[] = [message + controller.input];
   if (controller.panelVisible) {
     if (controller.suggestions.length === 0) {
@@ -460,7 +469,14 @@ export function renderReplFrame(
       lines.push(...renderPanel(controller, columns));
     }
   }
-  return { text: lines.join("\n"), cursorColumn, lineCount: lines.length };
+  // 面板行均已按列宽预算截断（placeholder 行极短），每行物理占 1 行
+  return {
+    text: lines.join("\n"),
+    cursorColumn,
+    cursorRow,
+    lineCount: lines.length,
+    rowCount: inputRows + (lines.length - 1),
+  };
 }
 
 /**

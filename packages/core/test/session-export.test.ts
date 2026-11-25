@@ -6,7 +6,7 @@ import { createEmptyUsage } from "@tx-cli/core/llm";
 import {
   formatSessionMarkdown,
   writeSessionMarkdown,
-} from "@tx-cli/core/conversation/repl/session-export";
+} from "@tx-cli/core/conversation/session/session-export";
 import type {
   ResponseHistoryItem,
   TokenUsage,

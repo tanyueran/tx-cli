@@ -4,8 +4,8 @@ import {
   ReplInputController,
   renderReplFrame,
   PANEL_LIMIT,
-} from "@tx-cli/core/conversation/repl/input";
-import type { ReplSuggestion } from "@tx-cli/core/conversation/repl/input";
+} from "../src/conversation/repl/input";
+import type { ReplSuggestion } from "../src/conversation/repl/input";
 import { stripAnsi } from "@tx-cli/shared/string";
 
 /** 构造固定候选的 suggest 回调 */
@@ -350,12 +350,38 @@ describe("renderReplFrame", () => {
     expect(frame.lineCount).toBe(1);
   });
 
-  it("光标列被 clamp 到 columns-1", () => {
+  it("输入超宽折行：光标列按列宽取模、行号按物理行计算", () => {
     const controller = new ReplInputController(suggestOf([]));
     controller.input = "abcdefghijklmnopqrstuvwxyz0123456789";
     controller.cursor = controller.input.length;
     const frame = renderReplFrame(controller, { message: "> ", columns: 20 });
-    expect(frame.cursorColumn).toBe(19);
+    // 总宽 2 + 36 = 38：物理行 2 行，光标在第 1 行第 18 列
+    expect(frame.cursorColumn).toBe(18);
+    expect(frame.cursorRow).toBe(1);
+    expect(frame.lineCount).toBe(1);
+    expect(frame.rowCount).toBe(2);
+  });
+
+  it("折行输入光标在行首时 cursorRow 为 0，rowCount 仍计全部物理行", () => {
+    const controller = new ReplInputController(suggestOf([]));
+    controller.input = "a".repeat(50);
+    controller.cursor = 0;
+    const frame = renderReplFrame(controller, { message: "> ", columns: 20 });
+    // 总宽 52：物理行 ceil(52/20) = 3 行，光标在帧首行第 2 列（提示词之后）
+    expect(frame.cursorRow).toBe(0);
+    expect(frame.cursorColumn).toBe(2);
+    expect(frame.rowCount).toBe(3);
+  });
+
+  it("折行输入叠加面板：rowCount = 输入物理行 + 面板行", () => {
+    const controller = new ReplInputController(suggestOf(COMMAND_SUGGESTIONS));
+    controller.input = "/" + "a".repeat(45);
+    controller.cursor = controller.input.length;
+    const frame = renderReplFrame(controller, { message: "> ", columns: 20 });
+    // 输入总宽 48 → 3 物理行；4 条候选各 1 行
+    expect(frame.rowCount).toBe(3 + 4);
+    expect(frame.lineCount).toBe(1 + 4);
+    expect(frame.cursorRow).toBe(2);
   });
 
   it("面板可见时渲染候选行，选中行带 ❯ 标记", () => {

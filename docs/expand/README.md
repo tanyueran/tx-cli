@@ -2,7 +2,7 @@
 
 > 将 tx-cli 从单体 CLI 工具改造为 pnpm + monorepo 架构，并扩展桌面端和云端服务能力。
 >
-> 当前进度：Phase 1、Phase 2 已完成；Phase 3 先收口包职责与依赖边界，再继续多模型和多端扩展。
+> 当前进度：Phase 1、Phase 2、Phase 3 已完成；包职责与依赖边界已收口，下一步进行 Phase 4 多模型/多 Provider 配置，再继续多端扩展。
 
 ## 改造目标
 
@@ -74,7 +74,7 @@ server  ──> core ──> shared
 |---|---|---|---|---|
 | 1 | pnpm + monorepo 拆分 | 无 | 已完成 | [phase-1-monorepo.md](./phase-1-monorepo.md) |
 | 2 | core I/O 解耦 | Phase 1 | 已完成 | [phase-2-io-decoupling.md](./phase-2-io-decoupling.md) |
-| 3 | 包职责与依赖边界收口 | Phase 2 | 待开始 | [phase-3-package-boundaries.md](./phase-3-package-boundaries.md) |
+| 3 | 包职责与依赖边界收口 | Phase 2 | 已完成 | [phase-3-package-boundaries.md](./phase-3-package-boundaries.md) |
 | 4 | 多模型/多 Provider 配置 | Phase 3 | 待开始 | [phase-4-multi-model.md](./phase-4-multi-model.md) |
 | 5 | Electron 桌面端 | Phase 4 | 待开始 | [phase-5-desktop.md](./phase-5-desktop.md) |
 | 6 | 云端 Agent 服务 | Phase 4 | 待开始 | [phase-6-cloud-server.md](./phase-6-cloud-server.md) |

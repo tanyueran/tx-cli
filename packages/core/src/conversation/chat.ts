@@ -1,8 +1,9 @@
 /**
  * conversation/chat：chat 命令的对话能力（Chat 模式）
- * 模式差异收敛为 CHAT_MODE_CONFIG 配置，单次/多轮机制复用 session/loop/repl 分层
+ * 模式差异收敛为 CHAT_MODE_CONFIG 配置，单次机制复用 session/loop 分层；
+ * 终端多轮入口（runReplChat）在 cli 包，由 CLI 组合 ConversationSession 实现
  */
-import { runOneShotConversation, runReplConversation } from ".";
+import { runOneShotConversation } from "./one-shot";
 import type { ConversationModeConfig } from "./session/mode";
 import type { LlmConfig, ThinkingLevel } from "../llm/types";
 import type { SessionChannels } from "../channels";
@@ -50,28 +51,6 @@ export async function runOneShotChat({
     llmConfig,
     modeConfig: CHAT_MODE_CONFIG,
     userInput: question,
-    thinkingLevel,
-    mcpEnabled: false,
-    channels,
-  });
-}
-
-/**
- * chat 命令的多轮对话模式（REPL 入口），会话循环复用会话机制的 runReplConversation
- * 只读语义同单次问答；会话内可用 /think 切换思考档位
- * @param {LlmConfig} llmConfig - LLM 接入配置
- * @param {ThinkingLevel | undefined} thinkingLevel - 初始思考档位，未指定时回退配置默认
- * @param {SessionChannels} channels - 会话通道集合
- * @returns {Promise<void>}
- */
-export async function runReplChat(
-  llmConfig: LlmConfig,
-  thinkingLevel: ThinkingLevel | undefined,
-  channels: SessionChannels,
-): Promise<void> {
-  await runReplConversation({
-    llmConfig,
-    modeConfig: CHAT_MODE_CONFIG,
     thinkingLevel,
     mcpEnabled: false,
     channels,
