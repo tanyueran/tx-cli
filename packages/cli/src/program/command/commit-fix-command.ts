@@ -1,7 +1,7 @@
 import type { Command } from "commander";
 import pico from "picocolors";
 import simpleGit from "simple-git";
-import { disposeOnesInfo } from "@tx-cli/scaffold";
+import { disposeOnesInfo } from "../../services/commit-fix";
 import { CliError } from "@tx-cli/shared";
 import { createCliChannels } from "../../channels";
 

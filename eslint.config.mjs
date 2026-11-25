@@ -16,6 +16,21 @@ export default tseslint.config(
       ],
       // 允许使用 any（项目成熟度阶段暂不强制）
       "@typescript-eslint/no-explicit-any": "off",
+      // 包边界守卫（Phase 3）：禁止跨包相对路径导入（如 ../core/src/...），
+      // 跨包一律经 @tx-cli/* 包名导入，确保依赖只走各包公开出口
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              regex:
+                "^(?:\\.\\.?/)+(?:[a-z0-9-]+/)*(?:core|shared|scaffold|cli|desktop|server)/(?:src|test)(?:/|$)",
+              message:
+                "禁止跨包相对路径导入：请改用 @tx-cli/* 包名导入（包公开出口见各包 package.json exports）",
+            },
+          ],
+        },
+      ],
     },
   }
 );

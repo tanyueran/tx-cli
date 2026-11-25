@@ -3,7 +3,6 @@
  * 只做参数校验与委托，不感知执行细节——执行核与调度器见 attach.ts / dispatcher.ts；
  * 未来新增 DAG 编排（多节点计划）只扩展调度器与新增工具壳，主循环与执行核不动
  */
-import pico from "picocolors";
 import { CancelError } from "@tx-cli/shared";
 import type { Tool, ToolOutput } from "../../tools";
 import type { OutputChannel } from "../../channels";
@@ -15,7 +14,7 @@ import {
 import type { TokenUsage } from "../../llm/types";
 import type { SubAgentDispatcher, SubAgentNodeStatus, TaskNodeState } from "./dispatcher";
 import { MAX_CONTEXT_CHARS, MAX_TASK_CHARS, SUB_AGENT_TIMEOUT_MS } from "./dispatcher";
-import { buildTaskPreview } from "./attach";
+import { buildTaskPreview } from "./utils";
 
 /** task_status 收割结论的截断上限：全文超限时截断并提示长度 */
 const STATUS_OUTPUT_MAX_CHARS = 8_000;
@@ -142,18 +141,12 @@ export function createDelegateTaskTool(
           usageReporter,
         );
         if (result.kind === "sync") {
-          output?.text(
-            pico.dim(`…… 子 Agent 运行中：${preview}（过程不进入主上下文）`),
-          );
-          output?.text(
-            pico.dim(`子 Agent 完成：结论 ${result.output.length} 字`),
-          );
+          output?.dim(`…… 子 Agent 运行中：${preview}（过程不进入主上下文）`);
+          output?.dim(`子 Agent 完成：结论 ${result.output.length} 字`);
           return { ok: true, output: `子 Agent 结论：\n${result.output}` };
         }
-        output?.text(
-          pico.dim(
-            `…… 子任务转后台：${preview}（${result.nodeId}，完成后结论自动带入对话）`,
-          ),
+        output?.dim(
+          `…… 子任务转后台：${preview}（${result.nodeId}，完成后结论自动带入对话）`,
         );
         return {
           ok: true,
@@ -168,7 +161,7 @@ export function createDelegateTaskTool(
           throw err;
         }
         const message = err instanceof Error ? err.message : String(err);
-        output?.text(pico.yellow(`子 Agent 失败：${message}`));
+        output?.warn(`子 Agent 失败：${message}`);
         return { ok: false, output: `子 Agent 执行失败：${message}` };
       }
     },

@@ -1,4 +1,3 @@
-import pico from "picocolors";
 import { CancelError } from "@tx-cli/shared";
 import { resolveCompactionConfig } from "../../llm";
 import type { LlmConfig, ResponseHistoryItem, TokenUsage } from "../../llm/types";
@@ -21,9 +20,26 @@ import {
 import type { SubAgentToolHandle } from "./tools";
 import { createResponsesTurn } from "../loop/responses-turn";
 import { runAgentLoop } from "../loop/loop";
+import type {
+  SubAgentControl,
+  SubAgentRequest,
+  SubAgentRunResult,
+  SubAgentRunner,
+  SubAgentSkillMeta,
+} from "./types";
+import { buildTaskPreview, TASK_PREVIEW_CHARS } from "./utils";
 
 // 工具名与裁剪集合的唯一定义在 tools/registry.ts，此处转发以维持既有导入路径
 export { SUB_AGENT_EXCLUDED_TOOL_NAMES, SUB_AGENT_TOOL_NAME };
+// 公共契约与无副作用工具函数前移到 types/utils，此处 re-export 维持既有导入路径
+export type {
+  SubAgentControl,
+  SubAgentRequest,
+  SubAgentRunResult,
+  SubAgentRunner,
+  SubAgentSkillMeta,
+};
+export { buildTaskPreview, TASK_PREVIEW_CHARS };
 
 /** 子 Agent 默认工具调用轮数上限：子任务边界清晰，轮数无需与主 Agent 对齐 */
 export const DEFAULT_SUB_AGENT_MAX_ITERATIONS = 20;
@@ -35,52 +51,6 @@ export const SUB_AGENT_PROMPT = [
   "按需使用工具（读写文件、检索、执行命令、MCP）完成任务；创建或修改文件优先用 write_file / edit_file；删除、覆盖等高危操作先停下说明需要确认。",
   "完成后直接给出结论：做了什么、产出或关键发现、遗留风险；不要复述过程，也不要把大段原始输出搬进结论。",
 ].join("\n");
-
-/** 子 Agent 可用的技能元数据（名称 + 描述，追加到人设提示词） */
-export interface SubAgentSkillMeta {
-  name: string;
-  description: string;
-}
-
-/** 子 Agent 执行请求 */
-export interface SubAgentRequest {
-  /** 子任务描述（必须自包含） */
-  task: string;
-  /** 背景信息（可选）：子 Agent 看不到主会话历史，关键事实与约束需写在这里 */
-  context?: string;
-}
-
-/** 子 Agent 执行结果 */
-export interface SubAgentRunResult {
-  /** 子 Agent 的最终结论 */
-  output: string;
-}
-
-/** 子 Agent 运行控制钩子（后台调度器注入；同步派生不传，行为与历史版本一致） */
-export interface SubAgentControl {
-  /**
-   * 协作式停止探针：在每个循环安全点（beforeIteration）检查，
-   * 为真时抛 CancelError 终止本次运行——JS 无法强杀进行中的 Promise，
-   * 与主回合取消同口径，由调度器在安全点之间轮询
-   * @returns {boolean} 已请求停止为 true
-   */
-  shouldStop(): boolean;
-  /** 静默运行：不打印软收敛等进度提示（后台节点使用，避免污染终端输入帧） */
-  quiet?: boolean;
-}
-
-/**
- * 子 Agent 执行器：完成一次独立子任务的运行并返回结论
- * @param {SubAgentRequest} request - 子任务与背景信息
- * @param {(usage: TokenUsage) => void} [onUsage] - 每次 LLM 请求的用量回调，供会话层累计
- * @param {SubAgentControl} [control] - 运行控制钩子（后台调度器注入协作停止与静默）
- * @returns {Promise<SubAgentRunResult>} 子 Agent 的最终结论
- */
-export type SubAgentRunner = (
-  request: SubAgentRequest,
-  onUsage?: (usage: TokenUsage) => void,
-  control?: SubAgentControl,
-) => Promise<SubAgentRunResult>;
 
 /** 创建子 Agent 执行器的参数 */
 export interface CreateSubAgentRunnerOptions {
@@ -178,10 +148,8 @@ export function createSubAgentRunner(
       onSoftConverge: control?.quiet
         ? () => {}
         : () => {
-            options.output?.text(
-              pico.dim(
-                `…… 子 Agent 已达 ${maxIterations} 轮上限，将基于已有信息直接收尾`,
-              ),
+            options.output?.dim(
+              `…… 子 Agent 已达 ${maxIterations} 轮上限，将基于已有信息直接收尾`,
             );
           },
       // 压缩安全点与主会话同构（首轮无历史不压缩）：检索型子任务最容易膨胀历史，全量重传前先摘要；
@@ -208,25 +176,6 @@ export function createSubAgentRunner(
     });
     return { output: output.trim() || "（子 Agent 执行完毕，但未给出文字结论）" };
   };
-}
-
-/** 子任务预览的目标字符数（调度器的进度行、通知与状态列表共用） */
-export const TASK_PREVIEW_CHARS = 80;
-
-/**
- * 生成子任务预览：取首行并截断，用于调用提示与进度行
- * @param {unknown} rawTask - 模型给出的 task 参数
- * @returns {string} 预览文本（无有效任务时为空串）
- */
-export function buildTaskPreview(rawTask: unknown): string {
-  if (typeof rawTask !== "string") {
-    return "";
-  }
-  const task = rawTask.trim();
-  if (task.length <= TASK_PREVIEW_CHARS) {
-    return task;
-  }
-  return `${task.slice(0, TASK_PREVIEW_CHARS)}…`;
 }
 
 /**

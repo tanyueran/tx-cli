@@ -34,9 +34,17 @@ export {
   formatCost,
   formatUsageSummary,
   describePricing,
-  formatUsageTable,
 } from "./usage";
 export type { UsageAccumulator } from "./usage";
+export type {
+  LlmConfig,
+  LlmContextConfig,
+  LlmPricing,
+  ResponseHistoryItem,
+  ThinkingLevel,
+  ThinkingStyle,
+  TokenUsage,
+} from "./types";
 export {
   parseThinkingLevel,
   parseThinkingStyle,

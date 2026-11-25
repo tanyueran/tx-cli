@@ -4,7 +4,8 @@ import {
   parseThinkingLevel,
   THINKING_LEVELS,
 } from "@tx-cli/core";
-import { runOneShotChat, runReplChat } from "@tx-cli/core";
+import { runOneShotChat } from "@tx-cli/core";
+import { runReplChat } from "../../conversation/chat";
 import { createCliChannels } from "../../channels";
 
 /** chat 命令执行体的选项入参 */

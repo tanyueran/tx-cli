@@ -3,7 +3,7 @@
  * 承担 TTY 状态行原地重绘（思考中 spinner）、非 TTY 的降级全量流式输出与工具调用提示渲染
  */
 import pico from "picocolors";
-import { formatUsageTable } from "@tx-cli/core";
+import { formatUsageTable } from "./usage-table";
 import type { OutputChannel, ToolCallInfo } from "@tx-cli/core";
 
 /** 思考/loading 状态行的 spinner 动画帧（Claude Code 风格星形序列） */
@@ -11,6 +11,28 @@ const SPINNER_FRAMES = ["✻", "✽", "✶", "✷", "✸", "✹"];
 
 /** spinner 帧间隔（毫秒） */
 const SPINNER_INTERVAL_MS = 120;
+
+/**
+ * 按行首符号为自定义渲染文本补色（core 只产出纯文本，样式由 CLI 展示层添加）：
+ * ☑ 已完成任务暗色弱化、◐ 进行中任务黄色高亮，其余行原样输出
+ * @param {string} text - 工具自定义渲染文本（如任务清单视图）
+ * @returns {string} 着色后的文本
+ */
+function colorizeRenderedCall(text: string): string {
+  return text
+    .split("\n")
+    .map((line) => {
+      const trimmed = line.trimStart();
+      if (trimmed.startsWith("☑ ")) {
+        return pico.dim(line);
+      }
+      if (trimmed.startsWith("◐ ")) {
+        return pico.yellow(line);
+      }
+      return line;
+    })
+    .join("\n");
+}
 
 /**
  * CLI 输出通道：文本经 console 输出，流式思考以单行状态行原地重绘
@@ -120,7 +142,7 @@ export class CliOutputChannel implements OutputChannel {
   toolCall(info: ToolCallInfo): void {
     if (info.renderedCall) {
       console.log(pico.cyan(`→ 调用 ${info.name}`));
-      console.log(info.renderedCall);
+      console.log(colorizeRenderedCall(info.renderedCall));
       return;
     }
     console.log(pico.cyan(`→ 调用 ${info.name}(${info.arguments})`));
@@ -143,7 +165,7 @@ export class CliOutputChannel implements OutputChannel {
    * @returns {void}
    */
   error(message: string): void {
-    console.error(message);
+    console.error(pico.red(message));
   }
 
   /**
@@ -152,7 +174,7 @@ export class CliOutputChannel implements OutputChannel {
    * @returns {void}
    */
   warn(message: string): void {
-    console.warn(message);
+    console.warn(pico.yellow(message));
   }
 
   /**
@@ -161,7 +183,7 @@ export class CliOutputChannel implements OutputChannel {
    * @returns {void}
    */
   system(message: string): void {
-    console.log(message);
+    console.log(pico.cyan(message));
   }
 
   /**
@@ -170,7 +192,7 @@ export class CliOutputChannel implements OutputChannel {
    * @returns {void}
    */
   success(message: string): void {
-    console.log(message);
+    console.log(pico.green(message));
   }
 
   /**
@@ -179,7 +201,7 @@ export class CliOutputChannel implements OutputChannel {
    * @returns {void}
    */
   dim(message: string): void {
-    console.log(message);
+    console.log(pico.dim(message));
   }
 
   /**

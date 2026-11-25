@@ -6,6 +6,8 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
+    "./channels": "./src/channels/index.ts",
+    "./channels/*": "./src/channels/*",
     "./conversation/*": "./src/conversation/*",
     "./llm/*": "./src/llm/*",
     "./tools/*": "./src/tools/*",
@@ -22,8 +24,7 @@
     "@tx-cli/shared": "workspace:*",
     "@anthropic-ai/sandbox-runtime": "^0.0.80",
     "@modelcontextprotocol/sdk": "^1.32.1",
-    "openai": "7.32.0",
-    "picocolors": "1.1.1"
+    "openai": "7.32.0"
   },
   "devDependencies": {
     "@types/node": "^26.4.1",

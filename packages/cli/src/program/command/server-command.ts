@@ -1,7 +1,7 @@
 import type { Command } from "commander";
 import pico from "picocolors";
 import open from "open";
-import { startServer } from "@tx-cli/scaffold";
+import { startServer } from "../../services/server";
 import { CliError } from "@tx-cli/shared";
 
 /**

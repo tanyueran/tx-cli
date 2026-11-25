@@ -9,7 +9,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { copyPath, resolveCopyTarget } from "@tx-cli/scaffold/copy";
+import { copyPath, resolveCopyTarget } from "../src/services/copy";
 
 let root: string;
 

@@ -12,9 +12,9 @@ import {
   matchSlashCommand,
   parseSkillArgs,
   printHelp,
-} from "@tx-cli/core/conversation/repl/slash-commands";
+} from "../src/conversation/repl/slash-commands";
 import { SkillCatalog } from "@tx-cli/core/skills";
-import type { SlashCommandDeps } from "@tx-cli/core/conversation/repl/slash-commands";
+import type { SlashCommandDeps } from "../src/conversation/repl/slash-commands";
 import type { TodoToolHandle } from "@tx-cli/core/tools";
 import { MockOutputChannel } from "./helpers/mock-channels";
 
@@ -43,19 +43,22 @@ function makeDeps(
 /** 记录 /think 设置的最新档位 */
 let lastLevel: string;
 
-/** console.log/error 捕获器：避免用例输出噪音并支持内容断言 */
+/** console.log/error/warn 捕获器：避免用例输出噪音并支持内容断言（warn 承载语义化警告输出） */
 let logSpy: ReturnType<typeof vi.spyOn>;
 let errorSpy: ReturnType<typeof vi.spyOn>;
+let warnSpy: ReturnType<typeof vi.spyOn>;
 
 beforeEach(() => {
   lastLevel = "low";
   logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
   errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+  warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 });
 
 afterEach(() => {
   logSpy.mockRestore();
   errorSpy.mockRestore();
+  warnSpy.mockRestore();
 });
 
 describe("parseSkillArgs", () => {
@@ -286,8 +289,10 @@ describe("buildSlashCommands 执行体", () => {
       .execute("/think");
     expect(result).toEqual({ kind: "handled" });
     expect(lastLevel).toBe("low");
-    // none 风格不打印档位行，但折算警告文案中携带档位
-    expect(logSpy.mock.calls.join("\n")).toContain("思考档位为 low");
+    // none 风格不打印档位行，但折算警告文案中携带档位（语义化警告走 output.warn → console.warn）
+    expect(
+      [...logSpy.mock.calls, ...warnSpy.mock.calls].join("\n"),
+    ).toContain("思考档位为 low");
   });
 
   it("/think <level> 切换档位", async () => {

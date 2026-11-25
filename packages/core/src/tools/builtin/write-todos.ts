@@ -1,4 +1,3 @@
-import pico from "picocolors";
 import { TODO_TOOL_NAME } from "../registry";
 import type { Tool, ToolOutput } from "../types";
 
@@ -36,8 +35,8 @@ const MAX_TODO_ITEMS = 20;
 const TODO_STATUSES: TodoStatus[] = ["pending", "in_progress", "completed"];
 
 /**
- * 格式化任务清单为多行展示文本（工具调用提示与 /todos 内联命令共用）
- * 符号约定：☐ 待办、◐ 进行中（黄字）、☑ 已完成（暗色弱化）
+ * 格式化任务清单为多行纯文本（工具调用提示与 /todos 内联命令共用）
+ * 符号约定：☐ 待办、◐ 进行中、☑ 已完成；着色由各端展示层按符号前缀添加
  * @param {TodoItem[]} todos - 任务清单
  * @returns {string} 逐行展示文本（每行两空格缩进，不含首行标题）
  */
@@ -45,10 +44,10 @@ export function formatTodoList(todos: TodoItem[]): string {
   return todos
     .map((todo) => {
       if (todo.status === "completed") {
-        return `  ${pico.dim("☑ " + todo.content)}`;
+        return `  ☑ ${todo.content}`;
       }
       if (todo.status === "in_progress") {
-        return `  ${pico.yellow("◐ " + todo.content)}`;
+        return `  ◐ ${todo.content}`;
       }
       return `  ☐ ${todo.content}`;
     })

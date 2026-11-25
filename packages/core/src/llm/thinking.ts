@@ -1,4 +1,3 @@
-import pico from "picocolors";
 import { CliError } from "@tx-cli/shared";
 import type { OutputChannel } from "../channels";
 import type { LlmConfig, ThinkingLevel, ThinkingStyle } from "./types";
@@ -215,16 +214,10 @@ export function warnThinkingFallback(
   output: OutputChannel,
 ): void {
   if (thinkingStyle === "none") {
-    output.text(
-      pico.yellow(
-        `思考档位为 ${thinkingLevel}，但${describeThinkingStyle(thinkingStyle)}`,
-      ),
-    );
+    output.warn(`思考档位为 ${thinkingLevel}，但${describeThinkingStyle(thinkingStyle)}`);
     return;
   }
   if (isToggleOnlyStyle(thinkingStyle) && thinkingLevel !== "off") {
-    output.text(
-      pico.yellow(`注意：当前服务${describeThinkingStyle(thinkingStyle)}`),
-    );
+    output.warn(`注意：当前服务${describeThinkingStyle(thinkingStyle)}`);
   }
 }

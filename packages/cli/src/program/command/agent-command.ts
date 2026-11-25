@@ -5,7 +5,8 @@ import {
   parseThinkingLevel,
   THINKING_LEVELS,
 } from "@tx-cli/core";
-import { runOneShotAgent, runReplAgent } from "@tx-cli/core";
+import { runOneShotAgent } from "@tx-cli/core";
+import { runReplAgent } from "../../conversation/agent";
 import {
   APPROVAL_POLICIES,
   SANDBOX_LEVELS,

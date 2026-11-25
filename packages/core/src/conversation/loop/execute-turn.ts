@@ -1,4 +1,3 @@
-import pico from "picocolors";
 import { createResponsesTurn } from "./responses-turn";
 import {
   createStreamRenderer,
@@ -118,9 +117,11 @@ export async function executeConversationTurn(
       });
       const notice = formatCompactionNotice(outcome);
       if (notice) {
-        options.output.text(
-          outcome.status === "failed" ? pico.yellow(notice) : pico.cyan(notice),
-        );
+        if (outcome.status === "failed") {
+          options.output.warn(notice);
+        } else {
+          options.output.system(notice);
+        }
       }
     },
   });
