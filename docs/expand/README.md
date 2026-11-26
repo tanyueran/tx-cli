@@ -3,6 +3,8 @@
 > 将 tx-cli 从单体 CLI 工具改造为 pnpm + monorepo 架构，并扩展桌面端和云端服务能力。
 >
 > 当前进度：Phase 1、Phase 2、Phase 3 已完成；包职责与依赖边界已收口，下一步进行 Phase 4 多模型/多 Provider 配置，再继续多端扩展。
+>
+> 说明：本目录是分阶段改造的**历史方案快照**，其中出现的文件/目录路径反映当时的结构或后续阶段的规划（如 `packages/desktop`、`packages/server` 尚未创建），当前实际结构以 [ARCHITECTURE.md](../ARCHITECTURE.md) 为准。
 
 ## 改造目标
 
