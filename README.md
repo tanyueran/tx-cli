@@ -37,16 +37,26 @@ Commands:
 
 添加模块。不传模块名称时，会以交互式提示输入。
 
+模块名称支持相对路径：生成目录基于**命令执行目录**解析（通过 `pnpm run dev` 等包装命令执行时，同样以调用处为准），模板中使用的名称只取路径最后一段。
+
 ```bash
 tx-cli add user-profile
+
+# 生成到 ./abc/aaa，组件名为 Aaa
+tx-cli add ./abc/aaa
 ```
 
 ### `create [project-name]`
 
 创建项目。不传项目名称时，会以交互式提示输入。
 
+与 `add` 一致，项目名称支持相对路径，生成目录基于命令执行目录解析，模板中的项目名称取路径最后一段。
+
 ```bash
 tx-cli create my-app
+
+# 生成到 ./apps/admin，package.json 中的 name 为 admin
+tx-cli create ./apps/admin
 ```
 
 ### `copy <src> <dest>`

@@ -21,6 +21,9 @@ export function registerAddCommand(program: Command): void {
         kind: "module",
         prompt: channels.prompt,
         output: channels.output,
+        // 相对模块路径基于命令行的实际执行目录：pnpm/npm 通过 INIT_CWD 传递调用方目录，
+        // 直接执行 bin 时没有该变量，回退到当前工作目录
+        cwd: process.env.INIT_CWD || process.cwd(),
       });
       if (result) {
         channels.output.text(pico.green(`模块已生成：${result.targetPath}`));
