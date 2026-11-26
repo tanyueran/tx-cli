@@ -138,3 +138,89 @@ describe("list_dir 工具（直连执行）", () => {
     expect(result).toEqual({ ok: false, output: `不是目录: ${target}` });
   });
 });
+
+describe("文件工具异常与空结果边界", () => {
+  it("glob 缺少有效 pattern 时返回失败", async () => {
+    for (const args of [{}, { pattern: "  " }, { pattern: 123 }]) {
+      const result = await globTool.execute(args);
+
+      expect(result).toEqual({
+        ok: false,
+        output: "缺少必填参数 pattern（glob 模式）",
+      });
+    }
+  });
+
+  it("glob 未匹配到文件时返回明确空结果", async () => {
+    writeFileSync(join(dir, "only.txt"), "content");
+
+    const result = await globTool.execute({ pattern: "**/*.ts", path: dir });
+
+    expect(result).toEqual({
+      ok: true,
+      output: "未匹配到文件（模式：**/*.ts）",
+    });
+  });
+
+  it("glob 根路径为文件时返回失败", async () => {
+    const target = join(dir, "file.txt");
+    writeFileSync(target, "content");
+
+    const result = await globTool.execute({ pattern: "*", path: target });
+
+    expect(result).toEqual({ ok: false, output: `不是目录: ${target}` });
+  });
+
+  it("glob 根目录不存在时把遍历异常转为失败输出", async () => {
+    const target = join(dir, "missing");
+
+    const result = await globTool.execute({ pattern: "*", path: target });
+
+    expect(result.ok).toBe(false);
+    expect(result.output).toContain("查找失败:");
+    expect(result.output).toContain(`（根目录：${target}）`);
+  });
+
+  it("grep 缺少 pattern 时返回失败", async () => {
+    for (const args of [{}, { pattern: "" }, { pattern: 123 }]) {
+      const result = await grepTool.execute(args);
+
+      expect(result).toEqual({
+        ok: false,
+        output: "缺少必填参数 pattern（正则表达式）",
+      });
+    }
+  });
+
+  it("grep 默认区分大小写，未命中时返回明确空结果", async () => {
+    const target = join(dir, "case.txt");
+    writeFileSync(target, "Alpha\nbeta", "utf8");
+
+    const result = await grepTool.execute({ pattern: "alpha", path: target });
+
+    expect(result).toEqual({
+      ok: true,
+      output: "未匹配到内容（正则：alpha）",
+    });
+  });
+
+  it("grep 路径不存在时把搜索异常转为失败输出", async () => {
+    const target = join(dir, "missing");
+
+    const result = await grepTool.execute({ pattern: "hit", path: target });
+
+    expect(result.ok).toBe(false);
+    expect(result.output).toContain("搜索失败:");
+    expect(result.output).toContain(`（路径：${target}）`);
+  });
+
+  it("list_dir 路径不存在时把读取异常转为失败输出", async () => {
+    const target = join(dir, "missing");
+
+    const result = await listDirTool.execute({ path: target });
+
+    expect(result.ok).toBe(false);
+    expect(result.output).toContain("列出目录失败:");
+    expect(result.output).toContain(`（路径：${target}）`);
+  });
+});

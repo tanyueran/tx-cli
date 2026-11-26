@@ -9,9 +9,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { beforeAll, expect, it } from "vitest";
+import { expect, it } from "vitest";
 
-const REPO_ROOT = fileURLToPath(new URL("../../../", import.meta.url));
 const CLI_BIN = fileURLToPath(new URL("../bin/tx-cli", import.meta.url));
 const EXPECTED_REPLY = "你好，世界！";
 
@@ -140,27 +139,6 @@ function runCapturedProcess(
       resolve({ code, signal, stdout, stderr });
     });
   });
-}
-
-/**
- * 构建真实 @tx-cli/cli 产物，供后续进程级测试执行
- * @returns {Promise<void>} 构建成功且退出码为 0 时完成
- */
-async function buildCli(): Promise<void> {
-  const result = await runCapturedProcess(
-    "pnpm",
-    ["--filter", "@tx-cli/cli", "build"],
-    {
-      cwd: REPO_ROOT,
-      env: { ...process.env, NO_COLOR: "1", FORCE_COLOR: "0" },
-      timeoutMs: 180_000,
-    },
-  );
-
-  expect(
-    result.code,
-    `CLI 构建失败，signal=${String(result.signal)}\n${formatProcessOutput(result.stdout, result.stderr)}`,
-  ).toBe(0);
 }
 
 /**
@@ -508,8 +486,6 @@ async function testChatSingleQuestion(): Promise<void> {
     }
   }
 }
-
-beforeAll(buildCli, 190_000);
 
 it(
   "chat 单次问题经真实构建 CLI 与本地 Responses 流式服务完整往返",
