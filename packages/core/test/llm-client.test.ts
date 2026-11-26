@@ -91,6 +91,24 @@ describe("streamResponse", () => {
     );
   });
 
+  it("多个回答文本增量按序聚合，并逐片触发 onDelta", async () => {
+    mockResponsesStream([
+      { type: "response.output_text.delta", delta: "你" },
+      { type: "response.output_text.delta", delta: "好" },
+      { type: "response.output_text.delta", delta: "！" },
+    ]);
+    const onDelta = vi.fn();
+
+    const result = await streamResponse({
+      llmConfig,
+      input: [{ type: "message", role: "user", content: "问题" }],
+      onDelta,
+    });
+
+    expect(result.reply).toBe("你好！");
+    expect(onDelta.mock.calls).toEqual([["你"], ["好"], ["！"]]);
+  });
+
   it("未传思考回调时，收到思考增量也不报错", async () => {
     mockResponsesStream([
       { type: "response.reasoning_text.delta", delta: "x" },
@@ -242,6 +260,24 @@ describe("streamResponse", () => {
     };
     await expect(streamResponse(params)).rejects.toThrow(CliError);
     await expect(streamResponse(params)).rejects.toThrow("网络请求失败");
+  });
+
+  it("HTTP 429 映射为 CliError 和频率或额度提示", async () => {
+    const apiError = new (OpenAI as unknown as {
+      APIError: new (status: number, message: string) => Error;
+    }).APIError(429, "rate limited");
+    responsesCreate.mockRejectedValue(apiError);
+
+    const request = streamResponse({
+      llmConfig,
+      input: [{ type: "message", role: "user", content: "问题" }],
+      onDelta: vi.fn(),
+    });
+    await expect(request).rejects.toBeInstanceOf(CliError);
+    await expect(request).rejects.toHaveProperty(
+      "message",
+      "请求过于频繁或额度不足，请稍后再试",
+    );
   });
 
   it("HTTP 401 映射为密钥无效提示", async () => {

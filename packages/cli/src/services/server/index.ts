@@ -46,7 +46,10 @@ export function startServer(
     server.listen(port, host, () => {
       // 监听成功后移除一次性的启动错误处理，避免影响运行期错误
       server.removeListener("error", reject);
-      resolvePromise({ server, url: `http://${host}:${port}` });
+      const address = server.address();
+      const actualPort =
+        typeof address === "object" && address !== null ? address.port : port;
+      resolvePromise({ server, url: `http://${host}:${actualPort}` });
     });
   });
 }
