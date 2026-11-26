@@ -4,13 +4,13 @@
  * 本文件只负责终端交互（raw mode、keypress 监听、光标定位、终端恢复）
  */
 import readline from "node:readline";
-import { CancelError } from "@tx-cli/shared";
-import { InputAbortedError } from "@tx-cli/core";
+import { CancelError } from "@tanyueran/agent-common";
+import { InputAbortedError } from "@tanyueran/agent-core";
 import {
   ReplInputController,
   renderReplFrame,
 } from "../conversation/repl/input";
-import type { InputChannel, InputRequest } from "@tx-cli/core";
+import type { InputChannel, InputRequest } from "@tanyueran/agent-core";
 
 /**
  * 判断当前进程是否连接真实终端（stdin 与 stdout 均为 TTY）

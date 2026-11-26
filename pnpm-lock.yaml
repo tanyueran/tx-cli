@@ -93,6 +93,59 @@ importers:
         specifier: ^4.1.11
         version: 4.1.11(@types/node@26.4.1)(@vitest/coverage-v8@4.1.11)(vite@8.2.2(@types/node@26.4.1)(esbuild@0.28.2)(jiti@2.6.1)(terser@5.43.1)(tsx@4.23.13)(yaml@2.9.1))
 
+  packages/agent-common:
+    devDependencies:
+      '@types/node':
+        specifier: ^26.4.1
+        version: 26.4.1
+      typescript:
+        specifier: 5.9.2
+        version: 5.9.2
+
+  packages/agent-core:
+    dependencies:
+      '@anthropic-ai/sandbox-runtime':
+        specifier: ^0.0.80
+        version: 0.0.80
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.32.1
+        version: 1.32.1(zod@4.6.7)
+      '@tanyueran/agent-common':
+        specifier: workspace:*
+        version: link:../agent-common
+      openai:
+        specifier: 7.32.0
+        version: 7.32.0(zod@4.6.7)
+    devDependencies:
+      '@types/node':
+        specifier: ^26.4.1
+        version: 26.4.1
+      typescript:
+        specifier: 5.9.2
+        version: 5.9.2
+
+  packages/agent-scaffold:
+    dependencies:
+      '@tanyueran/agent-common':
+        specifier: workspace:*
+        version: link:../agent-common
+      fs-extra:
+        specifier: 11.1.1
+        version: 11.1.1
+      handlebars:
+        specifier: 4.7.7
+        version: 4.7.7
+    devDependencies:
+      '@types/fs-extra':
+        specifier: 11.0.4
+        version: 11.0.4
+      '@types/node':
+        specifier: ^26.4.1
+        version: 26.4.1
+      typescript:
+        specifier: 5.9.2
+        version: 5.9.2
+
   packages/cli:
     dependencies:
       '@anthropic-ai/sandbox-runtime':
@@ -101,15 +154,6 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.32.1
         version: 1.32.1(zod@4.6.7)
-      '@tx-cli/core':
-        specifier: workspace:*
-        version: link:../core
-      '@tx-cli/scaffold':
-        specifier: workspace:*
-        version: link:../scaffold
-      '@tx-cli/shared':
-        specifier: workspace:*
-        version: link:../shared
       commander:
         specifier: 12.1.0
         version: 12.1.0
@@ -141,6 +185,15 @@ importers:
         specifier: 3.28.0
         version: 3.28.0
     devDependencies:
+      '@tanyueran/agent-common':
+        specifier: workspace:*
+        version: link:../agent-common
+      '@tanyueran/agent-core':
+        specifier: workspace:*
+        version: link:../agent-core
+      '@tanyueran/agent-scaffold':
+        specifier: workspace:*
+        version: link:../agent-scaffold
       '@types/connect':
         specifier: ^3.4.38
         version: 3.4.38
@@ -159,59 +212,6 @@ importers:
       tsx:
         specifier: ^4.23.13
         version: 4.23.13
-      typescript:
-        specifier: 5.9.2
-        version: 5.9.2
-
-  packages/core:
-    dependencies:
-      '@anthropic-ai/sandbox-runtime':
-        specifier: ^0.0.80
-        version: 0.0.80
-      '@modelcontextprotocol/sdk':
-        specifier: ^1.32.1
-        version: 1.32.1(zod@4.6.7)
-      '@tx-cli/shared':
-        specifier: workspace:*
-        version: link:../shared
-      openai:
-        specifier: 7.32.0
-        version: 7.32.0(zod@4.6.7)
-    devDependencies:
-      '@types/node':
-        specifier: ^26.4.1
-        version: 26.4.1
-      typescript:
-        specifier: 5.9.2
-        version: 5.9.2
-
-  packages/scaffold:
-    dependencies:
-      '@tx-cli/shared':
-        specifier: workspace:*
-        version: link:../shared
-      fs-extra:
-        specifier: 11.1.1
-        version: 11.1.1
-      handlebars:
-        specifier: 4.7.7
-        version: 4.7.7
-    devDependencies:
-      '@types/fs-extra':
-        specifier: 11.0.4
-        version: 11.0.4
-      '@types/node':
-        specifier: ^26.4.1
-        version: 26.4.1
-      typescript:
-        specifier: 5.9.2
-        version: 5.9.2
-
-  packages/shared:
-    devDependencies:
-      '@types/node':
-        specifier: ^26.4.1
-        version: 26.4.1
       typescript:
         specifier: 5.9.2
         version: 5.9.2

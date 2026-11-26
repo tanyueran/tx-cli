@@ -3,8 +3,8 @@ import {
   displayWidth,
   stripAnsi,
   truncateToWidth,
-} from "@tx-cli/shared";
-import type { InputSuggestion } from "@tx-cli/core";
+} from "@tanyueran/agent-common";
+import type { InputSuggestion } from "@tanyueran/agent-core";
 
 /**
  * 补全建议项（与 slash-commands 的 SlashSuggestion 结构兼容，可直接传入）

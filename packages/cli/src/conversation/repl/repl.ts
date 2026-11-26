@@ -9,14 +9,14 @@ import {
   buildBackgroundNotice,
   printTaskEventLines,
   warnThinkingFallback,
-} from "@tx-cli/core";
+} from "@tanyueran/agent-core";
 import type {
   ConversationModeConfig,
   LlmConfig,
   SandboxCliOptions,
   SessionChannels,
   ThinkingLevel,
-} from "@tx-cli/core";
+} from "@tanyueran/agent-core";
 import {
   MAX_AUTO_CONTINUE_TURNS,
   waitForInputOrBackground,

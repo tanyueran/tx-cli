@@ -1,0 +1,33 @@
+{
+  "name": "@tanyueran/agent-core",
+  "version": "0.11.1",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./channels": "./src/channels/index.ts",
+    "./channels/*": "./src/channels/*",
+    "./conversation/*": "./src/conversation/*",
+    "./llm/*": "./src/llm/*",
+    "./tools/*": "./src/tools/*",
+    "./mcp/*": "./src/mcp/*",
+    "./sandbox/*": "./src/sandbox/*",
+    "./skills/*": "./src/skills/*"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "type-check": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@tanyueran/agent-common": "workspace:*",
+    "@anthropic-ai/sandbox-runtime": "^0.0.80",
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "openai": "7.32.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.4.1",
+    "typescript": "5.9.2"
+  }
+}

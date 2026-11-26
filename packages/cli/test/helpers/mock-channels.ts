@@ -10,7 +10,7 @@ import type {
   SessionChannels,
   ToolCallInfo,
   UsageDisplayInfo,
-} from "@tx-cli/core";
+} from "@tanyueran/agent-core";
 
 /** 输出通道的收集记录 */
 export interface CapturedOutput {

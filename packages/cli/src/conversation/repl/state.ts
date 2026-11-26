@@ -4,7 +4,7 @@
  * 本模块只负责终端专属状态（输入历史、草稿还原、后台唤醒槽、自动继续计数）
  * 与斜杠命令注册表的桥接
  */
-import type { ConversationSession, SessionChannels } from "@tx-cli/core";
+import type { ConversationSession, SessionChannels } from "@tanyueran/agent-core";
 import { buildSkillSuggestions, buildSlashCommands } from "./slash-commands";
 import type { SlashCommand } from "./slash-commands";
 

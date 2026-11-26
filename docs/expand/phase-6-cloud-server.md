@@ -5,9 +5,9 @@
 
 ## 概述
 
-基于 Express + WebSocket + React 构建云端服务，复用已完成无头化的 `@tx-cli/core` 与 `@tx-cli/shared`，通过 WebSocket Channel 与浏览器通信。core 只提供会话运行时、回合执行和语义化消息，不包含终端 REPL、面板或 `picocolors`；终端 REPL 已移至 `@tx-cli/cli`，云端不得复用该 REPL，而应通过服务端会话适配层实现浏览器多轮对话。
+基于 Express + WebSocket + React 构建云端服务，复用已完成无头化的 `@tanyueran/agent-core` 与 `@tanyueran/agent-common`，通过 WebSocket Channel 与浏览器通信。core 只提供会话运行时、回合执行和语义化消息，不包含终端 REPL、面板或 `picocolors`；终端 REPL 已移至 `@tanyueran/cli`，云端不得复用该 REPL，而应通过服务端会话适配层实现浏览器多轮对话。
 
-server 只能依赖 `@tx-cli/core` 和 `@tx-cli/shared`，不得依赖 `@tx-cli/cli` 或 `@tx-cli/scaffold`。
+server 只能依赖 `@tanyueran/agent-core` 和 `@tanyueran/agent-common`，不得依赖 `@tanyueran/cli` 或 `@tanyueran/agent-scaffold`。
 
 **核心原则：多用户、JWT 认证、目录隔离、WebSocket 实时通信。**
 
@@ -30,7 +30,7 @@ server 只能依赖 `@tx-cli/core` 和 `@tx-cli/shared`，不得依赖 `@tx-cli/
 
 ```json
 {
-  "name": "@tx-cli/server",
+  "name": "@tanyueran/server",
   "version": "0.11.0",
   "private": true,
   "type": "module",
@@ -43,8 +43,8 @@ server 只能依赖 `@tx-cli/core` 和 `@tx-cli/shared`，不得依赖 `@tx-cli/
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@tx-cli/core": "workspace:*",
-    "@tx-cli/shared": "workspace:*",
+    "@tanyueran/agent-core": "workspace:*",
+    "@tanyueran/agent-common": "workspace:*",
     "express": "^5.0.0",
     "ws": "^8.18.0",
     "jsonwebtoken": "^9.0.0",
@@ -74,8 +74,8 @@ server 只能依赖 `@tx-cli/core` 和 `@tx-cli/shared`，不得依赖 `@tx-cli/
     "rootDir": "./src",
     "types": ["node"],
     "paths": {
-      "@tx-cli/core": ["../core/src/index.ts"],
-      "@tx-cli/shared": ["../shared/src/index.ts"]
+      "@tanyueran/agent-core": ["../core/src/index.ts"],
+      "@tanyueran/agent-common": ["../shared/src/index.ts"]
     }
   },
   "include": ["./src/**/*"]
@@ -92,7 +92,7 @@ mkdir -p packages/server/web/src/{pages,components,hooks,api}
 ### 验收标准
 
 - [ ] 项目结构完整
-- [ ] `pnpm --filter @tx-cli/server type-check` 通过
+- [ ] `pnpm --filter @tanyueran/server type-check` 通过
 
 ---
 
@@ -476,7 +476,7 @@ program.parse();
 #### Step 1: 创建 ws-output.ts
 
 ```typescript
-import type { OutputChannel, ToolCallInfo, UsageDisplayInfo } from "@tx-cli/core";
+import type { OutputChannel, ToolCallInfo, UsageDisplayInfo } from "@tanyueran/agent-core";
 import type { WebSocket } from "ws";
 
 /**
@@ -520,7 +520,7 @@ export class WsOutputChannel implements OutputChannel {
 #### Step 2: 创建 ws-input.ts
 
 ```typescript
-import type { InputChannel, InputRequest } from "@tx-cli/core";
+import type { InputChannel, InputRequest } from "@tanyueran/agent-core";
 import type { WebSocket } from "ws";
 
 /**
@@ -568,7 +568,7 @@ export class WsInputChannel implements InputChannel {
 #### Step 3: 创建 ws-prompt.ts
 
 ```typescript
-import type { PromptChannel } from "@tx-cli/core";
+import type { PromptChannel } from "@tanyueran/agent-core";
 import type { WebSocket } from "ws";
 
 /**
@@ -621,7 +621,7 @@ export class WsPromptChannel implements PromptChannel {
 - [ ] 三个 WebSocket Channel 实现完整，与 core 的 `OutputChannel`、`InputChannel`、`PromptChannel` 签名一致
 - [ ] 输出通道实现 `startLoading/stopLoading`，输入通道实现 `isInteractive` 并接收 `string | InputRequest`
 - [ ] 选择提示使用 `{ title, value }` 选项和 `select<T>` 泛型返回值
-- [ ] `pnpm --filter @tx-cli/server type-check` 通过
+- [ ] `pnpm --filter @tanyueran/server type-check` 通过
 
 ---
 
@@ -1303,20 +1303,20 @@ RUN npm install -g pnpm@10.5.2
 
 # 复制 workspace 配置
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
-COPY packages/shared/package.json packages/shared/
-COPY packages/core/package.json packages/core/
+COPY packages/agent-common/package.json packages/agent-common/
+COPY packages/agent-core/package.json packages/agent-core/
 COPY packages/server/package.json packages/server/
 
 # 安装依赖
 RUN pnpm install --frozen-lockfile
 
 # 仅复制运行时所需的 shared/core/server，不复制 cli/scaffold
-COPY packages/shared/ packages/shared/
-COPY packages/core/ packages/core/
+COPY packages/agent-common/ packages/agent-common/
+COPY packages/agent-core/ packages/agent-core/
 COPY packages/server/ packages/server/
 
 # 构建
-RUN pnpm --filter @tx-cli/server build
+RUN pnpm --filter @tanyueran/server build
 
 # 构建前端
 RUN cd packages/server/web && pnpm install && pnpm build
@@ -1329,7 +1329,7 @@ EXPOSE 3000
 CMD ["node", "packages/server/dist/index.js"]
 ```
 
-镜像和 server 依赖清单都只允许引入 shared/core/server 所需内容，不得为了复用终端 REPL、copy 或静态服务器命令而加入 `@tx-cli/cli`、`@tx-cli/scaffold`。server 直接转发 core 的纯文本与语义化事件，不在 core 消息中引入 ANSI 控制字符。
+镜像和 server 依赖清单都只允许引入 shared/core/server 所需内容，不得为了复用终端 REPL、copy 或静态服务器命令而加入 `@tanyueran/cli`、`@tanyueran/agent-scaffold`。server 直接转发 core 的纯文本与语义化事件，不在 core 消息中引入 ANSI 控制字符。
 
 #### Step 2: 创建 .env.example
 
@@ -1363,7 +1363,7 @@ server.listen(config.port, () => {
 
 ```bash
 # 本地测试
-pnpm --filter @tx-cli/server dev
+pnpm --filter @tanyueran/server dev
 
 # Docker 构建
 docker build -t tx-cli-server -f packages/server/Dockerfile .
@@ -1374,7 +1374,7 @@ docker run -p 3000:3000 -v ./data:/app/data tx-cli-server
 
 ### 验收标准
 
-- [ ] `pnpm --filter @tx-cli/server dev` 能启动服务
+- [ ] `pnpm --filter @tanyueran/server dev` 能启动服务
 - [ ] Docker 镜像能正常构建，容器内服务正常运行，浏览器能正常访问
-- [ ] server 的依赖、构建产物和 Docker 运行时均不依赖 `@tx-cli/cli` 或 `@tx-cli/scaffold`，镜像不包含这两个包的源码
+- [ ] server 的依赖、构建产物和 Docker 运行时均不依赖 `@tanyueran/cli` 或 `@tanyueran/agent-scaffold`，镜像不包含这两个包的源码
 - [ ] 浏览器通过 WebSocket 收到的 core 正文、提示、工具调用与结果文本均不含 ANSI 控制字符

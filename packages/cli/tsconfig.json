@@ -4,12 +4,12 @@
     "outDir": "./dist",
     "types": ["node"],
     "paths": {
-      "@tx-cli/core": ["../core/src/index.ts"],
-      "@tx-cli/core/*": ["../core/src/*"],
-      "@tx-cli/shared": ["../shared/src/index.ts"],
-      "@tx-cli/shared/*": ["../shared/src/*"],
-      "@tx-cli/scaffold": ["../scaffold/src/index.ts"],
-      "@tx-cli/scaffold/*": ["../scaffold/src/*"]
+      "@tanyueran/agent-core": ["../agent-core/src/index.ts"],
+      "@tanyueran/agent-core/*": ["../agent-core/src/*"],
+      "@tanyueran/agent-common": ["../agent-common/src/index.ts"],
+      "@tanyueran/agent-common/*": ["../agent-common/src/*"],
+      "@tanyueran/agent-scaffold": ["../agent-scaffold/src/index.ts"],
+      "@tanyueran/agent-scaffold/*": ["../agent-scaffold/src/*"]
     }
   },
   "include": ["./src/**/*", "../../global.d.ts"]

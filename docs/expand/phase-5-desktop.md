@@ -5,7 +5,7 @@
 
 ## 概述
 
-基于 Electron + React 构建桌面应用，复用 Phase 3 完成无头化后的 `@tx-cli/core` 会话机制，通过 IPC Channel 连接主进程与渲染进程。桌面主进程复用 core 的 `ConversationSession`，由 core 统一持有 runtime、跨轮 history、子 Agent、压缩、取消与资源释放；桌面端只管理 GUI 会话映射，不复用 CLI 的终端 REPL，也不重复实现回合控制。`desktop` 对 workspace 包的依赖仅限 `core/shared`，不依赖 `cli`。
+基于 Electron + React 构建桌面应用，复用 Phase 3 完成无头化后的 `@tanyueran/agent-core` 会话机制，通过 IPC Channel 连接主进程与渲染进程。桌面主进程复用 core 的 `ConversationSession`，由 core 统一持有 runtime、跨轮 history、子 Agent、压缩、取消与资源释放；桌面端只管理 GUI 会话映射，不复用 CLI 的终端 REPL，也不重复实现回合控制。`desktop` 对 workspace 包的依赖仅限 `core/shared`，不依赖 `cli`。
 
 **核心原则：复用无头 core，自持桌面多轮会话，通过 IPC Channel 对接。**
 
@@ -30,7 +30,7 @@
 
 ```json
 {
-  "name": "@tx-cli/desktop",
+  "name": "@tanyueran/desktop",
   "version": "0.11.0",
   "private": true,
   "type": "module",
@@ -43,8 +43,8 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@tx-cli/core": "workspace:*",
-    "@tx-cli/shared": "workspace:*",
+    "@tanyueran/agent-core": "workspace:*",
+    "@tanyueran/agent-common": "workspace:*",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "zustand": "^5.0.0"
@@ -116,8 +116,8 @@ export default defineConfig({
     "jsx": "react-jsx",
     "paths": {
       "@/*": ["./src/renderer/*"],
-      "@tx-cli/core": ["../core/src/index.ts"],
-      "@tx-cli/shared": ["../shared/src/index.ts"]
+      "@tanyueran/agent-core": ["../core/src/index.ts"],
+      "@tanyueran/agent-common": ["../shared/src/index.ts"]
     }
   },
   "include": ["./src/**/*"]
@@ -154,8 +154,8 @@ pnpm install
 ### 验收标准
 
 - [ ] `packages/desktop/` 项目结构完整
-- [ ] `pnpm --filter @tx-cli/desktop type-check` 通过
-- [ ] `pnpm --filter @tx-cli/desktop dev` 能启动 Electron 窗口
+- [ ] `pnpm --filter @tanyueran/desktop type-check` 通过
+- [ ] `pnpm --filter @tanyueran/desktop dev` 能启动 Electron 窗口
 
 ---
 
@@ -176,7 +176,7 @@ pnpm install
 #### Step 1: 创建 ipc-output.ts
 
 ```typescript
-import type { OutputChannel, ToolCallInfo, UsageDisplayInfo } from "@tx-cli/core";
+import type { OutputChannel, ToolCallInfo, UsageDisplayInfo } from "@tanyueran/agent-core";
 import type { WebContents } from "electron";
 
 /**
@@ -262,7 +262,7 @@ export class IpcOutputChannel implements OutputChannel {
 #### Step 2: 创建 ipc-input.ts
 
 ```typescript
-import type { InputChannel, InputRequest } from "@tx-cli/core";
+import type { InputChannel, InputRequest } from "@tanyueran/agent-core";
 import type { WebContents } from "electron";
 
 /**
@@ -319,7 +319,7 @@ export class IpcInputChannel implements InputChannel {
 #### Step 3: 创建 ipc-prompt.ts
 
 ```typescript
-import type { PromptChannel } from "@tx-cli/core";
+import type { PromptChannel } from "@tanyueran/agent-core";
 import type { WebContents } from "electron";
 
 /**
@@ -399,7 +399,7 @@ export class IpcPromptChannel implements PromptChannel {
 ### 验收标准
 
 - [ ] 三个 IPC Channel 类实现完整
-- [ ] `pnpm --filter @tx-cli/desktop type-check` 通过
+- [ ] `pnpm --filter @tanyueran/desktop type-check` 通过
 
 ---
 
@@ -533,7 +533,7 @@ app.on("window-all-closed", () => {
 - [ ] IPC 处理器注册成功
 - [ ] 同一 `sessionId` 连续发送消息时复用同一 core `ConversationSession`，能够引用前序上下文，不同会话的历史互不影响
 - [ ] 会话删除、窗口销毁和应用退出时释放 runtime，取消本轮不会留下未配对历史
-- [ ] `pnpm --filter @tx-cli/desktop dev` 能启动应用
+- [ ] `pnpm --filter @tanyueran/desktop dev` 能启动应用
 
 ---
 
@@ -954,7 +954,7 @@ nsis:
 #### Step 3: 测试打包
 
 ```bash
-pnpm --filter @tx-cli/desktop dist
+pnpm --filter @tanyueran/desktop dist
 ```
 
 ### 验收标准
@@ -963,5 +963,5 @@ pnpm --filter @tx-cli/desktop dist
 - [ ] Windows 打包成功（.exe）
 - [ ] Linux 打包成功（.AppImage）
 - [ ] 打包后的应用能正常运行
-- [ ] `desktop` 的 workspace 依赖仅限 `@tx-cli/core`、`@tx-cli/shared`，不依赖 `@tx-cli/cli`，也不导入 core/CLI 的终端 REPL、输入帧或面板
+- [ ] `desktop` 的 workspace 依赖仅限 `@tanyueran/agent-core`、`@tanyueran/agent-common`，不依赖 `@tanyueran/cli`，也不导入 core/CLI 的终端 REPL、输入帧或面板
 - [ ] core 经 Channel 与 IPC 发往渲染进程的文本、工具调用和错误消息不含 ANSI 控制字符，颜色与样式完全由 React UI 处理

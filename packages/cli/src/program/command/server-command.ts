@@ -2,7 +2,7 @@ import type { Command } from "commander";
 import pico from "picocolors";
 import open from "open";
 import { startServer } from "../../services/server";
-import { CliError } from "@tx-cli/shared";
+import { CliError } from "@tanyueran/agent-common";
 
 /**
  * 校验并转换端口号

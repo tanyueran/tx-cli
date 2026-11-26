@@ -3,12 +3,12 @@
  * 模式配置与单次入口在 core（CHAT_MODE_CONFIG / runOneShotChat），
  * 本模块只承载终端 REPL 薄包装
  */
-import { CHAT_MODE_CONFIG } from "@tx-cli/core";
+import { CHAT_MODE_CONFIG } from "@tanyueran/agent-core";
 import type {
   LlmConfig,
   SessionChannels,
   ThinkingLevel,
-} from "@tx-cli/core";
+} from "@tanyueran/agent-core";
 import { runReplConversation } from "./repl/repl";
 
 /**

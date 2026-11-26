@@ -8,7 +8,7 @@ const REPO_ROOT = fileURLToPath(new URL("../../../", import.meta.url));
  * @returns {void} 构建成功时返回；失败时抛出包含构建日志的错误
  */
 export default function buildCliForTests(): void {
-  const result = spawnSync("pnpm", ["--filter", "@tx-cli/cli", "build"], {
+  const result = spawnSync("pnpm", ["--filter", "@tanyueran/cli", "build"], {
     cwd: REPO_ROOT,
     encoding: "utf8",
     env: { ...process.env, NO_COLOR: "1", FORCE_COLOR: "0" },

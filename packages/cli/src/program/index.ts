@@ -1,5 +1,5 @@
 import { Command } from "commander";
-import { getVersion } from "@tx-cli/shared";
+import { getVersion } from "@tanyueran/agent-common";
 import { registerAddCommand } from "./command/add-command";
 import { registerAgentCommand } from "./command/agent-command";
 import { registerChatCommand } from "./command/chat-command";

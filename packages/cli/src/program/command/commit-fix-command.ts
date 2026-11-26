@@ -2,7 +2,7 @@ import type { Command } from "commander";
 import pico from "picocolors";
 import simpleGit from "simple-git";
 import { disposeOnesInfo } from "../../services/commit-fix";
-import { CliError } from "@tx-cli/shared";
+import { CliError } from "@tanyueran/agent-common";
 import { createCliChannels } from "../../channels";
 
 /**

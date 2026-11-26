@@ -3,9 +3,9 @@
  * core 的 llm/usage 只保留用量计算与汇总，表格对齐与着色由 CLI 展示层承担
  */
 import pico from "picocolors";
-import { displayWidth, padToWidth } from "@tx-cli/shared";
-import { estimateCost, formatCost, formatTokenCount } from "@tx-cli/core";
-import type { LlmPricing, TokenUsage } from "@tx-cli/core";
+import { displayWidth, padToWidth } from "@tanyueran/agent-common";
+import { estimateCost, formatCost, formatTokenCount } from "@tanyueran/agent-core";
+import type { LlmPricing, TokenUsage } from "@tanyueran/agent-core";
 
 /** 用量表格数据行 */
 export interface UsageTableRow {

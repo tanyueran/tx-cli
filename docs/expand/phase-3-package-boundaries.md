@@ -74,14 +74,14 @@ packages/
 
 ### 涉及文件
 
-- `packages/core/src/conversation/index.ts` — 修改
-- `packages/core/src/conversation/agent.ts` — 修改
-- `packages/core/src/conversation/chat.ts` — 修改
-- `packages/core/src/conversation/sub-agent/attach.ts` — 修改
-- `packages/core/src/conversation/sub-agent/dispatcher.ts` — 修改
-- `packages/core/src/conversation/sub-agent/tools.ts` — 修改
-- `packages/core/src/conversation/sub-agent/types.ts` — 新建
-- `packages/core/src/conversation/sub-agent/utils.ts` — 新建
+- `packages/agent-core/src/conversation/index.ts` — 修改
+- `packages/agent-core/src/conversation/agent.ts` — 修改
+- `packages/agent-core/src/conversation/chat.ts` — 修改
+- `packages/agent-core/src/conversation/sub-agent/attach.ts` — 修改
+- `packages/agent-core/src/conversation/sub-agent/dispatcher.ts` — 修改
+- `packages/agent-core/src/conversation/sub-agent/tools.ts` — 修改
+- `packages/agent-core/src/conversation/sub-agent/types.ts` — 新建
+- `packages/agent-core/src/conversation/sub-agent/utils.ts` — 新建
 
 ### 步骤
 
@@ -126,19 +126,19 @@ attach ──────> dispatcher ──────> types/utils
 
 ### 涉及文件
 
-- `packages/core/src/conversation/session/conversation-session.ts` — 新建无头多轮会话
-- `packages/core/src/conversation/repl/state.ts` — 拆分通用会话状态与终端状态
-- `packages/core/src/conversation/repl/background.ts` — 拆分后台事件收割与终端输入竞速
-- `packages/core/src/conversation/repl/repl.ts` — 迁移至 `packages/cli/src/conversation/repl/`
-- `packages/core/src/conversation/repl/panel.ts` — 迁移至 `packages/cli/src/conversation/repl/`
-- `packages/core/src/conversation/repl/input.ts` — 迁移至 `packages/cli/src/conversation/repl/`
-- `packages/core/src/conversation/repl/slash-commands.ts` — 迁移至 `packages/cli/src/conversation/repl/`
-- `packages/core/src/conversation/repl/session-export.ts` — 迁移至 `packages/core/src/conversation/session/session-export.ts`
-- `packages/core/src/conversation/agent.ts` — 修改，仅保留模式配置与 `runOneShotAgent`
-- `packages/core/src/conversation/chat.ts` — 修改，仅保留模式配置与 `runOneShotChat`
+- `packages/agent-core/src/conversation/session/conversation-session.ts` — 新建无头多轮会话
+- `packages/agent-core/src/conversation/repl/state.ts` — 拆分通用会话状态与终端状态
+- `packages/agent-core/src/conversation/repl/background.ts` — 拆分后台事件收割与终端输入竞速
+- `packages/agent-core/src/conversation/repl/repl.ts` — 迁移至 `packages/cli/src/conversation/repl/`
+- `packages/agent-core/src/conversation/repl/panel.ts` — 迁移至 `packages/cli/src/conversation/repl/`
+- `packages/agent-core/src/conversation/repl/input.ts` — 迁移至 `packages/cli/src/conversation/repl/`
+- `packages/agent-core/src/conversation/repl/slash-commands.ts` — 迁移至 `packages/cli/src/conversation/repl/`
+- `packages/agent-core/src/conversation/repl/session-export.ts` — 迁移至 `packages/agent-core/src/conversation/session/session-export.ts`
+- `packages/agent-core/src/conversation/agent.ts` — 修改，仅保留模式配置与 `runOneShotAgent`
+- `packages/agent-core/src/conversation/chat.ts` — 修改，仅保留模式配置与 `runOneShotChat`
 - `packages/cli/src/conversation/agent.ts` — 新建，承载 `runReplAgent`
 - `packages/cli/src/conversation/chat.ts` — 新建，承载 `runReplChat`
-- `packages/core/src/conversation/index.ts` — 修改
+- `packages/agent-core/src/conversation/index.ts` — 修改
 - `packages/cli/src/channels/cli-input.ts` — 修改
 - `packages/cli/src/channels/cli-output.ts` — 修改
 - `packages/cli/src/program/command/agent-command.ts` — 修改
@@ -166,7 +166,7 @@ core 的 `agent.ts`、`chat.ts` 保留 `AGENT_MODE_CONFIG`、`CHAT_MODE_CONFIG` 
 
 #### Step 4: 更新 CLI 接线
 
-`agent-command.ts`、`chat-command.ts` 的单次入口继续从 `@tx-cli/core` 导入，多轮入口改为从 CLI 本地模块导入。`cli-input.ts`、`cli-output.ts` 对 REPL 控制器和展示类型的引用改为 CLI 本地路径。
+`agent-command.ts`、`chat-command.ts` 的单次入口继续从 `@tanyueran/agent-core` 导入，多轮入口改为从 CLI 本地模块导入。`cli-input.ts`、`cli-output.ts` 对 REPL 控制器和展示类型的引用改为 CLI 本地路径。
 
 #### Step 5: 收敛 core 公开出口
 
@@ -174,8 +174,8 @@ core 的 `agent.ts`、`chat.ts` 保留 `AGENT_MODE_CONFIG`、`CHAT_MODE_CONFIG` 
 
 ### 验收标准
 
-- [x] `packages/core/src/conversation/repl/` 不再存在
-- [x] core 不导入 `@tx-cli/cli`，也不包含 REPL 专属导出
+- [x] `packages/agent-core/src/conversation/repl/` 不再存在
+- [x] core 不导入 `@tanyueran/cli`，也不包含 REPL 专属导出
 - [x] CLI 与后续非终端入口可复用同一个 `ConversationSession` 完成多轮、子 Agent、压缩、取消和资源释放
 - [x] `chat`、`agent` 的单次和多轮 CLI 行为与改造前一致
 - [x] REPL 补全、斜杠命令、后台任务通知、会话导出行为不回归
@@ -190,19 +190,19 @@ core 只产生语义化事件和纯文本，颜色、表格与终端布局由各
 
 ### 涉及文件
 
-- `packages/core/src/conversation/one-shot.ts` — 修改
-- `packages/core/src/conversation/loop/renderer.ts` — 修改
-- `packages/core/src/conversation/loop/execute-turn.ts` — 修改
-- `packages/core/src/conversation/sub-agent/attach.ts` — 修改
-- `packages/core/src/conversation/sub-agent/tools.ts` — 修改
-- `packages/core/src/llm/config.ts` — 修改
-- `packages/core/src/llm/config-wizard.ts` — 修改
-- `packages/core/src/llm/thinking.ts` — 修改
-- `packages/core/src/llm/usage.ts` — 修改
-- `packages/core/src/tools/builtin/write-todos.ts` — 修改
-- `packages/core/src/sandbox/bootstrap/trust.ts` — 修改
-- `packages/core/src/sandbox/runtime/interactive-approver.ts` — 修改
-- `packages/core/package.json` — 修改
+- `packages/agent-core/src/conversation/one-shot.ts` — 修改
+- `packages/agent-core/src/conversation/loop/renderer.ts` — 修改
+- `packages/agent-core/src/conversation/loop/execute-turn.ts` — 修改
+- `packages/agent-core/src/conversation/sub-agent/attach.ts` — 修改
+- `packages/agent-core/src/conversation/sub-agent/tools.ts` — 修改
+- `packages/agent-core/src/llm/config.ts` — 修改
+- `packages/agent-core/src/llm/config-wizard.ts` — 修改
+- `packages/agent-core/src/llm/thinking.ts` — 修改
+- `packages/agent-core/src/llm/usage.ts` — 修改
+- `packages/agent-core/src/tools/builtin/write-todos.ts` — 修改
+- `packages/agent-core/src/sandbox/bootstrap/trust.ts` — 修改
+- `packages/agent-core/src/sandbox/runtime/interactive-approver.ts` — 修改
+- `packages/agent-core/package.json` — 修改
 - `packages/cli/src/channels/cli-output.ts` — 修改
 
 ### 步骤
@@ -223,7 +223,7 @@ CLI Channel 负责把语义事件映射为颜色；桌面端和 WebSocket Channe
 
 #### Step 4: 删除 core 的颜色依赖
 
-完成全部替换后，从 `packages/core/package.json` 删除 `picocolors`，并清理相关导出、测试快照与 mock。
+完成全部替换后，从 `packages/agent-core/package.json` 删除 `picocolors`，并清理相关导出、测试快照与 mock。
 
 ### 验收标准
 
@@ -242,13 +242,13 @@ CLI Channel 负责把语义事件映射为颜色；桌面端和 WebSocket Channe
 
 ### 涉及文件
 
-- `packages/scaffold/src/copy/` — 迁移至 `packages/cli/src/services/copy/`
-- `packages/scaffold/src/server/` — 迁移至 `packages/cli/src/services/server/`
-- `packages/scaffold/src/commit-fix/` — 迁移至 `packages/cli/src/services/commit-fix/`
-- `packages/scaffold/src/scaffold/index.ts` — 修改
-- `packages/scaffold/src/index.ts` — 修改
-- `packages/scaffold/package.json` — 修改
-- `packages/scaffold/tsconfig.json` — 修改
+- `packages/agent-scaffold/src/copy/` — 迁移至 `packages/cli/src/services/copy/`
+- `packages/agent-scaffold/src/server/` — 迁移至 `packages/cli/src/services/server/`
+- `packages/agent-scaffold/src/commit-fix/` — 迁移至 `packages/cli/src/services/commit-fix/`
+- `packages/agent-scaffold/src/scaffold/index.ts` — 修改
+- `packages/agent-scaffold/src/index.ts` — 修改
+- `packages/agent-scaffold/package.json` — 修改
+- `packages/agent-scaffold/tsconfig.json` — 修改
 - `packages/cli/src/program/command/` — 修改相关命令引用
 - `packages/cli/package.json` — 修改
 
@@ -256,7 +256,7 @@ CLI Channel 负责把语义事件映射为颜色；桌面端和 WebSocket Channe
 
 #### Step 1: 迁移三个 CLI 专属服务
 
-移动 `copy`、`server`、`commit-fix` 的实现，保持对外函数和行为不变。对应命令改为引用 CLI 本地服务，不再从 `@tx-cli/scaffold` 导入。
+移动 `copy`、`server`、`commit-fix` 的实现，保持对外函数和行为不变。对应命令改为引用 CLI 本地服务，不再从 `@tanyueran/agent-scaffold` 导入。
 
 这些能力不得移入 `shared`，也暂不为每个命令创建新 package。
 
@@ -264,7 +264,7 @@ CLI Channel 负责把语义事件映射为颜色；桌面端和 WebSocket Channe
 
 在 scaffold 内定义自身所需的 `ScaffoldPrompt`、`ScaffoldOutput` 最小接口，仅包含生成流程实际使用的 `confirm/select/input` 和语义化输出方法。
 
-利用 TypeScript 结构化类型直接接收现有 CLI Channel，删除对 `@tx-cli/core/channels` 的类型依赖，不为此新增 contracts 包。
+利用 TypeScript 结构化类型直接接收现有 CLI Channel，删除对 `@tanyueran/agent-core/channels` 的类型依赖，不为此新增 contracts 包。
 
 #### Step 3: 保持通用生成流程可复用
 
@@ -281,7 +281,7 @@ CLI Channel 负责把语义事件映射为颜色；桌面端和 WebSocket Channe
 - [x] scaffold 不再依赖或导入 core
 - [x] scaffold 不再导出 copy/server/commit-fix
 - [x] `create/add/copy/server/commit-fix` 命令行为不变
-- [x] `pnpm --filter @tx-cli/scaffold type-check` 通过
+- [x] `pnpm --filter @tanyueran/agent-scaffold type-check` 通过
 - [x] 静态服务器有直接单元测试，覆盖启动、404 和监听失败
 
 ---
@@ -294,8 +294,8 @@ CLI Channel 负责把语义事件映射为颜色；桌面端和 WebSocket Channe
 
 ### 涉及文件
 
-- `packages/core/package.json` — 修改 exports
-- `packages/scaffold/package.json` — 修改 exports
+- `packages/agent-core/package.json` — 修改 exports
+- `packages/agent-scaffold/package.json` — 修改 exports
 - `package.json`（根）— 新增依赖检查脚本
 - `.dependency-cruiser.mjs` — 新建（实施时采用 ESM 配置）
 - `eslint.config.mjs` — 按需补充导入限制
@@ -339,13 +339,13 @@ scaffold 只公开模板相关入口，CLI 专属服务不作为 workspace 公�
 
 ### 涉及文件
 
-- `packages/core/test/conversation-session.test.ts` — 新建无头多轮会话测试
-- `packages/core/test/repl-input.test.ts` — 迁移至 `packages/cli/test/`
-- `packages/core/test/repl-slash-commands.test.ts` — 迁移至 `packages/cli/test/`
-- `packages/core/test/session-export.test.ts` — 修改导入路径
-- `packages/core/test/llm-usage.test.ts` — 拆分通用计算与终端表格用例
-- `packages/scaffold/test/copy.test.ts` — 迁移至 `packages/cli/test/`
-- `packages/scaffold/test/ones-message.test.ts` — 迁移至 `packages/cli/test/`
+- `packages/agent-core/test/conversation-session.test.ts` — 新建无头多轮会话测试
+- `packages/agent-core/test/repl-input.test.ts` — 迁移至 `packages/cli/test/`
+- `packages/agent-core/test/repl-slash-commands.test.ts` — 迁移至 `packages/cli/test/`
+- `packages/agent-core/test/session-export.test.ts` — 修改导入路径
+- `packages/agent-core/test/llm-usage.test.ts` — 拆分通用计算与终端表格用例
+- `packages/agent-scaffold/test/copy.test.ts` — 迁移至 `packages/cli/test/`
+- `packages/agent-scaffold/test/ones-message.test.ts` — 迁移至 `packages/cli/test/`
 - `packages/cli/test/command-actions.test.ts` — 修改单次与多轮入口 mock
 - `packages/cli/test/server.test.ts` — 新建
 

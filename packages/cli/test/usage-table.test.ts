@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { formatUsageTable } from "../src/channels/usage-table";
-import { stripAnsi } from "@tx-cli/shared/string";
-import type { TokenUsage } from "@tx-cli/core/llm/types";
+import { stripAnsi } from "@tanyueran/agent-common/string";
+import type { TokenUsage } from "@tanyueran/agent-core/llm/types";
 
 /**
  * 构造测试用量

@@ -34,12 +34,12 @@ tx-cli/
 ├── tsconfig.base.json            # 共享 TS 配置
 │
 ├── packages/
-│   ├── shared/                   # @tx-cli/shared — 通用工具与配置读写
-│   ├── core/                     # @tx-cli/core — 无头核心引擎（Channel + 会话 + 工具）
-│   ├── scaffold/                 # @tx-cli/scaffold — 模板发现、渲染与生成流程
-│   ├── cli/                      # @tx-cli/cli — 终端 REPL、命令适配与 CLI 专属服务
-│   ├── desktop/                  # @tx-cli/desktop — Electron 桌面应用（Phase 5 新增）
-│   └── server/                   # @tx-cli/server — 云端 Agent 服务（Phase 6 新增）
+│   ├── agent-common/             # @tanyueran/agent-common — 通用工具与配置读写
+│   ├── agent-core/               # @tanyueran/agent-core — 无头核心引擎（Channel + 会话 + 工具）
+│   ├── agent-scaffold/           # @tanyueran/agent-scaffold — 模板发现、渲染与生成流程
+│   ├── cli/                      # @tanyueran/cli — 终端 REPL、命令适配与 CLI 专属服务（对外发布包）
+│   ├── desktop/                  # @tanyueran/desktop — Electron 桌面应用（Phase 5 新增）
+│   └── server/                   # @tanyueran/server — 云端 Agent 服务（Phase 6 新增）
 │
 ├── packages/*/test/              # 各包单元测试
 ├── test/                         # 跨包与端到端集成测试
@@ -50,14 +50,14 @@ tx-cli/
 ## 包依赖关系
 
 ```text
-cli ──────> core ──────> shared
- │                         ↑
- ├──────> scaffold ────────┘
- │                         ↑
- └─────────────────────────┘
+cli ─────────────> agent-core ─────────────> agent-common
+ │                                             ↑
+ ├──────────> agent-scaffold ──────────────────┘
+ │                                             ↑
+ └─────────────────────────────────────────────┘
 
-desktop ──> core ──> shared
-server  ──> core ──> shared
+desktop ──> agent-core ──> agent-common
+server  ──> agent-core ──> agent-common
 ```
 
 依赖约束：
@@ -67,6 +67,8 @@ server  ──> core ──> shared
 - `scaffold` 只依赖 `shared`，不再为了 Channel 类型依赖 core。
 - `cli` 可以依赖 core、scaffold、shared，并独占终端 REPL 与 CLI 专属服务。
 - `desktop/server` 只复用 core/shared，不得依赖 cli。
+
+> 包命名：四个包统一使用 `@tanyueran/*` 前缀——`@tanyueran/cli` 对外发布，`@tanyueran/agent-common`（基础工具）、`@tanyueran/agent-core`（Agent 引擎）、`@tanyueran/agent-scaffold`（脚手架）为 private 内部包，构建时打进 CLI 产物。
 
 ## Phase 导航
 

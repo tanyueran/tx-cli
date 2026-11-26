@@ -13,9 +13,9 @@ import {
   parseSkillArgs,
   printHelp,
 } from "../src/conversation/repl/slash-commands";
-import { SkillCatalog } from "@tx-cli/core/skills";
+import { SkillCatalog } from "@tanyueran/agent-core/skills";
 import type { SlashCommandDeps } from "../src/conversation/repl/slash-commands";
-import type { TodoToolHandle } from "@tx-cli/core/tools";
+import type { TodoToolHandle } from "@tanyueran/agent-core/tools";
 import { MockOutputChannel } from "./helpers/mock-channels";
 
 /** 构造无沙箱、无任务清单、none 思考风格的最小依赖（档位经 lastLevel 观测），可按用例覆盖字段 */

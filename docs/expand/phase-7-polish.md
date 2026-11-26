@@ -127,7 +127,7 @@
 
 #### Step 2: 配置 npm publish
 
-确保 `@tx-cli/cli` 包能正确发布到 npm：
+确保 `@tanyueran/cli` 包能正确发布到 npm：
 
 ```json
 {

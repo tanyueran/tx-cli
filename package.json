@@ -7,18 +7,18 @@
     "node": ">=22.12.0"
   },
   "scripts": {
-    "dev": "pnpm --filter @tx-cli/cli dev",
-    "build": "pnpm --filter @tx-cli/cli build",
+    "dev": "pnpm --filter @tanyueran/cli dev",
+    "build": "pnpm --filter @tanyueran/cli build",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "type-check": "tsc --noEmit && pnpm --filter @tx-cli/* --if-present type-check",
+    "type-check": "tsc --noEmit && pnpm --filter \"@tanyueran/*\" --if-present type-check",
     "deps:check": "depcruise --config .dependency-cruiser.mjs packages",
     "lint": "eslint packages/",
     "lint:fix": "eslint packages/ --fix",
-    "clean": "pnpm --filter @tx-cli/* --if-present clean",
+    "clean": "pnpm --filter \"@tanyueran/*\" --if-present clean",
     "publish:cli": "node ./script/publish-cli.cjs",
-    "changelog": "conventional-changelog -n ./changelog.config.mjs -i CHANGELOG.md -s",
+    "changelog": "conventional-changelog -n ./changelog.config.mjs -i CHANGELOG.md -s -k packages/cli/package.json -t \"@tanyueran/cli@\"",
     "prepare": "husky"
   },
   "lint-staged": {

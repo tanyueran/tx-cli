@@ -20,22 +20,22 @@ export default {
       name: "shared-no-workspace-deps",
       severity: "error",
       comment: "shared 不依赖任何其他 workspace 包",
-      from: { path: "^packages/shared/" },
-      to: { path: "^packages/(core|cli|scaffold|desktop|server)/" },
+      from: { path: "^packages/agent-common/" },
+      to: { path: "^packages/(agent-core|cli|agent-scaffold|desktop|server)/" },
     },
     {
       name: "core-only-shared",
       severity: "error",
       comment: "core 只依赖 shared，不依赖 cli/scaffold/desktop/server",
-      from: { path: "^packages/core/" },
-      to: { path: "^packages/(cli|scaffold|desktop|server)/" },
+      from: { path: "^packages/agent-core/" },
+      to: { path: "^packages/(cli|agent-scaffold|desktop|server)/" },
     },
     {
       name: "scaffold-only-shared",
       severity: "error",
       comment: "scaffold 只依赖 shared，不依赖 core/cli",
-      from: { path: "^packages/scaffold/" },
-      to: { path: "^packages/(core|cli|desktop|server)/" },
+      from: { path: "^packages/agent-scaffold/" },
+      to: { path: "^packages/(agent-core|cli|desktop|server)/" },
     },
     {
       name: "no-cli-from-desktop-server",
@@ -59,7 +59,7 @@ export default {
       conditionNames: ["import", "require", "node", "default"],
     },
     exclude: {
-      path: "(node_modules|dist|coverage|packages/scaffold/template)",
+      path: "(node_modules|dist|coverage|packages/agent-scaffold/template)",
     },
     reporterOptions: {
       dot: { collapsePattern: "^(packages/[^/]+/[^/]+)" },

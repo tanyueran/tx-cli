@@ -5,8 +5,8 @@
  * 后台事件的收割、历史注入与退出等待由 core 的 ConversationSession 统一承担
  */
 import pico from "picocolors";
-import { CancelError } from "@tx-cli/shared";
-import { InputAbortedError } from "@tx-cli/core";
+import { CancelError } from "@tanyueran/agent-common";
+import { InputAbortedError } from "@tanyueran/agent-core";
 import {
   filterInlineSkillSuggestions,
   filterSuggestions,

@@ -2,7 +2,7 @@
  * cli/channels 模块：CLI 侧的会话通道实现
  * core 的会话机制只依赖 channels 接口，CLI 在此提供终端实现
  */
-import type { SessionChannels } from "@tx-cli/core";
+import type { SessionChannels } from "@tanyueran/agent-core";
 import { CliInputChannel } from "./cli-input";
 import { CliOutputChannel } from "./cli-output";
 import { CliPromptChannel } from "./cli-prompt";
