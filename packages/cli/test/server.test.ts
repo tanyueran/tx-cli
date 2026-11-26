@@ -49,10 +49,10 @@ describe("startServer", () => {
 
       const address = server.address();
       expect(address).not.toBeNull();
-      expect(url).toBe("http://127.0.0.1:0");
 
       const port = (address as { port: number }).port;
-      const response = await fetch(`http://127.0.0.1:${port}/hello.txt`);
+      expect(url).toBe(`http://127.0.0.1:${port}`);
+      const response = await fetch(`${url}/hello.txt`);
       expect(response.status).toBe(200);
       expect(await response.text()).toBe("hello tx-cli");
       expect(response.headers.get("x-test-header")).toBe("tx-cli");
