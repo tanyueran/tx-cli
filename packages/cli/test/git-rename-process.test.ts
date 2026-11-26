@@ -1,4 +1,4 @@
-import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { spawnSync, type SpawnSyncReturns } from "node:child_process";
 import {
   existsSync,
@@ -12,7 +12,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const REPO_ROOT = fileURLToPath(new URL("../../../", import.meta.url));
 const CLI_BIN = fileURLToPath(new URL("../bin/tx-cli", import.meta.url));
 
 let tempRoot: string;
@@ -91,20 +90,6 @@ function commitFixture(
   const commitResult = runGit(["commit", "-m", message]);
   expect(commitResult.status, commitResult.stderr).toBe(0);
 }
-
-beforeAll(() => {
-  const result = spawnSync("pnpm", ["--filter", "@tx-cli/cli", "build"], {
-    cwd: REPO_ROOT,
-    encoding: "utf8",
-    env: { ...process.env, NO_COLOR: "1", FORCE_COLOR: "0" },
-    timeout: 180_000,
-  });
-
-  expect(
-    result.status,
-    `CLI 构建失败：${result.error?.message ?? ""}\n${result.stdout}\n${result.stderr}`,
-  ).toBe(0);
-}, 180_000);
 
 beforeEach(() => {
   tempRoot = mkdtempSync(join(tmpdir(), "tx-cli-git-rename-process-"));

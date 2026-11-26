@@ -1,16 +1,11 @@
-import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import {
-  spawn,
-  spawnSync,
-  type ChildProcess,
-} from "node:child_process";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { spawn, type ChildProcess } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { createServer, type Server as HttpServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const REPO_ROOT = fileURLToPath(new URL("../../../", import.meta.url));
 const CLI_BIN = fileURLToPath(new URL("../bin/tx-cli", import.meta.url));
 const HOST = "127.0.0.1";
 const READY_TEXT = "本地开发服务器已启动";
@@ -290,20 +285,6 @@ async function forceStopServer(
   }
   await waitForClose(currentSession, timeoutMs);
 }
-
-beforeAll(() => {
-  const result = spawnSync("pnpm", ["--filter", "@tx-cli/cli", "build"], {
-    cwd: REPO_ROOT,
-    encoding: "utf8",
-    env: { ...process.env, NO_COLOR: "1", FORCE_COLOR: "0" },
-    timeout: 180_000,
-  });
-
-  expect(
-    result.status,
-    `CLI 构建失败：${result.error?.message ?? ""}\n${result.stdout}\n${result.stderr}`,
-  ).toBe(0);
-}, 180_000);
 
 beforeEach(() => {
   tempRoot = mkdtempSync(join(tmpdir(), "tx-cli-server-process-"));

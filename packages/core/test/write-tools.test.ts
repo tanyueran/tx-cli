@@ -213,6 +213,28 @@ describe("edit_file 工具（直连执行）", () => {
     expect(missing.ok).toBe(false);
   });
 
+  it("path 或 new_string 无效时失败", async () => {
+    const noPath = await editFileTool.execute({
+      old_string: "a",
+      new_string: "b",
+    });
+    expect(noPath).toEqual({
+      ok: false,
+      output: "缺少必填参数 path（文件路径）",
+    });
+
+    for (const args of [
+      { path: join(dir, "a.txt"), old_string: "a" },
+      { path: join(dir, "a.txt"), old_string: "a", new_string: 123 },
+    ]) {
+      const result = await editFileTool.execute(args);
+      expect(result).toEqual({
+        ok: false,
+        output: "缺少必填参数 new_string（替换后的内容，可为空字符串表示删除片段）",
+      });
+    }
+  });
+
   it("文件不存在时失败", async () => {
     const result = await editFileTool.execute({
       path: join(dir, "nope.txt"),

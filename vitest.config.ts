@@ -3,6 +3,7 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     include: ["packages/*/test/**/*.test.ts"],
+    globalSetup: ["packages/cli/test/global-setup.ts"],
     coverage: {
       include: ["packages/*/src/**/*.ts"],
       reporter: ["text", "html", "json-summary"],
