@@ -41,7 +41,7 @@ flowchart TD
         SCAFFOLD["scaffold 模板发现 / 渲染 / 生成流程"]
     end
     subgraph 共享层["共享层 · packages/agent-common"]
-        SHARED["shared 通用工具<br/>fs / paths / errors / user-config / turn-cancel"]
+        SHARED["agent-common 通用工具<br/>fs / paths / errors / user-config / turn-cancel"]
     end
     CLI --> CMDS --> 领域层
     CMDS --> REPL --> 领域层
@@ -131,7 +131,7 @@ packages/
 
 依赖方向由自动化检查固定（Phase 3 产出），后续开发不会悄悄退化：
 
-- **`pnpm deps:check`**（dependency-cruiser，配置 `.dependency-cruiser.mjs`）：禁止任何循环依赖；shared 不依赖其他 workspace 包；core 只依赖 shared；scaffold 只依赖 shared；desktop/server（后续包）不得依赖 cli。类型级导入同样纳入检查。
+- **`pnpm deps:check`**（dependency-cruiser，配置 `.dependency-cruiser.mjs`）：禁止任何循环依赖；`agent-common` 不依赖其他 workspace 包；`agent-core` 只依赖 `agent-common`；`agent-scaffold` 只依赖 `agent-common`；desktop/server（后续包）不得依赖 cli。类型级导入同样纳入检查。
 - **ESLint `no-restricted-imports`**：禁止跨包相对路径导入（如 `../../agent-core/src/...`），跨包一律经 `@tanyueran/*` 包名导入，确保只走各包 package.json 声明的公开出口。
 - **core 无终端展示依赖**：core 只产出语义化事件（`output.warn/error/success/dim/system`）与纯文本，颜色、表格对齐与终端布局由 CLI 展示层（`cli/channels/cli-output.ts`、`cli/channels/usage-table.ts`）映射；core 发送给 IPC/WebSocket 的内容不含 ANSI 控制字符。
 
@@ -273,7 +273,7 @@ LLM 调用走 OpenAI 兼容 Responses API 的**无状态模式**（`core/llm/cli
 
 ### 回合级取消传播
 
-`shared/turn-cancel.ts` 基于 `AsyncLocalStorage` 实现回合级取消标记（`{ cancelled: boolean }` 状态对象，非 token 方案）：`runWithTurnCancellation` 包裹整个 agentic loop，同一轮内所有并发工具执行链共享同一状态对象，REPL 多轮之间互不影响。
+`common/turn-cancel.ts` 基于 `AsyncLocalStorage` 实现回合级取消标记（`{ cancelled: boolean }` 状态对象，非 token 方案）：`runWithTurnCancellation` 包裹整个 agentic loop，同一轮内所有并发工具执行链共享同一状态对象，REPL 多轮之间互不影响。
 
 - **置位点**（`markTurnCancelled`）：
   1. 交互问询（审批/升级确认）的 `onCancel` 回调中**同步**置位再抛 `CancelError`——同步置位保证取消标记早于一切 Promise 传播链，串行队列中排队任务启动时必然可见，避免微任务时序竞争；
@@ -476,7 +476,7 @@ bash（exec，串行）、read_file / list_dir / glob / grep（fs.read，规则�
 
 ## 配置文件
 
-`~/.tx-cli/config.json`（0600，`shared/user-config.ts` 统一读写，进程内缓存）：
+`~/.tx-cli/config.json`（0600，`common/user-config.ts` 统一读写，进程内缓存）：
 
 | 段            | 职责                                   | 解析模块                     |
 | ------------ | ------------------------------------ | ------------------------ |
