@@ -168,6 +168,53 @@ describe("runScaffold 完整工作流", () => {
     expect(existsSync(join(targetPath, "first-only.txt"))).toBe(false);
   });
 
+  it("名称为相对路径时按路径生成，模板数据只取最后一段作为名称", async () => {
+    const template = createTemplate("single", "单模板", {
+      "index.vue.hbs": 'name: "{{toPascalCase name}}"，原始：{{name}}',
+    });
+    vi.mocked(loadTemplates).mockReturnValue([template]);
+
+    const result = await runScaffold({
+      name: "./abc/aaa",
+      nameLabel: "模块名",
+      kind: "module",
+      prompt,
+      output,
+    });
+
+    const targetPath = join(workingDir, "abc/aaa");
+    expect(result).toEqual({ name: "./abc/aaa", targetPath });
+    expect(readFileSync(join(targetPath, "index.vue"), "utf8")).toBe(
+      'name: "Aaa"，原始：aaa',
+    );
+    expect(output.success).toHaveBeenCalledWith("模块名：aaa");
+  });
+
+  it("传入 cwd 时以它作为相对路径基准，忽略当前工作目录", async () => {
+    const template = createTemplate("single", "单模板", {
+      "module.txt.hbs": "模块：{{name}}",
+    });
+    vi.mocked(loadTemplates).mockReturnValue([template]);
+    const customCwd = join(tempDir, "custom");
+
+    const result = await runScaffold({
+      name: "./pkg/target-module",
+      nameLabel: "模块名",
+      kind: "module",
+      prompt,
+      output,
+      cwd: customCwd,
+    });
+
+    const targetPath = join(customCwd, "pkg/target-module");
+    expect(result).toEqual({ name: "./pkg/target-module", targetPath });
+    expect(readFileSync(join(targetPath, "module.txt"), "utf8")).toBe(
+      "模块：target-module",
+    );
+    // 当前工作目录下不应产生任何内容
+    expect(existsSync(join(workingDir, "pkg"))).toBe(false);
+  });
+
   it("目标已存在且拒绝覆盖时返回 null、输出警告并保持旧文件不变", async () => {
     const template = createTemplate("single", "单模板", {
       "new.txt": "新内容",

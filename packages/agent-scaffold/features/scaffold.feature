@@ -66,6 +66,14 @@
     而且 "user-profile/obsolete.txt"已删除
     而且 输出包含"模块已生成"
 
+  场景:名称为相对路径时按命令执行目录生成
+    假如 目标路径"abc/aaa"不存在
+    当 在命令执行目录中执行命令"tx-cli add ./abc/aaa"
+    那么 在命令执行目录下的"abc/aaa"中生成模块模板的完整内容
+    而且 输出包含"模块名：aaa"
+    而且 "abc/aaa/index.vue"包含"Aaa"
+    而且 "abc/aaa/index.vue"不包含"./abc/aaa"
+
   场景:生成项目时渲染变量并还原特殊文件名
     假如 目标路径"my-shop"不存在
     当 执行命令"tx-cli create my-shop"

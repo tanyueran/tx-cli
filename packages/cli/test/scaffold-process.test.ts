@@ -33,6 +33,8 @@ function runCli(args: string[]): SpawnSyncReturns<string> {
       USERPROFILE: home,
       NO_COLOR: "1",
       FORCE_COLOR: "0",
+      // CLI 会优先使用 INIT_CWD 作为相对路径基准，这里模拟 pnpm 在 workingDir 下执行
+      INIT_CWD: workingDir,
     },
     input: "",
     timeout: 15_000,
@@ -58,6 +60,7 @@ describe("真实构建产物的脚手架命令", () => {
       `create 执行失败：${result.error?.message ?? ""}\n${result.stdout}\n${result.stderr}`,
     ).toBe(0);
     expect(result.stdout).toContain("创建成功");
+    expect(result.stdout).toContain("cd ./demo-app && pnpm install");
 
     const projectDir = join(workingDir, "demo-app");
     const packageJson = JSON.parse(
@@ -107,5 +110,24 @@ describe("真实构建产物的脚手架命令", () => {
       ".user-profile-wrapper",
     );
     expect(existsSync(join(moduleDir, "template.json"))).toBe(false);
+  });
+
+  it("add ./abc/ccc 在命令执行目录下按路径生成，名称取最后一段", () => {
+    const result = runCli(["add", "./abc/ccc"]);
+
+    expect(
+      result.status,
+      `add 执行失败：${result.error?.message ?? ""}\n${result.stdout}\n${result.stderr}`,
+    ).toBe(0);
+    expect(result.stdout).toContain("模块名：ccc");
+
+    const moduleDir = join(workingDir, "abc/ccc");
+    expect(result.stdout).toContain(`模块已生成：${moduleDir}`);
+    const component = readFileSync(join(moduleDir, "index.vue"), "utf8");
+    expect(component).toContain('name: "Ccc"');
+    expect(component).toContain("ccc-wrapper");
+    expect(existsSync(join(workingDir, "abc/ccc/index.module.scss"))).toBe(
+      true,
+    );
   });
 });
