@@ -4,20 +4,20 @@ import {
   loadLlmConfig,
   parseThinkingLevel,
   THINKING_LEVELS,
-} from "@tx-cli/core";
-import { runOneShotAgent } from "@tx-cli/core";
+} from "@tanyueran/agent-core";
+import { runOneShotAgent } from "@tanyueran/agent-core";
 import { runReplAgent } from "../../conversation/agent";
 import {
   APPROVAL_POLICIES,
   SANDBOX_LEVELS,
   SANDBOX_MISSING_ACTIONS,
   type SandboxCliOptions,
-} from "@tx-cli/core";
+} from "@tanyueran/agent-core";
 import type {
   ApprovalPolicy,
   SandboxLevel,
   SandboxMissingAction,
-} from "@tx-cli/core";
+} from "@tanyueran/agent-core";
 import { createCliChannels } from "../../channels";
 
 /** agent 命令执行体的选项入参（沙箱枚举字段用联合类型，合法性由 commander choices() 保证） */

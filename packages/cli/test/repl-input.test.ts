@@ -6,7 +6,7 @@ import {
   PANEL_LIMIT,
 } from "../src/conversation/repl/input";
 import type { ReplSuggestion } from "../src/conversation/repl/input";
-import { stripAnsi } from "@tx-cli/shared/string";
+import { stripAnsi } from "@tanyueran/agent-common/string";
 
 /** 构造固定候选的 suggest 回调 */
 function suggestOf(suggestions: ReplSuggestion[]) {

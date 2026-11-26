@@ -4,7 +4,7 @@
  * prompts 是终端专属实现，只属于 CLI 层；core 等其他端通过 PromptChannel 接口使用交互能力
  */
 import prompts from "prompts";
-import { CancelError, markTurnCancelled } from "@tx-cli/shared";
+import { CancelError, markTurnCancelled } from "@tanyueran/agent-common";
 
 /**
  * prompts 的统一封装：用户取消（Ctrl+C / Esc）时抛出 CancelError

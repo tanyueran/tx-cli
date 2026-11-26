@@ -2,7 +2,7 @@
 
 > tx-cli：一个 Node.js 命令行工具，支持创建项目、添加模块、与大模型对话（含工具调用与沙箱管控）以及若干实用命令。
 >
-> 仓库为 pnpm monorepo：`shared` / `core` / `scaffold` / `cli` 四包。下文路径简写 `core/`、`cli/`、`shared/`、`scaffold/` 分别指 `packages/<包名>/src/`。
+> 仓库为 pnpm monorepo：`agent-common` / `agent-core` / `agent-scaffold` / `cli` 四包。下文路径简写 `common/`、`core/`、`scaffold/`、`cli/` 分别指 `packages/agent-common/src/`、`packages/agent-core/src/`、`packages/agent-scaffold/src/`、`packages/cli/src/`。
 
 ## 技术栈
 
@@ -28,7 +28,7 @@ flowchart TD
         REPL["conversation/repl/ 终端 REPL<br/>输入帧 / 面板 / 斜杠命令"]
         SERVICES["services/ copy / server / commit-fix"]
     end
-    subgraph 领域层["领域层 · packages/core（无头核心引擎）"]
+    subgraph 领域层["领域层 · packages/agent-core（无头核心引擎）"]
         CONV["conversation 对话编排<br/>session（含 ConversationSession）/ loop / sub-agent"]
         TOOLS["tools 工具系统"]
         SANDBOX["sandbox 沙箱与权限"]
@@ -37,10 +37,10 @@ flowchart TD
         SKILLS["skills 技能发现"]
         CH["channels 跨端 I/O 契约（纯类型）"]
     end
-    subgraph 脚手架层["脚手架层 · packages/scaffold"]
+    subgraph 脚手架层["脚手架层 · packages/agent-scaffold"]
         SCAFFOLD["scaffold 模板发现 / 渲染 / 生成流程"]
     end
-    subgraph 共享层["共享层 · packages/shared"]
+    subgraph 共享层["共享层 · packages/agent-common"]
         SHARED["shared 通用工具<br/>fs / paths / errors / user-config / turn-cancel"]
     end
     CLI --> CMDS --> 领域层
@@ -52,16 +52,16 @@ flowchart TD
     脚手架层 --> 共享层
 ```
 
-依赖方向自上而下：`cli` 可依赖 core/scaffold/shared；`core` 只依赖 shared，**不含终端 REPL、ANSI 着色与任何前端适配**（无 picocolors、console、readline、stdio 依赖），桌面端与云端可直接复用；`scaffold` 只依赖 shared，通过自身的 `ScaffoldPrompt` / `ScaffoldOutput` 最小端口以结构化类型接收 CLI Channel。命令与执行体分离（如 `registerChatCommand` / `runChatAction`），便于脱离 commander 单测。
+依赖方向自上而下：`cli` 可依赖 core/scaffold/common；`core` 只依赖 common，**不含终端 REPL、ANSI 着色与任何前端适配**（无 picocolors、console、readline、stdio 依赖），桌面端与云端可直接复用；`scaffold` 只依赖 common，通过自身的 `ScaffoldPrompt` / `ScaffoldOutput` 最小端口以结构化类型接收 CLI Channel。命令与执行体分离（如 `registerChatCommand` / `runChatAction`），便于脱离 commander 单测。
 
 ## 目录结构
 
 ```text
 packages/
-├── shared/src/                # 共享层：fs / paths / errors / user-config（全局配置读写）/
+├── agent-common/src/          # 共享层：fs / paths / errors / user-config（全局配置读写）/
 │                              # config-merge（配置合并）/ string / text / timeout /
 │                              # serial-queue（串行执行队列）/ turn-cancel（回合级取消）
-├── core/src/                  # 领域层 · 无头核心引擎（协议类型内聚在各模块 types.ts）
+├── agent-core/src/            # 领域层 · 无头核心引擎（协议类型内聚在各模块 types.ts）
 │   ├── channels/              # 跨端 I/O 契约：InputChannel / OutputChannel / PromptChannel
 │   ├── conversation/          # 对话编排（chat / agent 命令共用机制，模式即配置）
 │   │   ├── chat.ts            #   CHAT_MODE_CONFIG + runOneShotChat（单次入口）
@@ -85,7 +85,7 @@ packages/
 │   │                          #   grep / web_search / web_fetch / write_file / edit_file（写侧，
 │   │                          #   受可写边界管控）/ write_todos（agent 模式装配，
 │   │                          #   工厂创建）/ bash（工厂创建，按需拼入）
-│   ├── sandbox/               # 沙箱与权限（四层模型，见下文；模块详情见 packages/core/src/sandbox/README.md）
+│   ├── sandbox/               # 沙箱与权限（四层模型，见下文；模块详情见 packages/agent-core/src/sandbox/README.md）
 │   │   ├── bootstrap/         #   L1 装配：create-context（createSandboxContext）、
 │   │   │                      #   options（CLI/配置优先级合并）、trust（目录信任与降级）
 │   │   ├── config/            #   配置 schema / 全局与项目配置加载校验
@@ -101,7 +101,7 @@ packages/
 │   ├── mcp/                   # MCP：config 解析（stdio / http 传输）、manager 连接管理、
 │   │                          #   tool-adapter 工具适配、discovery-tool 折叠发现、setup 装配
 │   └── skills/                # 技能：discovery 扫描、catalog、load_skill 工具（loader-tool）
-├── scaffold/
+├── agent-scaffold/
 │   ├── src/
 │   │   ├── index.ts           # 包出口
 │   │   └── scaffold/          # 脚手架：index（runScaffold 生成流程）、templates 加载、
@@ -132,7 +132,7 @@ packages/
 依赖方向由自动化检查固定（Phase 3 产出），后续开发不会悄悄退化：
 
 - **`pnpm deps:check`**（dependency-cruiser，配置 `.dependency-cruiser.mjs`）：禁止任何循环依赖；shared 不依赖其他 workspace 包；core 只依赖 shared；scaffold 只依赖 shared；desktop/server（后续包）不得依赖 cli。类型级导入同样纳入检查。
-- **ESLint `no-restricted-imports`**：禁止跨包相对路径导入（如 `../../core/src/...`），跨包一律经 `@tx-cli/*` 包名导入，确保只走各包 package.json 声明的公开出口。
+- **ESLint `no-restricted-imports`**：禁止跨包相对路径导入（如 `../../agent-core/src/...`），跨包一律经 `@tanyueran/*` 包名导入，确保只走各包 package.json 声明的公开出口。
 - **core 无终端展示依赖**：core 只产出语义化事件（`output.warn/error/success/dim/system`）与纯文本，颜色、表格对齐与终端布局由 CLI 展示层（`cli/channels/cli-output.ts`、`cli/channels/usage-table.ts`）映射；core 发送给 IPC/WebSocket 的内容不含 ANSI 控制字符。
 
 ## 对话链路（chat / agent 命令）
@@ -402,7 +402,7 @@ interface Tool extends ToolDefinition {
 
 ## 沙箱与权限（四层模型）
 
-> 模块内部目录职责、核心概念与推荐阅读顺序见 [packages/core/src/sandbox/README.md](../packages/core/src/sandbox/README.md)。
+> 模块内部目录职责、核心概念与推荐阅读顺序见 [packages/agent-core/src/sandbox/README.md](../packages/agent-core/src/sandbox/README.md)。
 
 三档沙箱（`SandboxLevel`）× 审批策略（`ApprovalPolicy`）正交：
 
@@ -494,8 +494,8 @@ bash（exec，串行）、read_file / list_dir / glob / grep（fs.read，规则�
 | 需求         | 入口                                                                                         |
 | ---------- | ------------------------------------------------------------------------------------------ |
 | 新增命令       | `packages/cli/src/program/command/` 新建文件并在 `program/index.ts` 的 registrars 注册                           |
-| 新增内置工具     | `packages/core/src/tools/builtin/` 实现 `Tool` 接口并加入 `builtinTools`；需权限管控则声明 `permission` 字段（自动被门卫包装） |
-| 新增沙箱实现     | `packages/core/src/sandbox/providers/` 实现 `SandboxProvider` 并在 `providers/registry.ts` 注册                     |
-| 新增模板       | `packages/scaffold/template/` 目录（create/add 共用脚手架流程 `@tx-cli/scaffold`）                                         |
-| 接入新 LLM 能力 | 思考档位等协议差异统一收敛在 `packages/core/src/llm/thinking.ts` 适配层                                                  |
+| 新增内置工具     | `packages/agent-core/src/tools/builtin/` 实现 `Tool` 接口并加入 `builtinTools`；需权限管控则声明 `permission` 字段（自动被门卫包装） |
+| 新增沙箱实现     | `packages/agent-core/src/sandbox/providers/` 实现 `SandboxProvider` 并在 `providers/registry.ts` 注册                     |
+| 新增模板       | `packages/agent-scaffold/template/` 目录（create/add 共用脚手架流程 `@tanyueran/agent-scaffold`）                                         |
+| 接入新 LLM 能力 | 思考档位等协议差异统一收敛在 `packages/agent-core/src/llm/thinking.ts` 适配层                                                  |
 | 新增前端（桌面/云端） | 复用 core 的 `ConversationSession` 与 channels 契约实现各端 Channel；不得反向让 core 依赖前端（由 `pnpm deps:check` 强制） |

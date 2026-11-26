@@ -3,8 +3,8 @@ import { cwd } from "node:process";
 import { basename, dirname, join, resolve } from "node:path";
 import { simpleGit } from "simple-git";
 import pico from "picocolors";
-import { existsWithExactCase } from "@tx-cli/shared";
-import { CliError } from "@tx-cli/shared";
+import { existsWithExactCase } from "@tanyueran/agent-common";
+import { CliError } from "@tanyueran/agent-common";
 
 /**
  * 注册 git-rename 命令：git 重命名模块（支持大小写转换）

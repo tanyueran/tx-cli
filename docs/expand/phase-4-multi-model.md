@@ -21,14 +21,14 @@ Phase 3 已完成包边界收口：Provider 配置、注册表和模型选择逻
 
 ### 涉及文件
 
-- `packages/core/src/llm/types.ts` — 修改
-- `packages/shared/src/user-config.ts` — 修改
+- `packages/agent-core/src/llm/types.ts` — 修改
+- `packages/agent-common/src/user-config.ts` — 修改
 
 ### 步骤
 
 #### Step 1: 扩展 LlmConfig 类型
 
-在 `packages/core/src/llm/types.ts` 中新增：
+在 `packages/agent-core/src/llm/types.ts` 中新增：
 
 ```typescript
 /** 单个 Provider 配置 */
@@ -158,7 +158,7 @@ function inferProviderName(baseUrl: string): string {
 
 ### 涉及文件
 
-- `packages/core/src/llm/provider-registry.ts` — 新建
+- `packages/agent-core/src/llm/provider-registry.ts` — 新建
 
 ### 步骤
 
@@ -250,9 +250,9 @@ export class ProviderRegistry {
 
 ### 涉及文件
 
-- `packages/core/src/llm/client.ts` — 修改
-- `packages/core/src/llm/config.ts` — 修改
-- `packages/core/src/llm/index.ts` — 修改
+- `packages/agent-core/src/llm/client.ts` — 修改
+- `packages/agent-core/src/llm/config.ts` — 修改
+- `packages/agent-core/src/llm/index.ts` — 修改
 
 ### 步骤
 
@@ -303,13 +303,13 @@ export async function loadLlmConfig(): Promise<LlmConfig & { registry?: Provider
 
 #### Step 3: 更新导出
 
-在 `packages/core/src/llm/index.ts` 中导出 ProviderRegistry。
+在 `packages/agent-core/src/llm/index.ts` 中导出 ProviderRegistry。
 
 ### 验收标准
 
 - [ ] 能按 provider + model 创建请求
 - [ ] 向后兼容单 provider 配置
-- [ ] `pnpm --filter @tx-cli/core type-check` 通过
+- [ ] `pnpm --filter @tanyueran/agent-core type-check` 通过
 
 ---
 
@@ -321,7 +321,7 @@ export async function loadLlmConfig(): Promise<LlmConfig & { registry?: Provider
 
 ### 涉及文件
 
-- `packages/core/src/llm/config-wizard.ts` — 修改
+- `packages/agent-core/src/llm/config-wizard.ts` — 修改
 - `packages/cli/src/conversation/repl/slash-commands.ts` — 修改终端内模型切换入口
 
 ### 步骤

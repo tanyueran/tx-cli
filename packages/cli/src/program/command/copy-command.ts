@@ -2,8 +2,8 @@ import type { Command } from "commander";
 import { existsSync } from "node:fs";
 import pico from "picocolors";
 import { copyPath, resolveCopyTarget } from "../../services/copy";
-import { resolveFromCwd } from "@tx-cli/shared";
-import { CancelError } from "@tx-cli/shared";
+import { resolveFromCwd } from "@tanyueran/agent-common";
+import { CancelError } from "@tanyueran/agent-common";
 import { createCliChannels } from "../../channels";
 
 /** copy 命令的选项 */

@@ -4,7 +4,7 @@
  */
 import pico from "picocolors";
 import { formatUsageTable } from "./usage-table";
-import type { OutputChannel, ToolCallInfo } from "@tx-cli/core";
+import type { OutputChannel, ToolCallInfo } from "@tanyueran/agent-core";
 
 /** 思考/loading 状态行的 spinner 动画帧（Claude Code 风格星形序列） */
 const SPINNER_FRAMES = ["✻", "✽", "✶", "✷", "✸", "✹"];
@@ -206,10 +206,10 @@ export class CliOutputChannel implements OutputChannel {
 
   /**
    * 输出用量统计表格
-   * @param {import("@tx-cli/core").UsageDisplayInfo} info - 用量展示信息
+   * @param {import("@tanyueran/agent-core").UsageDisplayInfo} info - 用量展示信息
    * @returns {void}
    */
-  usage(info: import("@tx-cli/core").UsageDisplayInfo): void {
+  usage(info: import("@tanyueran/agent-core").UsageDisplayInfo): void {
     console.log(formatUsageTable(info.rows, info.pricing));
   }
 

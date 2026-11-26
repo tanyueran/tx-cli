@@ -4,14 +4,14 @@
     "types": ["node"],
     "baseUrl": ".",
     "paths": {
-      "@tx-cli/core": ["packages/core/src"],
-      "@tx-cli/core/*": ["packages/core/src/*"],
-      "@tx-cli/shared": ["packages/shared/src"],
-      "@tx-cli/shared/*": ["packages/shared/src/*"],
-      "@tx-cli/scaffold": ["packages/scaffold/src"],
-      "@tx-cli/scaffold/*": ["packages/scaffold/src/*"],
-      "@tx-cli/cli": ["packages/cli/src"],
-      "@tx-cli/cli/*": ["packages/cli/src/*"]
+      "@tanyueran/agent-core": ["packages/agent-core/src"],
+      "@tanyueran/agent-core/*": ["packages/agent-core/src/*"],
+      "@tanyueran/agent-common": ["packages/agent-common/src"],
+      "@tanyueran/agent-common/*": ["packages/agent-common/src/*"],
+      "@tanyueran/agent-scaffold": ["packages/agent-scaffold/src"],
+      "@tanyueran/agent-scaffold/*": ["packages/agent-scaffold/src/*"],
+      "@tanyueran/cli": ["packages/cli/src"],
+      "@tanyueran/cli/*": ["packages/cli/src/*"]
     }
   },
   "include": ["./packages/*/test/**/*", "./global.d.ts"],

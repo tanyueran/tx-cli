@@ -4,6 +4,8 @@
 
 ## 安装
 
+要求 Node.js >= 22.12.0。
+
 ```bash
 npm install -g @tanyueran/cli
 ```
@@ -11,21 +13,21 @@ npm install -g @tanyueran/cli
 ## 用法
 
 ```text
-tx-cli [command] [options]
+Usage: tx-cli [options] [command]
 
 Options:
   -V, --version                               output the version number
   -h, --help                                  display help for command
 
 Commands:
-  add [module-name]                           添加模块
   create [project-name]                       创建项目
+  add [module-name]                           添加模块
   copy [options] <src> <dest>                 复制文件或目录，支持过滤某些文件
   server [options]                            启动一个本地HTTP服务器
   git-rename <old-model-url> <new-model-url>  git重命名模块
-  commit-fix <message...>                     根据ones信息改为 fix(#id): title 格式提交git commit
-  chat [options] [question...]                与大模型轻量只读问答：传入问题为单次问答，不带参数进入多轮对话
-  agent [options] [task...]                   让 AI Agent 执行任务：传入任务为单次执行，不带参数进入多轮任务模式
+  commit-fix <message...>                     根据 ones 信息生成 fix(#id): title 格式并提交
+  chat [options] [question...]                与大模型轻量只读问答：单次问答或多轮对话
+  agent [options] [task...]                   让 AI Agent 执行任务：单次执行或多轮任务模式
   help [command]                              display help for command
 ```
 

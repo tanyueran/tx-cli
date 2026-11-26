@@ -19,12 +19,12 @@
 
 ### 涉及文件
 
-- `packages/core/src/channels/types.ts` — 新建
-- `packages/core/src/channels/index.ts` — 新建
+- `packages/agent-core/src/channels/types.ts` — 新建
+- `packages/agent-core/src/channels/index.ts` — 新建
 
 ### 步骤
 
-#### Step 1: 创建 packages/core/src/channels/types.ts
+#### Step 1: 创建 packages/agent-core/src/channels/types.ts
 
 ```typescript
 /**
@@ -130,7 +130,7 @@ export interface SessionChannels {
 }
 ```
 
-#### Step 2: 创建 packages/core/src/channels/index.ts
+#### Step 2: 创建 packages/agent-core/src/channels/index.ts
 
 ```typescript
 export * from "./types";
@@ -138,7 +138,7 @@ export * from "./types";
 
 #### Step 3: 更新 core 包的 index.ts
 
-在 `packages/core/src/index.ts` 中添加：
+在 `packages/agent-core/src/index.ts` 中添加：
 
 ```typescript
 export * from "./channels";
@@ -146,8 +146,8 @@ export * from "./channels";
 
 ### 验收标准
 
-- [ ] `packages/core/src/channels/types.ts` 定义了完整的接口
-- [ ] `pnpm --filter @tx-cli/core type-check` 通过
+- [ ] `packages/agent-core/src/channels/types.ts` 定义了完整的接口
+- [ ] `pnpm --filter @tanyueran/agent-core type-check` 通过
 
 ---
 
@@ -172,7 +172,7 @@ export * from "./channels";
 
 ```typescript
 import pico from "picocolors";
-import type { OutputChannel, ToolCallInfo, UsageDisplayInfo } from "@tx-cli/core";
+import type { OutputChannel, ToolCallInfo, UsageDisplayInfo } from "@tanyueran/agent-core";
 
 /**
  * CLI 版输出通道：使用 stdout + picocolors
@@ -265,7 +265,7 @@ export class CliOutputChannel implements OutputChannel {
 #### Step 2: 创建 packages/cli/src/channels/cli-input.ts
 
 ```typescript
-import type { InputChannel } from "@tx-cli/core";
+import type { InputChannel } from "@tanyueran/agent-core";
 
 /**
  * CLI 版输入通道：封装 readline
@@ -293,8 +293,8 @@ export class CliInputChannel implements InputChannel {
 #### Step 3: 创建 packages/cli/src/channels/cli-prompt.ts
 
 ```typescript
-import type { PromptChannel } from "@tx-cli/core";
-import { confirmPrompt, selectPrompt, inputPrompt } from "@tx-cli/shared";
+import type { PromptChannel } from "@tanyueran/agent-core";
+import { confirmPrompt, selectPrompt, inputPrompt } from "@tanyueran/agent-common";
 
 /**
  * CLI 版交互提示通道：封装 prompts 库
@@ -327,7 +327,7 @@ export { CliPromptChannel } from "./cli-prompt";
 ### 验收标准
 
 - [ ] 三个 CLI Channel 类创建完成
-- [ ] `pnpm --filter @tx-cli/cli type-check` 通过
+- [ ] `pnpm --filter @tanyueran/cli type-check` 通过
 
 ---
 
@@ -339,19 +339,19 @@ export { CliPromptChannel } from "./cli-prompt";
 
 ### 涉及文件
 
-- `packages/core/src/conversation/index.ts` — 修改
-- `packages/core/src/conversation/one-shot.ts` — 修改
-- `packages/core/src/conversation/repl/repl.ts` — 修改
-- `packages/core/src/conversation/loop/renderer.ts` — 修改
-- `packages/core/src/conversation/loop/execute-turn.ts` — 修改
-- `packages/core/src/conversation/loop/loop.ts` — 修改
-- `packages/core/src/conversation/session/runtime.ts` — 修改
+- `packages/agent-core/src/conversation/index.ts` — 修改
+- `packages/agent-core/src/conversation/one-shot.ts` — 修改
+- `packages/agent-core/src/conversation/repl/repl.ts` — 修改
+- `packages/agent-core/src/conversation/loop/renderer.ts` — 修改
+- `packages/agent-core/src/conversation/loop/execute-turn.ts` — 修改
+- `packages/agent-core/src/conversation/loop/loop.ts` — 修改
+- `packages/agent-core/src/conversation/session/runtime.ts` — 修改
 
 ### 步骤
 
 #### Step 1: 修改 runOneShotConversation 签名
 
-在 `packages/core/src/conversation/index.ts` 中，为 `runOneShotConversation` 添加 `channels` 参数：
+在 `packages/agent-core/src/conversation/index.ts` 中，为 `runOneShotConversation` 添加 `channels` 参数：
 
 ```typescript
 // 修改前
@@ -409,7 +409,7 @@ export async function runOneShotConversation(options: {
 
 - [ ] `runOneShotConversation` 和 `runReplConversation` 接收 channels 参数
 - [ ] 所有直接 I/O 调用已替换为 Channel 调用
-- [ ] `pnpm --filter @tx-cli/core type-check` 通过
+- [ ] `pnpm --filter @tanyueran/agent-core type-check` 通过
 
 ---
 
@@ -421,10 +421,10 @@ export async function runOneShotConversation(options: {
 
 ### 涉及文件
 
-- `packages/shared/src/interactive-prompt.ts` — 修改（或迁移到 core）
-- `packages/core/src/tools/executor.ts` — 修改
-- `packages/core/src/sandbox/runtime/interactive-approver.ts` — 修改
-- `packages/core/src/llm/config-wizard.ts` — 修改
+- `packages/agent-common/src/interactive-prompt.ts` — 修改（或迁移到 core）
+- `packages/agent-core/src/tools/executor.ts` — 修改
+- `packages/agent-core/src/sandbox/runtime/interactive-approver.ts` — 修改
+- `packages/agent-core/src/llm/config-wizard.ts` — 修改
 
 ### 步骤
 
@@ -461,7 +461,7 @@ export async function confirmPrompt(channel: PromptChannel, message: string): Pr
 ### 验收标准
 
 - [ ] 所有交互调用通过 Channel 接口
-- [ ] `pnpm --filter @tx-cli/core type-check` 通过
+- [ ] `pnpm --filter @tanyueran/agent-core type-check` 通过
 
 ---
 
@@ -506,7 +506,7 @@ await runOneShotAgent({
 
 #### Step 3: 修改 agent.ts 和 chat.ts
 
-在 `packages/core/src/conversation/agent.ts` 和 `chat.ts` 中，为 `runOneShotAgent`、`runReplAgent`、`runOneShotChat`、`runReplChat` 添加 channels 参数并传递。
+在 `packages/agent-core/src/conversation/agent.ts` 和 `chat.ts` 中，为 `runOneShotAgent`、`runReplAgent`、`runOneShotChat`、`runReplChat` 添加 channels 参数并传递。
 
 ### 验收标准
 

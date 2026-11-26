@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { CancelError } from "@tx-cli/shared";
+import { CancelError } from "@tanyueran/agent-common";
 import { CliPromptChannel } from "../src/channels/cli-prompt";
 
 // prompts 是终端交互库，测试中替换为可编排的假实现，避免真实读 stdin

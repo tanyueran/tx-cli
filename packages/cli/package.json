@@ -1,8 +1,27 @@
 {
-  "name": "@tx-cli/cli",
-  "version": "0.11.0",
-  "private": true,
-  "main": "./src/index.ts",
+  "name": "@tanyueran/cli",
+  "version": "0.11.1",
+  "description": "一个cli工具，支持创建项目，添加模版，与大模型对话",
+  "keywords": [
+    "cli",
+    "ai",
+    "agent",
+    "scaffold"
+  ],
+  "author": "tanyueran",
+  "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tanyueran/tx-cli.git"
+  },
+  "homepage": "https://github.com/tanyueran/tx-cli#readme",
+  "bugs": {
+    "url": "https://github.com/tanyueran/tx-cli/issues"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "main": "./dist/cli.js",
   "bin": {
     "tx-cli": "./bin/tx-cli"
   },
@@ -14,9 +33,6 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@tx-cli/core": "workspace:*",
-    "@tx-cli/scaffold": "workspace:*",
-    "@tx-cli/shared": "workspace:*",
     "@anthropic-ai/sandbox-runtime": "^0.0.80",
     "@modelcontextprotocol/sdk": "^1.32.1",
     "commander": "12.1.0",
@@ -31,6 +47,9 @@
     "simple-git": "3.28.0"
   },
   "devDependencies": {
+    "@tanyueran/agent-core": "workspace:*",
+    "@tanyueran/agent-scaffold": "workspace:*",
+    "@tanyueran/agent-common": "workspace:*",
     "@types/connect": "^3.4.38",
     "@types/fs-extra": "11.0.4",
     "@types/node": "^26.4.1",

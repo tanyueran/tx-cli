@@ -2,7 +2,7 @@
  * CLI 交互提示通道：把 core 的 PromptChannel 接口落到 prompts 实现
  * 用户取消（Ctrl+C / Esc）时沿用 shared 的 CancelError 语义
  */
-import type { PromptChannel } from "@tx-cli/core";
+import type { PromptChannel } from "@tanyueran/agent-core";
 import { askConfirm, askSelect, askText } from "./prompts-prompt";
 
 /**

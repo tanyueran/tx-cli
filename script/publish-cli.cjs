@@ -1,5 +1,5 @@
 const { execSync } = require("node:child_process");
-const { readFileSync } = require("fs-extra");
+const { readFileSync, writeFileSync } = require("fs-extra");
 const { simpleGit } = require("simple-git");
 const prompts = require("prompts");
 const pico = require("picocolors");
@@ -14,6 +14,13 @@ const ACCESS = "public";
 const TOTAL_STEPS = 6;
 /** 待发布包目录 */
 const PACKAGE_DIR = "packages/cli";
+/** 需要与 CLI 版本保持一致的 package.json（根包 + 各 workspace 包） */
+const VERSION_SYNC_FILES = [
+  "package.json",
+  "packages/agent-common/package.json",
+  "packages/agent-core/package.json",
+  "packages/agent-scaffold/package.json",
+];
 
 /** 当前发布版本号 */
 let version = "0.0.1";
@@ -36,6 +43,22 @@ function run(command, options = {}) {
  */
 function readPkg() {
   return JSON.parse(readFileSync(`${PACKAGE_DIR}/package.json`, "utf-8"));
+}
+
+/**
+ * 把 CLI 的最新版本号同步写入根包与其他 workspace 包，避免版本号漂移
+ * @param {string} nextVersion - 待同步的版本号
+ * @returns {void}
+ */
+function syncWorkspaceVersions(nextVersion) {
+  for (const file of VERSION_SYNC_FILES) {
+    const pkg = JSON.parse(readFileSync(file, "utf-8"));
+    if (pkg.version === nextVersion) {
+      continue;
+    }
+    pkg.version = nextVersion;
+    writeFileSync(file, `${JSON.stringify(pkg, null, 2)}\n`, "utf-8");
+  }
 }
 
 /**
@@ -110,6 +133,8 @@ async function updateVersion() {
         cwd: PACKAGE_DIR,
       });
     }
+    // CLI 版本变更后同步根包与其余 workspace 包，保持仓库内版本一致
+    syncWorkspaceVersions(readPkg().version);
   } catch (err) {
     console.log(pico.red(`更新版本号失败: ${err.message}`));
     process.exit(1);

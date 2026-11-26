@@ -4,15 +4,15 @@
  * 以及标签对齐、耗时格式化等展示辅助（formatElapsed 同时被 background 的通知行复用）
  */
 import pico from "picocolors";
-import { displayWidth } from "@tx-cli/shared";
+import { displayWidth } from "@tanyueran/agent-common";
 import {
   describePricing,
   formatElapsed,
   formatUsageSummary,
   isEmptyUsage,
-} from "@tx-cli/core";
-import type { LlmPricing, ThinkingLevel, TokenUsage } from "@tx-cli/core";
-import type { OutputChannel } from "@tx-cli/core";
+} from "@tanyueran/agent-core";
+import type { LlmPricing, ThinkingLevel, TokenUsage } from "@tanyueran/agent-core";
+import type { OutputChannel } from "@tanyueran/agent-core";
 import type { ReplOptions } from "./state";
 import type { SlashCommand } from "./slash-commands";
 

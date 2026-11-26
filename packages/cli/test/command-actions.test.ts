@@ -1,37 +1,37 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { loadLlmConfig } from "@tx-cli/core/llm";
-import { runOneShotChat } from "@tx-cli/core/conversation/chat";
-import { runOneShotAgent } from "@tx-cli/core/conversation/agent";
-import { runReplChat } from "@tx-cli/cli/conversation/chat";
-import { runReplAgent } from "@tx-cli/cli/conversation/agent";
-import { runChatAction } from "@tx-cli/cli/program/command/chat-command";
+import { loadLlmConfig } from "@tanyueran/agent-core/llm";
+import { runOneShotChat } from "@tanyueran/agent-core/conversation/chat";
+import { runOneShotAgent } from "@tanyueran/agent-core/conversation/agent";
+import { runReplChat } from "@tanyueran/cli/conversation/chat";
+import { runReplAgent } from "@tanyueran/cli/conversation/agent";
+import { runChatAction } from "@tanyueran/cli/program/command/chat-command";
 import {
   buildSandboxOptions,
   runAgentAction,
-} from "@tx-cli/cli/program/command/agent-command";
-import type { LlmConfig } from "@tx-cli/core/llm/types";
+} from "@tanyueran/cli/program/command/agent-command";
+import type { LlmConfig } from "@tanyueran/agent-core/llm/types";
 
 // loadLlmConfig 保留真实签名但替换实现（真实实现会进入交互向导并写盘），parseThinkingLevel 等保持真实逻辑
-vi.mock("@tx-cli/core/llm", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@tx-cli/core/llm")>();
+vi.mock("@tanyueran/agent-core/llm", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@tanyueran/agent-core/llm")>();
   return { ...actual, loadLlmConfig: vi.fn() };
 });
 
 // 会话层整体替换：命令执行体只负责分流，conversation 层行为不属于本文件测试范围
 // 单次入口在 core，多轮入口已迁至 CLI 本地模块（Task 3.2 包边界收口）
-vi.mock("@tx-cli/core/conversation/chat", () => ({
+vi.mock("@tanyueran/agent-core/conversation/chat", () => ({
   runOneShotChat: vi.fn(),
 }));
 
-vi.mock("@tx-cli/core/conversation/agent", () => ({
+vi.mock("@tanyueran/agent-core/conversation/agent", () => ({
   runOneShotAgent: vi.fn(),
 }));
 
-vi.mock("@tx-cli/cli/conversation/chat", () => ({
+vi.mock("@tanyueran/cli/conversation/chat", () => ({
   runReplChat: vi.fn(),
 }));
 
-vi.mock("@tx-cli/cli/conversation/agent", () => ({
+vi.mock("@tanyueran/cli/conversation/agent", () => ({
   runReplAgent: vi.fn(),
 }));
 

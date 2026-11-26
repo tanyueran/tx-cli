@@ -21,8 +21,8 @@ function external(id) {
   if (id.startsWith("node:")) {
     return true;
   }
-  // workspace 包不 external，需要打进产物
-  if (id.startsWith("@tx-cli/")) {
+  // workspace 内部包不 external，需要打进产物
+  if (id.startsWith("@tanyueran/agent-")) {
     return false;
   }
   return Object.keys(pkg.dependencies || {}).some(
@@ -92,12 +92,17 @@ export default {
       tsconfig: "./tsconfig.json",
       include: ["**/*.ts"],
       compilerOptions: {
-        // monorepo 中 rollup 会把跨包源码（@tx-cli/shared/core/scaffold）纳入同一 TS 程序，
+        // monorepo 中 rollup 会把跨包源码（agent-common / agent-core / agent-scaffold）纳入同一 TS 程序，
         // 必须显式指定 rootDir/outDir 为仓库根，否则 rootDir 自动推断不稳定，
         // 导致 emit 路径与插件预期的产物路径不一致而拿不到转译后的代码
         rootDir: "../..",
         outDir: "./dist",
         removeComments: true,
+        // 产物只需可执行的 CJS bundle，声明文件与 sourcemap 由 rollup 之外的工具负责，
+        // 关闭后避免把跨包 .d.ts / .d.ts.map 一并打进发布产物
+        declaration: false,
+        declarationMap: false,
+        sourceMap: false,
       },
     }),
     // 压缩产物，保留 shebang 注释
@@ -107,7 +112,7 @@ export default {
       },
     }),
     // 把 scaffold 模板复制进产物，保证运行时 loadTemplates 可定位
-    copyTemplates("../scaffold/template", "./dist/template"),
+    copyTemplates("../agent-scaffold/template", "./dist/template"),
   ],
   // 依赖为 external 时无需 node-resolve/commonjs，此处保持最小插件集
   onwarn(warning, warn) {

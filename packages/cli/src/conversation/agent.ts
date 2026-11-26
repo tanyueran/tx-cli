@@ -3,13 +3,13 @@
  * 模式配置与单次入口在 core（AGENT_MODE_CONFIG / runOneShotAgent），
  * 本模块只承载终端 REPL 薄包装
  */
-import { AGENT_MODE_CONFIG } from "@tx-cli/core";
+import { AGENT_MODE_CONFIG } from "@tanyueran/agent-core";
 import type {
   LlmConfig,
   SandboxCliOptions,
   SessionChannels,
   ThinkingLevel,
-} from "@tx-cli/core";
+} from "@tanyueran/agent-core";
 import { runReplConversation } from "./repl/repl";
 
 /** runReplAgent 入参对象 */

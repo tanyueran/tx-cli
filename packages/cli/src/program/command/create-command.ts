@@ -1,6 +1,6 @@
 import type { Command } from "commander";
 import pico from "picocolors";
-import { runScaffold } from "@tx-cli/scaffold";
+import { runScaffold } from "@tanyueran/agent-scaffold";
 import { createCliChannels } from "../../channels";
 
 /**

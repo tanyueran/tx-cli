@@ -3,8 +3,8 @@ import {
   loadLlmConfig,
   parseThinkingLevel,
   THINKING_LEVELS,
-} from "@tx-cli/core";
-import { runOneShotChat } from "@tx-cli/core";
+} from "@tanyueran/agent-core";
+import { runOneShotChat } from "@tanyueran/agent-core";
 import { runReplChat } from "../../conversation/chat";
 import { createCliChannels } from "../../channels";
 

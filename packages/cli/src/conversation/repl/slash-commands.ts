@@ -1,17 +1,17 @@
 import pico from "picocolors";
-import { formatTodoList } from "@tx-cli/core";
-import type { TodoToolHandle } from "@tx-cli/core";
-import type { SandboxContext } from "@tx-cli/core";
-import type { SkillCatalog } from "@tx-cli/core";
+import { formatTodoList } from "@tanyueran/agent-core";
+import type { TodoToolHandle } from "@tanyueran/agent-core";
+import type { SandboxContext } from "@tanyueran/agent-core";
+import type { SkillCatalog } from "@tanyueran/agent-core";
 import {
   parseThinkingLevel,
   warnThinkingFallback,
   THINKING_LEVELS,
-} from "@tx-cli/core";
-import type { ThinkingLevel, ThinkingStyle } from "@tx-cli/core";
-import { CliError } from "@tx-cli/shared";
-import { displayWidth, padToWidth } from "@tx-cli/shared";
-import type { OutputChannel } from "@tx-cli/core";
+} from "@tanyueran/agent-core";
+import type { ThinkingLevel, ThinkingStyle } from "@tanyueran/agent-core";
+import { CliError } from "@tanyueran/agent-common";
+import { displayWidth, padToWidth } from "@tanyueran/agent-common";
+import type { OutputChannel } from "@tanyueran/agent-core";
 
 /** 斜杠命令执行结果：handled 表示命令已就地处理完，send 表示要把任务文本交给模型处理 */
 export type SlashCommandResult =

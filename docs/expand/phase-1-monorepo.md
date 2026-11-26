@@ -46,7 +46,7 @@ packages:
     "node": ">=20.11.0"
   },
   "scripts": {
-    "dev": "pnpm --filter @tx-cli/cli dev",
+    "dev": "pnpm --filter @tanyueran/cli dev",
     "build": "pnpm -r build",
     "test": "pnpm -r test",
     "test:watch": "pnpm -r test:watch",
@@ -96,22 +96,22 @@ packages:
 
 ### 目标
 
-将 `src/shared/` 迁移为独立的 `@tx-cli/shared` 包。
+将 `src/shared/` 迁移为独立的 `@tanyueran/agent-common` 包。
 
 ### 涉及文件
 
-- `packages/shared/package.json` — 新建
-- `packages/shared/tsconfig.json` — 新建
-- `packages/shared/src/` — 从 `src/shared/` 迁移
-- `packages/shared/src/index.ts` — 新建（统一导出）
+- `packages/agent-common/package.json` — 新建
+- `packages/agent-common/tsconfig.json` — 新建
+- `packages/agent-common/src/` — 从 `src/shared/` 迁移
+- `packages/agent-common/src/index.ts` — 新建（统一导出）
 
 ### 步骤
 
-#### Step 1: 创建 packages/shared/package.json
+#### Step 1: 创建 packages/agent-common/package.json
 
 ```json
 {
-  "name": "@tx-cli/shared",
+  "name": "@tanyueran/agent-common",
   "version": "0.11.0",
   "private": true,
   "type": "module",
@@ -136,7 +136,7 @@ packages:
 }
 ```
 
-#### Step 2: 创建 packages/shared/tsconfig.json
+#### Step 2: 创建 packages/agent-common/tsconfig.json
 
 ```json
 {
@@ -152,24 +152,24 @@ packages:
 
 #### Step 3: 迁移源文件
 
-将 `src/shared/` 下所有文件复制到 `packages/shared/src/`：
+将 `src/shared/` 下所有文件复制到 `packages/agent-common/src/`：
 
 ```
-src/shared/fs.ts           → packages/shared/src/fs.ts
-src/shared/string.ts       → packages/shared/src/string.ts
-src/shared/paths.ts        → packages/shared/src/paths.ts
-src/shared/errors.ts       → packages/shared/src/errors.ts
-src/shared/text.ts         → packages/shared/src/text.ts
-src/shared/timeout.ts      → packages/shared/src/timeout.ts
-src/shared/warnings.ts     → packages/shared/src/warnings.ts
-src/shared/serial-queue.ts → packages/shared/src/serial-queue.ts
-src/shared/turn-cancel.ts  → packages/shared/src/turn-cancel.ts
-src/shared/config-merge.ts → packages/shared/src/config-merge.ts
-src/shared/user-config.ts  → packages/shared/src/user-config.ts
-src/shared/interactive-prompt.ts → packages/shared/src/interactive-prompt.ts
+src/shared/fs.ts           → packages/agent-common/src/fs.ts
+src/shared/string.ts       → packages/agent-common/src/string.ts
+src/shared/paths.ts        → packages/agent-common/src/paths.ts
+src/shared/errors.ts       → packages/agent-common/src/errors.ts
+src/shared/text.ts         → packages/agent-common/src/text.ts
+src/shared/timeout.ts      → packages/agent-common/src/timeout.ts
+src/shared/warnings.ts     → packages/agent-common/src/warnings.ts
+src/shared/serial-queue.ts → packages/agent-common/src/serial-queue.ts
+src/shared/turn-cancel.ts  → packages/agent-common/src/turn-cancel.ts
+src/shared/config-merge.ts → packages/agent-common/src/config-merge.ts
+src/shared/user-config.ts  → packages/agent-common/src/user-config.ts
+src/shared/interactive-prompt.ts → packages/agent-common/src/interactive-prompt.ts
 ```
 
-#### Step 4: 创建 packages/shared/src/index.ts
+#### Step 4: 创建 packages/agent-common/src/index.ts
 
 统一导出所有共享模块：
 
@@ -194,9 +194,9 @@ export * from "./interactive-prompt";
 
 ### 验收标准
 
-- [ ] `packages/shared/` 目录结构完整
-- [ ] `packages/shared/src/index.ts` 导出所有模块
-- [ ] `pnpm --filter @tx-cli/shared type-check` 通过
+- [ ] `packages/agent-common/` 目录结构完整
+- [ ] `packages/agent-common/src/index.ts` 导出所有模块
+- [ ] `pnpm --filter @tanyueran/agent-common type-check` 通过
 
 ---
 
@@ -204,22 +204,22 @@ export * from "./interactive-prompt";
 
 ### 目标
 
-将 `src/core/` 迁移为独立的 `@tx-cli/core` 包。
+将 `src/core/` 迁移为独立的 `@tanyueran/agent-core` 包。
 
 ### 涉及文件
 
-- `packages/core/package.json` — 新建
-- `packages/core/tsconfig.json` — 新建
-- `packages/core/src/` — 从 `src/core/` 迁移
-- `packages/core/src/index.ts` — 新建（统一导出）
+- `packages/agent-core/package.json` — 新建
+- `packages/agent-core/tsconfig.json` — 新建
+- `packages/agent-core/src/` — 从 `src/core/` 迁移
+- `packages/agent-core/src/index.ts` — 新建（统一导出）
 
 ### 步骤
 
-#### Step 1: 创建 packages/core/package.json
+#### Step 1: 创建 packages/agent-core/package.json
 
 ```json
 {
-  "name": "@tx-cli/core",
+  "name": "@tanyueran/agent-core",
   "version": "0.11.0",
   "private": true,
   "type": "module",
@@ -240,7 +240,7 @@ export * from "./interactive-prompt";
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@tx-cli/shared": "workspace:*",
+    "@tanyueran/agent-common": "workspace:*",
     "@anthropic-ai/sandbox-runtime": "^0.0.80",
     "@modelcontextprotocol/sdk": "^1.32.1",
     "openai": "7.32.0",
@@ -259,7 +259,7 @@ export * from "./interactive-prompt";
 }
 ```
 
-#### Step 2: 创建 packages/core/tsconfig.json
+#### Step 2: 创建 packages/agent-core/tsconfig.json
 
 ```json
 {
@@ -269,7 +269,7 @@ export * from "./interactive-prompt";
     "rootDir": "./src",
     "types": ["node"],
     "paths": {
-      "@tx-cli/shared": ["../shared/src/index.ts"]
+      "@tanyueran/agent-common": ["../shared/src/index.ts"]
     }
   },
   "include": ["./src/**/*"]
@@ -278,32 +278,32 @@ export * from "./interactive-prompt";
 
 #### Step 3: 迁移源文件
 
-将 `src/core/` 下所有内容复制到 `packages/core/src/`，保持目录结构不变：
+将 `src/core/` 下所有内容复制到 `packages/agent-core/src/`，保持目录结构不变：
 
 ```
-src/core/conversation/  → packages/core/src/conversation/
-src/core/llm/           → packages/core/src/llm/
-src/core/tools/         → packages/core/src/tools/
-src/core/mcp/           → packages/core/src/mcp/
-src/core/sandbox/       → packages/core/src/sandbox/
-src/core/skills/        → packages/core/src/skills/
-src/core/scaffold/      → packages/core/src/scaffold/  (暂时保留，Task 1.4 迁移)
-src/core/copy/          → packages/core/src/copy/      (暂时保留，Task 1.4 迁移)
-src/core/server/        → packages/core/src/server/    (暂时保留，Task 1.4 迁移)
-src/core/commit-fix/    → packages/core/src/commit-fix/ (暂时保留，Task 1.4 迁移)
+src/core/conversation/  → packages/agent-core/src/conversation/
+src/core/llm/           → packages/agent-core/src/llm/
+src/core/tools/         → packages/agent-core/src/tools/
+src/core/mcp/           → packages/agent-core/src/mcp/
+src/core/sandbox/       → packages/agent-core/src/sandbox/
+src/core/skills/        → packages/agent-core/src/skills/
+src/core/scaffold/      → packages/agent-core/src/scaffold/  (暂时保留，Task 1.4 迁移)
+src/core/copy/          → packages/agent-core/src/copy/      (暂时保留，Task 1.4 迁移)
+src/core/server/        → packages/agent-core/src/server/    (暂时保留，Task 1.4 迁移)
+src/core/commit-fix/    → packages/agent-core/src/commit-fix/ (暂时保留，Task 1.4 迁移)
 ```
 
 #### Step 4: 更新 core 内部对 shared 的 import
 
-将所有 `from "../../shared/xxx"` 或 `from "../shared/xxx"` 替换为 `from "@tx-cli/shared"`。
+将所有 `from "../../shared/xxx"` 或 `from "../shared/xxx"` 替换为 `from "@tanyueran/agent-common"`。
 
 具体替换规则：
-- `from "../../shared/fs"` → `from "@tx-cli/shared"`
-- `from "../shared/errors"` → `from "@tx-cli/shared"`
-- `from "../../shared/user-config"` → `from "@tx-cli/shared"`
+- `from "../../shared/fs"` → `from "@tanyueran/agent-common"`
+- `from "../shared/errors"` → `from "@tanyueran/agent-common"`
+- `from "../../shared/user-config"` → `from "@tanyueran/agent-common"`
 - 以此类推
 
-#### Step 5: 创建 packages/core/src/index.ts
+#### Step 5: 创建 packages/agent-core/src/index.ts
 
 ```typescript
 // 会话
@@ -329,9 +329,9 @@ export * from "./skills";
 
 ### 验收标准
 
-- [ ] `packages/core/` 目录结构完整
-- [ ] 所有对 shared 的引用已改为 `@tx-cli/shared`
-- [ ] `pnpm --filter @tx-cli/core type-check` 通过
+- [ ] `packages/agent-core/` 目录结构完整
+- [ ] 所有对 shared 的引用已改为 `@tanyueran/agent-common`
+- [ ] `pnpm --filter @tanyueran/agent-core type-check` 通过
 
 ---
 
@@ -339,22 +339,22 @@ export * from "./skills";
 
 ### 目标
 
-将脚手架相关功能（scaffold、copy、commit-fix、server）迁移为独立的 `@tx-cli/scaffold` 包。
+将脚手架相关功能（scaffold、copy、commit-fix、server）迁移为独立的 `@tanyueran/agent-scaffold` 包。
 
 ### 涉及文件
 
-- `packages/scaffold/package.json` — 新建
-- `packages/scaffold/tsconfig.json` — 新建
-- `packages/scaffold/src/` — 从 core 中迁移
-- `template/` → `packages/scaffold/template/` — 迁移
+- `packages/agent-scaffold/package.json` — 新建
+- `packages/agent-scaffold/tsconfig.json` — 新建
+- `packages/agent-scaffold/src/` — 从 core 中迁移
+- `template/` → `packages/agent-scaffold/template/` — 迁移
 
 ### 步骤
 
-#### Step 1: 创建 packages/scaffold/package.json
+#### Step 1: 创建 packages/agent-scaffold/package.json
 
 ```json
 {
-  "name": "@tx-cli/scaffold",
+  "name": "@tanyueran/agent-scaffold",
   "version": "0.11.0",
   "private": true,
   "type": "module",
@@ -369,7 +369,7 @@ export * from "./skills";
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@tx-cli/shared": "workspace:*",
+    "@tanyueran/agent-common": "workspace:*",
     "handlebars": "4.7.7",
     "fs-extra": "11.1.1",
     "simple-git": "3.28.0",
@@ -387,7 +387,7 @@ export * from "./skills";
 }
 ```
 
-#### Step 2: 创建 packages/scaffold/tsconfig.json
+#### Step 2: 创建 packages/agent-scaffold/tsconfig.json
 
 ```json
 {
@@ -397,7 +397,7 @@ export * from "./skills";
     "rootDir": "./src",
     "types": ["node"],
     "paths": {
-      "@tx-cli/shared": ["../shared/src/index.ts"]
+      "@tanyueran/agent-common": ["../shared/src/index.ts"]
     }
   },
   "include": ["./src/**/*"]
@@ -407,18 +407,18 @@ export * from "./skills";
 #### Step 3: 迁移源文件
 
 ```
-packages/core/src/scaffold/   → packages/scaffold/src/scaffold/
-packages/core/src/copy/       → packages/scaffold/src/copy/
-packages/core/src/server/     → packages/scaffold/src/server/
-packages/core/src/commit-fix/ → packages/scaffold/src/commit-fix/
-template/                     → packages/scaffold/template/
+packages/agent-core/src/scaffold/   → packages/agent-scaffold/src/scaffold/
+packages/agent-core/src/copy/       → packages/agent-scaffold/src/copy/
+packages/agent-core/src/server/     → packages/agent-scaffold/src/server/
+packages/agent-core/src/commit-fix/ → packages/agent-scaffold/src/commit-fix/
+template/                     → packages/agent-scaffold/template/
 ```
 
 #### Step 4: 更新 import 路径
 
-将这些模块中对 shared 的引用改为 `@tx-cli/shared`。
+将这些模块中对 shared 的引用改为 `@tanyueran/agent-common`。
 
-#### Step 5: 创建 packages/scaffold/src/index.ts
+#### Step 5: 创建 packages/agent-scaffold/src/index.ts
 
 ```typescript
 export * from "./scaffold";
@@ -429,7 +429,7 @@ export * from "./commit-fix";
 
 #### Step 6: 从 core 包中删除已迁移的模块
 
-删除 `packages/core/src/` 下的 `scaffold/`、`copy/`、`server/`、`commit-fix/` 目录。
+删除 `packages/agent-core/src/` 下的 `scaffold/`、`copy/`、`server/`、`commit-fix/` 目录。
 
 #### Step 7: 更新 core 包的 index.ts
 
@@ -437,10 +437,10 @@ export * from "./commit-fix";
 
 ### 验收标准
 
-- [ ] `packages/scaffold/` 目录结构完整
-- [ ] `template/` 目录迁移到 `packages/scaffold/template/`
+- [ ] `packages/agent-scaffold/` 目录结构完整
+- [ ] `template/` 目录迁移到 `packages/agent-scaffold/template/`
 - [ ] core 包中不再包含 scaffold/copy/server/commit-fix
-- [ ] `pnpm --filter @tx-cli/scaffold type-check` 通过
+- [ ] `pnpm --filter @tanyueran/agent-scaffold type-check` 通过
 
 ---
 
@@ -448,7 +448,7 @@ export * from "./commit-fix";
 
 ### 目标
 
-将 CLI 入口迁移为独立的 `@tx-cli/cli` 包。
+将 CLI 入口迁移为独立的 `@tanyueran/cli` 包。
 
 ### 涉及文件
 
@@ -463,7 +463,7 @@ export * from "./commit-fix";
 
 ```json
 {
-  "name": "@tx-cli/cli",
+  "name": "@tanyueran/cli",
   "version": "0.11.0",
   "private": true,
   "type": "module",
@@ -479,9 +479,9 @@ export * from "./commit-fix";
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@tx-cli/core": "workspace:*",
-    "@tx-cli/scaffold": "workspace:*",
-    "@tx-cli/shared": "workspace:*",
+    "@tanyueran/agent-core": "workspace:*",
+    "@tanyueran/agent-scaffold": "workspace:*",
+    "@tanyueran/agent-common": "workspace:*",
     "commander": "12.1.0",
     "picocolors": "1.1.1",
     "open": "^10.2.0",
@@ -506,9 +506,9 @@ export * from "./commit-fix";
     "rootDir": "./src",
     "types": ["node"],
     "paths": {
-      "@tx-cli/core": ["../core/src/index.ts"],
-      "@tx-cli/shared": ["../shared/src/index.ts"],
-      "@tx-cli/scaffold": ["../scaffold/src/index.ts"]
+      "@tanyueran/agent-core": ["../core/src/index.ts"],
+      "@tanyueran/agent-common": ["../shared/src/index.ts"],
+      "@tanyueran/agent-scaffold": ["../scaffold/src/index.ts"]
     }
   },
   "include": ["./src/**/*"]
@@ -528,18 +528,18 @@ bin/                → packages/cli/bin/
 
 将 CLI 层中对 core、shared、scaffold 的引用改为包名：
 
-- `from "../core/conversation/agent"` → `from "@tx-cli/core"`
-- `from "../core/conversation/chat"` → `from "@tx-cli/core"`
-- `from "../core/llm"` → `from "@tx-cli/core"`
-- `from "../core/sandbox"` → `from "@tx-cli/core"`
-- `from "../shared/errors"` → `from "@tx-cli/shared"`
-- `from "../core/server"` → `from "@tx-cli/scaffold"`
-- `from "../core/scaffold"` → `from "@tx-cli/scaffold"`
-- `from "../core/copy"` → `from "@tx-cli/scaffold"`
-- `from "../core/commit-fix"` → `from "@tx-cli/scaffold"`
+- `from "../core/conversation/agent"` → `from "@tanyueran/agent-core"`
+- `from "../core/conversation/chat"` → `from "@tanyueran/agent-core"`
+- `from "../core/llm"` → `from "@tanyueran/agent-core"`
+- `from "../core/sandbox"` → `from "@tanyueran/agent-core"`
+- `from "../shared/errors"` → `from "@tanyueran/agent-common"`
+- `from "../core/server"` → `from "@tanyueran/agent-scaffold"`
+- `from "../core/scaffold"` → `from "@tanyueran/agent-scaffold"`
+- `from "../core/copy"` → `from "@tanyueran/agent-scaffold"`
+- `from "../core/commit-fix"` → `from "@tanyueran/agent-scaffold"`
 - 以此类推
 
-注意：如果 `@tx-cli/core` 的 index.ts 没有导出所有需要的模块，需要补充导出或调整 import 路径。
+注意：如果 `@tanyueran/agent-core` 的 index.ts 没有导出所有需要的模块，需要补充导出或调整 import 路径。
 
 #### Step 5: 迁移 rollup 配置
 
@@ -555,7 +555,7 @@ bin/                → packages/cli/bin/
 
 - [ ] `packages/cli/` 目录结构完整
 - [ ] `bin/tx-cli` 可执行文件存在
-- [ ] `pnpm --filter @tx-cli/cli type-check` 通过
+- [ ] `pnpm --filter @tanyueran/cli type-check` 通过
 - [ ] `pnpm dev` 能正常启动 CLI
 
 ---
@@ -595,9 +595,9 @@ export default defineWorkspace([
 
 将 `test/` 中所有对 `../src/` 的引用改为包名引用：
 
-- `from "../src/core/..."` → `from "@tx-cli/core"`
-- `from "../src/shared/..."` → `from "@tx-cli/shared"`
-- `from "../src/program/..."` → `from "@tx-cli/cli"`
+- `from "../src/core/..."` → `from "@tanyueran/agent-core"`
+- `from "../src/shared/..."` → `from "@tanyueran/agent-common"`
+- `from "../src/program/..."` → `from "@tanyueran/cli"`
 
 #### Step 3: 创建根 vitest.config.ts
 
@@ -610,10 +610,10 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      "@tx-cli/core": new URL("./packages/core/src/index.ts", import.meta.url).pathname,
-      "@tx-cli/shared": new URL("./packages/shared/src/index.ts", import.meta.url).pathname,
-      "@tx-cli/scaffold": new URL("./packages/scaffold/src/index.ts", import.meta.url).pathname,
-      "@tx-cli/cli": new URL("./packages/cli/src/index.ts", import.meta.url).pathname,
+      "@tanyueran/agent-core": new URL("./packages/agent-core/src/index.ts", import.meta.url).pathname,
+      "@tanyueran/agent-common": new URL("./packages/agent-common/src/index.ts", import.meta.url).pathname,
+      "@tanyueran/agent-scaffold": new URL("./packages/agent-scaffold/src/index.ts", import.meta.url).pathname,
+      "@tanyueran/cli": new URL("./packages/cli/src/index.ts", import.meta.url).pathname,
     },
   },
 });

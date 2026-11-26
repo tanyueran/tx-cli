@@ -1,6 +1,6 @@
 import pico from "picocolors";
 import { createProgram } from "./program";
-import { CliError, CancelError } from "@tx-cli/shared";
+import { CliError, CancelError } from "@tanyueran/agent-common";
 
 export { createProgram } from "./program";
 export { runChatAction } from "./program/command/chat-command";

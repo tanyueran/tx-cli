@@ -2,8 +2,8 @@ import { basename, isAbsolute, join, relative, resolve } from "node:path";
 import { lstat, stat } from "node:fs/promises";
 import type { Stats } from "node:fs";
 import { copy as fsCopy } from "fs-extra";
-import { CliError } from "@tx-cli/shared";
-import { globToRegExp } from "@tx-cli/shared";
+import { CliError } from "@tanyueran/agent-common";
+import { globToRegExp } from "@tanyueran/agent-common";
 
 /** copy 命令的执行选项 */
 export interface CopyOptions {

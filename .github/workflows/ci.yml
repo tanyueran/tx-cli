@@ -31,6 +31,9 @@ jobs:
       - name: 类型检查
         run: pnpm type-check
 
+      - name: 依赖边界检查
+        run: pnpm deps:check
+
       - name: 单元测试
         run: pnpm test
 

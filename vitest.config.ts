@@ -17,10 +17,10 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      "@tx-cli/core": new URL("./packages/core/src", import.meta.url).pathname,
-      "@tx-cli/shared": new URL("./packages/shared/src", import.meta.url).pathname,
-      "@tx-cli/scaffold": new URL("./packages/scaffold/src", import.meta.url).pathname,
-      "@tx-cli/cli": new URL("./packages/cli/src", import.meta.url).pathname,
+      "@tanyueran/agent-core": new URL("./packages/agent-core/src", import.meta.url).pathname,
+      "@tanyueran/agent-common": new URL("./packages/agent-common/src", import.meta.url).pathname,
+      "@tanyueran/agent-scaffold": new URL("./packages/agent-scaffold/src", import.meta.url).pathname,
+      "@tanyueran/cli": new URL("./packages/cli/src", import.meta.url).pathname,
     },
   },
 });

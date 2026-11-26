@@ -100,7 +100,7 @@
 **决策**：分两层实现：
 
 - **REPL 输入行**：基于 Node 原生 `readline` API 自实现——keypress 事件驱动的编辑与光标移动（代理对感知，一次退格跨过整个 emoji）、bracketed paste 粘贴支持、补全面板（最多 10 条建议：内联命令与技能名）
-- **交互问答**（审批、确认、选择、信任询问）：统一封装 `prompts` 库（`shared/interactive-prompt.ts`）。封装的核心价值是统一**取消语义**——原生 prompts 被取消时只返回缺字段的对象，调用方极易误把空值当默认值继续执行；封装后在 `onCancel` 同步回调中抛 `CancelError` 并标记回合取消，保证「取消一轮即中止整轮」的时序可靠性
+- **交互问答**（审批、确认、选择、信任询问）：统一封装 `prompts` 库（`packages/cli/src/channels/prompts-prompt.ts`）。封装的核心价值是统一**取消语义**——原生 prompts 被取消时只返回缺字段的对象，调用方极易误把空值当默认值继续执行；封装后在 `onCancel` 同步回调中抛 `CancelError` 并标记回合取消，保证「取消一轮即中止整轮」的时序可靠性
 
 ## 9. 上下文自动压缩的取舍
 
