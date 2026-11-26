@@ -1,3 +1,30 @@
+## [0.12.1](https://github.com/tanyueran/tx-cli/compare/@tanyueran/cli@0.11.1...@tanyueran/cli@0.12.1) (2026-11-26)
+
+### Bug Fixes
+
+* 脚手架相对路径按命令执行目录解析并取路径末段命名 ([c9230da](https://github.com/tanyueran/tx-cli/commit/c9230da294109dd2d30eddc1ae65e35d4c63e853))
+
+### Code Refactoring
+
+* 抽象 I/O Channel 层，剥离 core 包对终端的直接依赖 ([15e8461](https://github.com/tanyueran/tx-cli/commit/15e84614494af8ecec423255e6c5ffe132f9aa20))
+* 按子包独立发布模式优化 CLI 发布流程 ([35026a9](https://github.com/tanyueran/tx-cli/commit/35026a948f3c486a95e01a1a2872121600d466b8))
+* 收口四包边界，core 下沉无头会话、cli 上移终端交互 ([cf916ea](https://github.com/tanyueran/tx-cli/commit/cf916eade00a905f73fc9c3e3a64028e6e85fd93))
+* 测试用例按包归位到各子包 test 目录 ([545c5d8](https://github.com/tanyueran/tx-cli/commit/545c5d87a124ddbefa23d2fa74bd4bf5d62b695f))
+* 统一包命名与目录结构并修复正式发布配置 ([d095375](https://github.com/tanyueran/tx-cli/commit/d095375a2a2337c918433991a6fdecad4fcf7634))
+* 重构为 pnpm workspace monorepo 结构 ([83a030a](https://github.com/tanyueran/tx-cli/commit/83a030a1b7195aee6e07ae5f683ba2bcb6e38a56))
+
+### Documentation
+
+* 同步包名与共享层路径表述 ([f774e87](https://github.com/tanyueran/tx-cli/commit/f774e87793692609d4983680154b2567e27899c6))
+* 在多端扩展前收口包边界并同步阶段计划 ([32d48ad](https://github.com/tanyueran/tx-cli/commit/32d48ad22592f1cf071801f9e0496cb3ce8cbd29))
+* 添加扩展改造任务文档 ([d14eba4](https://github.com/tanyueran/tx-cli/commit/d14eba48c996930db25ea263ab8df57700fcca3d))
+* 精简根 README 并补充各子包 README ([85a29b3](https://github.com/tanyueran/tx-cli/commit/85a29b3dfb9e3d3ea1fb83bae30fb101b53d9f61))
+
+### Tests
+
+* 完善验收文档与关键链路测试 ([c09da3c](https://github.com/tanyueran/tx-cli/commit/c09da3c98261e64a04e6160360ccd6d2ceacac93))
+* 补全文件工具边界并统一测试构建 ([112c3c2](https://github.com/tanyueran/tx-cli/commit/112c3c299c7c23a3e4f972afae94c7566e90c96c))
+* 补全核心工具与关键进程链路测试 ([d969f62](https://github.com/tanyueran/tx-cli/commit/d969f6287c6c7052fecaeedffd9433ff14cd215b))
 ## [0.12.0](https://github.com/tanyueran/tx-cli/compare/@tanyueran/cli@0.11.1...@tanyueran/cli@0.12.0) (2026-11-26)
 
 ### Bug Fixes
