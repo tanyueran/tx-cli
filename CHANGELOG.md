@@ -1,4 +1,9 @@
-## [0.12.1](https://github.com/tanyueran/tx-cli/compare/@tanyueran/cli@0.11.1...@tanyueran/cli@0.12.1) (2026-11-26)
+## [0.12.1](https://github.com/tanyueran/tx-cli/compare/@tanyueran/cli@0.12.0...@tanyueran/cli@0.12.1) (2026-11-26)
+
+### Documentation
+
+* 精简根 README 并补充各子包 README ([85a29b3](https://github.com/tanyueran/tx-cli/commit/85a29b3dfb9e3d3ea1fb83bae30fb101b53d9f61))
+## [0.12.0](https://github.com/tanyueran/tx-cli/compare/@tanyueran/cli@0.11.1...@tanyueran/cli@0.12.0) (2026-11-26)
 
 ### Bug Fixes
 
@@ -6,11 +11,11 @@
 
 ### Code Refactoring
 
+* 统一包命名与目录结构并修复正式发布配置 ([d095375](https://github.com/tanyueran/tx-cli/commit/d095375a2a2337c918433991a6fdecad4fcf7634))
+* 收口四包边界，core 下沉无头会话、cli 上移终端交互 ([cf916ea](https://github.com/tanyueran/tx-cli/commit/cf916eade00a905f73fc9c3e3a64028e6e85fd93))
 * 抽象 I/O Channel 层，剥离 core 包对终端的直接依赖 ([15e8461](https://github.com/tanyueran/tx-cli/commit/15e84614494af8ecec423255e6c5ffe132f9aa20))
 * 按子包独立发布模式优化 CLI 发布流程 ([35026a9](https://github.com/tanyueran/tx-cli/commit/35026a948f3c486a95e01a1a2872121600d466b8))
-* 收口四包边界，core 下沉无头会话、cli 上移终端交互 ([cf916ea](https://github.com/tanyueran/tx-cli/commit/cf916eade00a905f73fc9c3e3a64028e6e85fd93))
 * 测试用例按包归位到各子包 test 目录 ([545c5d8](https://github.com/tanyueran/tx-cli/commit/545c5d87a124ddbefa23d2fa74bd4bf5d62b695f))
-* 统一包命名与目录结构并修复正式发布配置 ([d095375](https://github.com/tanyueran/tx-cli/commit/d095375a2a2337c918433991a6fdecad4fcf7634))
 * 重构为 pnpm workspace monorepo 结构 ([83a030a](https://github.com/tanyueran/tx-cli/commit/83a030a1b7195aee6e07ae5f683ba2bcb6e38a56))
 
 ### Documentation
@@ -18,39 +23,12 @@
 * 同步包名与共享层路径表述 ([f774e87](https://github.com/tanyueran/tx-cli/commit/f774e87793692609d4983680154b2567e27899c6))
 * 在多端扩展前收口包边界并同步阶段计划 ([32d48ad](https://github.com/tanyueran/tx-cli/commit/32d48ad22592f1cf071801f9e0496cb3ce8cbd29))
 * 添加扩展改造任务文档 ([d14eba4](https://github.com/tanyueran/tx-cli/commit/d14eba48c996930db25ea263ab8df57700fcca3d))
-* 精简根 README 并补充各子包 README ([85a29b3](https://github.com/tanyueran/tx-cli/commit/85a29b3dfb9e3d3ea1fb83bae30fb101b53d9f61))
 
 ### Tests
 
-* 完善验收文档与关键链路测试 ([c09da3c](https://github.com/tanyueran/tx-cli/commit/c09da3c98261e64a04e6160360ccd6d2ceacac93))
 * 补全文件工具边界并统一测试构建 ([112c3c2](https://github.com/tanyueran/tx-cli/commit/112c3c299c7c23a3e4f972afae94c7566e90c96c))
 * 补全核心工具与关键进程链路测试 ([d969f62](https://github.com/tanyueran/tx-cli/commit/d969f6287c6c7052fecaeedffd9433ff14cd215b))
-## [0.12.0](https://github.com/tanyueran/tx-cli/compare/@tanyueran/cli@0.11.1...@tanyueran/cli@0.12.0) (2026-11-26)
-
-### Bug Fixes
-
-* 脚手架相对路径按命令执行目录解析并取路径末段命名 ([7c61de5](https://github.com/tanyueran/tx-cli/commit/7c61de543de3f398b693ccab2c68bfb0e2a69db2))
-
-### Code Refactoring
-
-* 抽象 I/O Channel 层，剥离 core 包对终端的直接依赖 ([146e475](https://github.com/tanyueran/tx-cli/commit/146e4756f6f00823b804aa6f0940aa2f08acdacb))
-* 按子包独立发布模式优化 CLI 发布流程 ([e095530](https://github.com/tanyueran/tx-cli/commit/e09553020979ef673be585c0875728c7554d8c0c))
-* 收口四包边界，core 下沉无头会话、cli 上移终端交互 ([344181b](https://github.com/tanyueran/tx-cli/commit/344181b1793112cea13544bfc0fae080b829c57e))
-* 测试用例按包归位到各子包 test 目录 ([307bf38](https://github.com/tanyueran/tx-cli/commit/307bf38904ca50487a6ecdc76e616819f1685fe7))
-* 统一包命名与目录结构并修复正式发布配置 ([ed809c6](https://github.com/tanyueran/tx-cli/commit/ed809c6f0034bf0ce236848a9c2a14405831537d))
-* 重构为 pnpm workspace monorepo 结构 ([c159252](https://github.com/tanyueran/tx-cli/commit/c159252d55a890ef4b7e14cb63f4668d8de3a749))
-
-### Documentation
-
-* 同步包名与共享层路径表述 ([5fbf03b](https://github.com/tanyueran/tx-cli/commit/5fbf03b3a7e1b5b495d4ef891ea6cdbb9fa48436))
-* 在多端扩展前收口包边界并同步阶段计划 ([065f255](https://github.com/tanyueran/tx-cli/commit/065f2553d5e1532279670df9b15667bb46b10019))
-* 添加扩展改造任务文档 ([6a74898](https://github.com/tanyueran/tx-cli/commit/6a74898e86d6c1b5c2086949f9c6ed12d59b4dc9))
-
-### Tests
-
-* 完善验收文档与关键链路测试 ([58cb67f](https://github.com/tanyueran/tx-cli/commit/58cb67fee2430263059f09b6946201c9ab9f1cfd))
-* 补全文件工具边界并统一测试构建 ([aa83e00](https://github.com/tanyueran/tx-cli/commit/aa83e005dc9047cbf23cdb806c862bd93501120c))
-* 补全核心工具与关键进程链路测试 ([558b01b](https://github.com/tanyueran/tx-cli/commit/558b01b95128f3d2fa7ce3e805e8e68905692077))
+* 完善验收文档与关键链路测试 ([c09da3c](https://github.com/tanyueran/tx-cli/commit/c09da3c98261e64a04e6160360ccd6d2ceacac93))
 ## [0.11.1](https://github.com/tanyueran/tx-cli/compare/v0.11.0...v0.11.1) (2026-11-07)
 
 ### Bug Fixes

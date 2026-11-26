@@ -142,6 +142,42 @@ async function updateVersion() {
 }
 
 /**
+ * 校验发布历史一致性：包的最新 Git tag 必须位于当前 HEAD 的历史中
+ *
+ * 背景：历史被改写（rebase、重新初始化仓库等）后，旧 tag 会指向游离提交；
+ * conventional-changelog 找不到可达的上一个版本 tag，只能回退到更早的 tag，
+ * 导致新版本重复收录旧提交。发布前直接失败，避免生成错误的 changelog。
+ * @returns {Promise<void>}
+ */
+async function assertReleaseHistory() {
+  const tagPrefix = `${readPkg().name}@`;
+  const rawTags = await git.raw([
+    "tag",
+    "--list",
+    `${tagPrefix}*`,
+    "--sort=-v:refname",
+  ]);
+  const latestTag = rawTags
+    .split("\n")
+    .map((tag) => tag.trim())
+    .filter(Boolean)[0];
+  if (!latestTag) {
+    return;
+  }
+  try {
+    await git.raw(["merge-base", "--is-ancestor", latestTag, "HEAD"]);
+  } catch {
+    console.log(
+      pico.red(
+        `最新发布 tag ${latestTag} 不在当前提交历史中（历史可能被改写），` +
+          "继续发布会重复收录旧提交。请先修正该 tag 的指向后重试。",
+      ),
+    );
+    process.exit(1);
+  }
+}
+
+/**
  * 自动生成 changelog 并同步当前版本号
  * @returns {void}
  */
@@ -278,6 +314,7 @@ async function start() {
   await updateVersion();
   // 2. 生成 changelog
   logStep(2, "生成 changelog");
+  await assertReleaseHistory();
   generateChangelog();
   // 3. 打包构建
   logStep(3, "打包构建");
