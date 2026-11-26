@@ -3,6 +3,16 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     include: ["packages/*/test/**/*.test.ts"],
+    coverage: {
+      include: ["packages/*/src/**/*.ts"],
+      reporter: ["text", "html", "json-summary"],
+      thresholds: {
+        statements: 75,
+        branches: 70,
+        functions: 75,
+        lines: 75,
+      },
+    },
   },
   resolve: {
     alias: {
